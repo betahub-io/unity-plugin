@@ -16,9 +16,12 @@ public class BH_BugReportUI : MonoBehaviour
 
     public BH_MessagePanelUI messagePanelUI;
 
+    [HideInInspector]
     public string submitEndpoint = "https://app.betahub.io";
 
     public string projectID;
+
+    public KeyCode shortcutKey = KeyCode.F12;
 
     private string screenshotPath;
     private string logFilePath;
@@ -36,7 +39,7 @@ public class BH_BugReportUI : MonoBehaviour
 
     void Update()
     {
-        if (Input.GetKeyDown(KeyCode.F12)) // Shortcut key to open bug report UI
+        if (shortcutKey != KeyCode.None && Input.GetKeyDown(shortcutKey)) // Shortcut key to open bug report UI
         {
             // Capture screenshot
             screenshotPath = Application.persistentDataPath + "/screenshot.png";
