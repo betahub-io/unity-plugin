@@ -569,7 +569,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   frameRate: 30
   RecordingDuration: 60
-  DebugMode: 1
+  DebugMode: 0
 --- !u!1 &3630024247696638876
 GameObject:
   m_ObjectHideFlags: 0
