@@ -4,6 +4,7 @@ using TMPro;
 using System.IO;
 using System.Collections;
 using UnityEngine.Networking;
+using UnityEngine.Events;
 
 public class BH_BugReportUI : MonoBehaviour
 {
@@ -23,8 +24,13 @@ public class BH_BugReportUI : MonoBehaviour
 
     public KeyCode shortcutKey = KeyCode.F12;
 
+    public UnityEvent OnActiveBugReport;
+    public UnityEvent OnDeactivateBugReport;
+
     private string screenshotPath;
     private static BH_Logger bH_Logger;
+    private bool _cursorWasEdited;
+    private CursorLockMode _previousCursorLockMode;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void InitializeLogger()
@@ -51,6 +57,15 @@ public class BH_BugReportUI : MonoBehaviour
             ScreenCapture.CaptureScreenshot(screenshotPath);
             
             bugReportPanel.SetActive(true);
+
+            if (!Cursor.visible || Cursor.lockState != CursorLockMode.None)
+            {
+                _cursorWasEdited = true;
+                _previousCursorLockMode = Cursor.lockState;
+                Cursor.lockState = CursorLockMode.None;
+                Cursor.visible = true;
+                OnActiveBugReport?.Invoke();
+            }
         }
     }
 
@@ -107,8 +122,16 @@ public class BH_BugReportUI : MonoBehaviour
                 string response = www.downloadHandler.text;
                 IssueResponse issueResponse = JsonUtility.FromJson<IssueResponse>(response);
                 string issueId = issueResponse.id;
-                messagePanelUI.ShowMessagePanel("Success", "Bug report submitted successfully!", () => {
+                messagePanelUI.ShowMessagePanel("Success", "Bug report submitted successfully!", () =>
+                {
                     bugReportPanel.SetActive(false);
+                    if (_cursorWasEdited)
+                    {
+                        Cursor.lockState = _previousCursorLockMode;
+                        Cursor.visible = false;
+                        _cursorWasEdited = false;
+                        OnDeactivateBugReport?.Invoke();
+                    }
                 });
 
                 StartCoroutine(UploadAdditionalFiles(issueId));
