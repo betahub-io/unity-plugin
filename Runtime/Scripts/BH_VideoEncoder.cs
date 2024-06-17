@@ -57,13 +57,19 @@ public class BH_VideoEncoder
 
     public void StartEncoding()
     {
+        string ffmpegPath = GetFfmpegPath();
+        if (ffmpegPath == null)
+        {
+            return;
+        }
+        
         RemoveAllSegments();
         
         string encoder = GetHardwareEncoder();
         UnityEngine.Debug.Log($"Using encoder: {encoder}");
 
         ffmpegProcess = new Process();
-        ffmpegProcess.StartInfo.FileName = "/opt/homebrew/bin/ffmpeg";
+        ffmpegProcess.StartInfo.FileName = ffmpegPath;
         ffmpegProcess.StartInfo.Arguments = $"-y -f rawvideo -pix_fmt rgb24 -s {width}x{height} -r {frameRate} -i - " +
                                             $"-vf vflip -c:v {encoder} -pix_fmt yuv420p -preset ultrafast -f segment -segment_time {segmentLength} " +
                                             $"-reset_timestamps 1 \"{outputPathPattern}\"";
@@ -161,6 +167,12 @@ public class BH_VideoEncoder
 
     private string MergeSegments()
     {
+        string ffmpegPath = GetFfmpegPath();
+        if (ffmpegPath == null)
+        {
+            return null;
+        }
+        
         var directoryInfo = new DirectoryInfo(outputDir);
         var files = directoryInfo.GetFiles("segment_*.mp4")
                                  .OrderBy(f => f.Name)
@@ -175,7 +187,7 @@ public class BH_VideoEncoder
         File.WriteAllLines(concatFilePath, files.Select(f => $"file '{f.FullName.Replace("'", @"'\''")}'")); // Properly escape single quotes
 
         var mergeProcess = new Process();
-        mergeProcess.StartInfo.FileName = "/opt/homebrew/bin/ffmpeg";
+        mergeProcess.StartInfo.FileName = ffmpegPath;
         mergeProcess.StartInfo.Arguments = $"-f concat -safe 0 -i \"{concatFilePath}\" -c copy \"{mergedFilePath}\"";
         mergeProcess.StartInfo.UseShellExecute = false;
         mergeProcess.StartInfo.RedirectStandardError = true;
@@ -220,10 +232,17 @@ public class BH_VideoEncoder
         }
     }
 
-    private string GetHardwareEncoder()
+    private static string GetHardwareEncoder()
     {
         // Run ffmpeg to get the list of available encoders
         var process = new Process();
+
+        string ffmpegPath = GetFfmpegPath();
+        if (ffmpegPath == null)
+        {
+            return "libx264";
+        }
+
         process.StartInfo.FileName = "/opt/homebrew/bin/ffmpeg";
         process.StartInfo.Arguments = "-encoders";
         process.StartInfo.UseShellExecute = false;
@@ -253,24 +272,35 @@ public class BH_VideoEncoder
         }
     }
 
-    // private FindFfmpegPath()
-    // {
-    //     string[] paths = new string[] {
-    //         "/usr/local/bin/ffmpeg",
-    //         "/usr/bin/ffmpeg",
-    //         "/opt/homebrew/bin/ffmpeg"
-    //     };
+    private static string GetFfmpegPath()
+    {
+        // ffmpeg should be installed in streaming assets directory of the current platform, e.g:
+        // - Windows: <ProjectRoot>/Assets/StreamingAssets/BetaHub/ffmpeg.exe
+        // - macOS: <ProjectRoot>/Assets/StreamingAssets/BetaHub/ffmpeg
+        // - Linux: <ProjectRoot>/Assets/StreamingAssets/BetaHub/ffmpeg
 
-    //     foreach (var path in paths)
-    //     {
-    //         if (File.Exists(path))
-    //         {
-    //             return path;
-    //         }
-    //     }
+        string path = null;
+    
+#if UNITY_EDITOR_WIN || UNITY_STANDALONE_WIN
+        path = Path.Combine(Application.streamingAssetsPath, "BetaHub", "ffmpeg.exe");
+#elif UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX
+        path = Path.Combine(Application.streamingAssetsPath, "BetaHub", "ffmpeg");
+#elif UNITY_EDITOR_LINUX || UNITY_STANDALONE_LINUX
+        path = Path.Combine(Application.streamingAssetsPath, "BetaHub", "ffmpeg");
+#endif
 
-    //     return null;
-    // }
+        if (!File.Exists(path))
+        {
+            UnityEngine.Debug.LogError("FFmpeg binary not found, BetaHub video recording will not work. " +
+                "You can download it by clicking on the Windows/BetaHub/Download FFmpeg menu item. " +
+                "If that doesn't work, you can download it manually from https://ffmpeg.org/download.html " +
+                "and place the executable directly in the StreamingAssets/BetaHub directory.");
+
+            return null;
+        }
+
+        return path;
+    }
 }
 
 public class CircularBuffer<T>
