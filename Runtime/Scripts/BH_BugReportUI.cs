@@ -4,6 +4,7 @@ using TMPro;
 using System.IO;
 using System.Collections;
 using UnityEngine.Networking;
+using UnityEngine.Events;
 
 public class BH_BugReportUI : MonoBehaviour
 {
@@ -23,13 +24,18 @@ public class BH_BugReportUI : MonoBehaviour
 
     public KeyCode shortcutKey = KeyCode.F12;
 
+    public UnityEvent OnBugReportWindowShown;
+    public UnityEvent OnBugReportWindowHidden;
+
     private string screenshotPath;
-    private static BH_Logger bH_Logger;
+    private static BH_Logger logger;
+    private bool _cursorStateChanged;
+    private CursorLockMode _previousCursorLockMode;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void InitializeLogger()
     {
-        bH_Logger = new BH_Logger();
+        logger = new BH_Logger();
     }
     void Start()
     {
@@ -51,6 +57,20 @@ public class BH_BugReportUI : MonoBehaviour
             ScreenCapture.CaptureScreenshot(screenshotPath);
             
             bugReportPanel.SetActive(true);
+
+            ModifyCursorState();
+        }
+    }
+
+    private void ModifyCursorState()
+    {
+        if (!Cursor.visible || Cursor.lockState != CursorLockMode.None)
+        {
+            _cursorStateChanged = true;
+            _previousCursorLockMode = Cursor.lockState;
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+            OnBugReportWindowShown?.Invoke();
         }
     }
 
@@ -107,12 +127,25 @@ public class BH_BugReportUI : MonoBehaviour
                 string response = www.downloadHandler.text;
                 IssueResponse issueResponse = JsonUtility.FromJson<IssueResponse>(response);
                 string issueId = issueResponse.id;
-                messagePanelUI.ShowMessagePanel("Success", "Bug report submitted successfully!", () => {
+                messagePanelUI.ShowMessagePanel("Success", "Bug report submitted successfully!", () =>
+                {
                     bugReportPanel.SetActive(false);
+                    RestoreCursorState();
                 });
 
                 StartCoroutine(UploadAdditionalFiles(issueId));
             }
+        }
+    }
+
+    private void RestoreCursorState()
+    {
+        if (_cursorStateChanged)
+        {
+            Cursor.lockState = _previousCursorLockMode;
+            Cursor.visible = false;
+            _cursorStateChanged = false;
+            OnBugReportWindowHidden?.Invoke();
         }
     }
 
@@ -125,12 +158,12 @@ public class BH_BugReportUI : MonoBehaviour
         }
 
         // Upload log files
-        if (!string.IsNullOrEmpty(bH_Logger.LogPath) && File.Exists(bH_Logger.LogPath))
+        if (!string.IsNullOrEmpty(logger.LogPath) && File.Exists(logger.LogPath))
         {
             // skip if size over 200MB
-            if (new FileInfo(bH_Logger.LogPath).Length < 200 * 1024 * 1024)
+            if (new FileInfo(logger.LogPath).Length < 200 * 1024 * 1024)
             {
-                yield return StartCoroutine(UploadFile(issueId, "log_files", "log_file[file]", bH_Logger.LogPath, "text/plain"));
+                yield return StartCoroutine(UploadFile(issueId, "log_files", "log_file[file]", logger.LogPath, "text/plain"));
             }
         }
 
