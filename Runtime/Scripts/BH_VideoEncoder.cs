@@ -243,7 +243,7 @@ public class BH_VideoEncoder
             return "libx264";
         }
 
-        process.StartInfo.FileName = "/opt/homebrew/bin/ffmpeg";
+        process.StartInfo.FileName = ffmpegPath;
         process.StartInfo.Arguments = "-encoders";
         process.StartInfo.UseShellExecute = false;
         process.StartInfo.RedirectStandardOutput = true;
