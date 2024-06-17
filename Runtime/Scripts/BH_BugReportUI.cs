@@ -24,6 +24,12 @@ public class BH_BugReportUI : MonoBehaviour
 
     public KeyCode shortcutKey = KeyCode.F12;
 
+    public bool includePlayerLog = true;
+
+    public bool includeVideo = true;
+
+    private bool _startedRecordingInitially = false;
+
     public UnityEvent OnBugReportWindowShown;
     public UnityEvent OnBugReportWindowHidden;
 
@@ -48,10 +54,24 @@ public class BH_BugReportUI : MonoBehaviour
         {
             Debug.LogError("Project ID is not set. I won't be able to submit bug reports.");
         }
+
+        var gameRecorder = GetComponent<BH_GameRecorder>();
+        if (gameRecorder == null)
+        {
+            Debug.LogWarning("BH_GameRecorder component is not attached to the same GameObject as BH_BugReportUI. Video won't be recorded.");
+        }
     }
 
     void Update()
     {
+        if (includeVideo && !_startedRecordingInitially) {
+            var gameRecorder = GetComponent<BH_GameRecorder>();
+            if (gameRecorder != null && !gameRecorder.IsRecording) {
+                gameRecorder.StartRecording();
+                _startedRecordingInitially = true;
+            }
+        }
+        
         if (shortcutKey != KeyCode.None && Input.GetKeyDown(shortcutKey)) // Shortcut key to open bug report UI
         {
             // Capture screenshot
@@ -184,7 +204,7 @@ public class BH_BugReportUI : MonoBehaviour
         _screenshots.Clear();
 
         // Upload logger log files
-        if (!string.IsNullOrEmpty(logger.LogPath) && File.Exists(logger.LogPath))
+        if (includePlayerLog && !string.IsNullOrEmpty(logger.LogPath) && File.Exists(logger.LogPath))
         {
             // skip if size over 200MB
             if (new FileInfo(logger.LogPath).Length < 200 * 1024 * 1024)
@@ -219,17 +239,22 @@ public class BH_BugReportUI : MonoBehaviour
         // }
 
         // Upload video file
-        BH_GameRecorder gameRecorder = GetComponent<BH_GameRecorder>();
-        string videoPath = gameRecorder.StopRecordingAndSaveLastMinute();
-        if (!string.IsNullOrEmpty(videoPath) && File.Exists(videoPath))
+        if (includeVideo)
         {
-            yield return StartCoroutine(UploadFile(issueId, "video_clips", "video_clip[video]", videoPath, "video/mp4"));
+            BH_GameRecorder gameRecorder = GetComponent<BH_GameRecorder>();
+            if (gameRecorder != null)
+            {
+                string videoPath = gameRecorder.StopRecordingAndSaveLastMinute();
+                if (!string.IsNullOrEmpty(videoPath) && File.Exists(videoPath))
+                {
+                    yield return StartCoroutine(UploadFile(issueId, "video_clips", "video_clip[video]", videoPath, "video/mp4"));
 
-            // Delete the video file after uploading
-            File.Delete(videoPath);
+                    // Delete the video file after uploading
+                    File.Delete(videoPath);
+                }
+                gameRecorder.StartRecording(); // Restart recording
+            }
         }
-
-        gameRecorder.StartRecording(); // Restart recording
 
         // Final debug message
         Debug.Log("All files uploaded successfully!");

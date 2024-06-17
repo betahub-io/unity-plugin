@@ -8,6 +8,7 @@ public class BH_GameRecorder : MonoBehaviour
 
     public int RecordingDuration = 60;
     private Texture2D screenShot;
+    public bool IsRecording { get { return isRecording; } }
     private bool isRecording;
     private BH_VideoEncoder videoEncoder;
     private BH_TexturePainter texturePainter;
@@ -45,8 +46,6 @@ public class BH_GameRecorder : MonoBehaviour
 
         captureInterval = 1.0f / frameRate;
         nextCaptureTime = Time.time;
-
-        StartRecording();
     }
 
     void OnDestroy()
