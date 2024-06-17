@@ -5,6 +5,7 @@ using System.IO;
 using System.Collections;
 using UnityEngine.Networking;
 using UnityEngine.Events;
+using System.Collections.Generic;
 
 public class BH_BugReportUI : MonoBehaviour
 {
@@ -26,7 +27,9 @@ public class BH_BugReportUI : MonoBehaviour
     public UnityEvent OnBugReportWindowShown;
     public UnityEvent OnBugReportWindowHidden;
 
-    private string screenshotPath;
+    private List<ScreenshotFileReference> _screenshots = new List<ScreenshotFileReference>();
+    private List<LogFileReference> _logFiles = new List<LogFileReference>();
+
     private static BH_Logger logger;
     private bool _cursorStateChanged;
     private CursorLockMode _previousCursorLockMode;
@@ -52,13 +55,26 @@ public class BH_BugReportUI : MonoBehaviour
         if (shortcutKey != KeyCode.None && Input.GetKeyDown(shortcutKey)) // Shortcut key to open bug report UI
         {
             // Capture screenshot
-            screenshotPath = Application.persistentDataPath + "/screenshot.png";
+            string screenshotPath = Application.persistentDataPath + "/screenshot.png";
             ScreenCapture.CaptureScreenshot(screenshotPath);
+
+            AddScreenshot(screenshotPath, true);
             
             bugReportPanel.SetActive(true);
 
             ModifyCursorState();
         }
+    }
+
+    // Sets screenshot path to be uploaded. Useful on manual invocation of bug report UI.
+    public void AddScreenshot(string path, bool removeAfterUpload)
+    {
+        _screenshots.Add(new ScreenshotFileReference { path = path, removeAfterUpload = removeAfterUpload });
+    }
+
+    public void AddLogFile(string path, bool removeAfterUpload)
+    {
+        _logFiles.Add(new LogFileReference { path = path, removeAfterUpload = removeAfterUpload });
     }
 
     private void ModifyCursorState()
@@ -150,13 +166,24 @@ public class BH_BugReportUI : MonoBehaviour
 
     IEnumerator UploadAdditionalFiles(string issueId)
     {
-        // Upload screenshot
-        if (File.Exists(screenshotPath))
+        // Upload screenshots
+
+        foreach (var screenshot in _screenshots)
         {
-            yield return StartCoroutine(UploadFile(issueId, "screenshots", "screenshot[image]", screenshotPath, "image/png"));
+            if (File.Exists(screenshot.path))
+            {
+                yield return StartCoroutine(UploadFile(issueId, "screenshots", "screenshot[image]", screenshot.path, "image/png"));
+
+                if (screenshot.removeAfterUpload)
+                {
+                    File.Delete(screenshot.path);
+                }
+            }
         }
 
-        // Upload log files
+        _screenshots.Clear();
+
+        // Upload logger log files
         if (!string.IsNullOrEmpty(logger.LogPath) && File.Exists(logger.LogPath))
         {
             // skip if size over 200MB
@@ -165,6 +192,22 @@ public class BH_BugReportUI : MonoBehaviour
                 yield return StartCoroutine(UploadFile(issueId, "log_files", "log_file[file]", logger.LogPath, "text/plain"));
             }
         }
+
+        // Upload custom log files
+        foreach (var logFile in _logFiles)
+        {
+            if (File.Exists(logFile.path))
+            {
+                yield return StartCoroutine(UploadFile(issueId, "log_files", "log_file[file]", logFile.path, "text/plain"));
+
+                if (logFile.removeAfterUpload)
+                {
+                    File.Delete(logFile.path);
+                }
+            }
+        }
+
+        _logFiles.Clear();
 
         // // Upload performance samples (if any)
         // string samplesFile = Application.persistentDataPath + "/samples.csv";
@@ -225,5 +268,17 @@ public class BH_BugReportUI : MonoBehaviour
 
     class IssueResponse {
         public string id;
+    }
+
+    struct LogFileReference
+    {
+        public string path;
+        public bool removeAfterUpload;
+    }
+
+    struct ScreenshotFileReference
+    {
+        public string path;
+        public bool removeAfterUpload;
     }
 }
