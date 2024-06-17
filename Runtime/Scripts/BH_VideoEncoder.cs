@@ -71,7 +71,7 @@ public class BH_VideoEncoder
         ffmpegProcess = new Process();
         ffmpegProcess.StartInfo.FileName = ffmpegPath;
         ffmpegProcess.StartInfo.Arguments = $"-y -f rawvideo -pix_fmt rgb24 -s {width}x{height} -r {frameRate} -i - " +
-                                            $"-vf vflip -c:v {encoder} -pix_fmt yuv420p -preset ultrafast -f segment -segment_time {segmentLength} " +
+                                            $"-vf vflip -c:v {encoder} -pix_fmt yuv420p -f segment -segment_time {segmentLength} " +
                                             $"-reset_timestamps 1 \"{outputPathPattern}\"";
         ffmpegProcess.StartInfo.UseShellExecute = false;
         ffmpegProcess.StartInfo.RedirectStandardInput = true;
