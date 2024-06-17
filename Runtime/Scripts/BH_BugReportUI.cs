@@ -16,7 +16,6 @@ public class BH_BugReportUI : MonoBehaviour
 
     public BH_MessagePanelUI messagePanelUI;
 
-    [HideInInspector]
     public string submitEndpoint = "https://app.betahub.io";
 
     public string projectID;
@@ -157,7 +156,7 @@ public class BH_BugReportUI : MonoBehaviour
         // Upload video file
         BH_GameRecorder gameRecorder = GetComponent<BH_GameRecorder>();
         string videoPath = gameRecorder.StopRecordingAndSaveLastMinute();
-        if (File.Exists(videoPath))
+        if (!string.IsNullOrEmpty(videoPath) && File.Exists(videoPath))
         {
             yield return StartCoroutine(UploadFile(issueId, "video_clips", "video_clip[video]", videoPath, "video/mp4"));
 
