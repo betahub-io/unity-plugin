@@ -50,7 +50,10 @@ public class BH_GameRecorder : MonoBehaviour
 
     void OnDestroy()
     {
-        videoEncoder.Dispose();
+        if (videoEncoder != null) // can be null since Start() may not have been called
+        {
+            videoEncoder.Dispose();
+        }
     }
 
      void Update()
