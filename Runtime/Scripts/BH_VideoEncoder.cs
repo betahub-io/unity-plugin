@@ -89,6 +89,7 @@ public class BH_VideoEncoder
         ffmpegProcess.StartInfo.UseShellExecute = false;
         ffmpegProcess.StartInfo.RedirectStandardInput = true;
         ffmpegProcess.StartInfo.RedirectStandardError = true;
+        ffmpegProcess.StartInfo.CreateNoWindow = true;
         ffmpegProcess.ErrorDataReceived += (sender, e) => { if (e.Data != null) errorBuffer.Add(e.Data); };
         ffmpegProcess.Start();
 
@@ -232,6 +233,7 @@ public class BH_VideoEncoder
         mergeProcess.StartInfo.Arguments = $"-f concat -safe 0 -i \"{concatFilePath}\" -c copy \"{mergedFilePath}\"";
         mergeProcess.StartInfo.UseShellExecute = false;
         mergeProcess.StartInfo.RedirectStandardError = true;
+        mergeProcess.StartInfo.CreateNoWindow = true;
         mergeProcess.ErrorDataReceived += (sender, e) => { if (e.Data != null) errorBuffer.Add(e.Data); };
         mergeProcess.Start();
         mergeProcess.BeginErrorReadLine();
@@ -288,6 +290,7 @@ public class BH_VideoEncoder
         process.StartInfo.Arguments = "-encoders";
         process.StartInfo.UseShellExecute = false;
         process.StartInfo.RedirectStandardOutput = true;
+        process.StartInfo.CreateNoWindow = true;
         process.Start();
 
         string output = process.StandardOutput.ReadToEnd();
