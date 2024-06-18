@@ -60,6 +60,8 @@ public class BH_BugReportUI : MonoBehaviour
         {
             Debug.LogWarning("BH_GameRecorder component is not attached to the same GameObject as BH_BugReportUI. Video won't be recorded.");
         }
+
+        DontDestroyOnLoad(gameObject);
     }
 
     void Update()
