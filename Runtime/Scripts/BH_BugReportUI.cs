@@ -9,6 +9,8 @@ using System.Collections.Generic;
 
 public class BH_BugReportUI : MonoBehaviour
 {
+    private static BH_BugReportUI instance;
+    
     public GameObject bugReportPanel;
     public TMP_InputField descriptionField;
     public TMP_InputField stepsField;
@@ -45,6 +47,19 @@ public class BH_BugReportUI : MonoBehaviour
     {
         logger = new BH_Logger();
     }
+    
+    void Awake()
+    {
+        if (instance == null)
+        {
+            instance = this;
+        }
+        else
+        {
+            Destroy(gameObject);
+        }
+    }
+    
     void Start()
     {
         bugReportPanel.SetActive(false);
