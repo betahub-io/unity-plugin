@@ -22,6 +22,7 @@ public class BH_VideoEncoder
 
     private bool debugMode;
 
+    public bool Disposed { get { return disposed; } }
     private volatile bool disposed;
 
     // if true, the inner thread should stop
@@ -53,7 +54,7 @@ public class BH_VideoEncoder
         
         if (ffmpegProcess != null && !ffmpegProcess.HasExited)
         {
-            ffmpegProcess.Kill();
+            SendStopRequestAndWait();
         }
 
         RemoveAllSegments();
