@@ -6,6 +6,9 @@ using System.Collections;
 using UnityEngine.Networking;
 using UnityEngine.Events;
 using System.Collections.Generic;
+#if ENABLE_INPUT_SYSTEM
+using UnityEngine.InputSystem;
+#endif
 
 public class BH_BugReportUI : MonoBehaviour
 {
@@ -24,7 +27,11 @@ public class BH_BugReportUI : MonoBehaviour
 
     public string projectID;
 
+#if ENABLE_INPUT_SYSTEM
+    public InputAction shortcutAction = new InputAction("BugReportShortcut", binding: "<Keyboard>/f12");
+#else
     public KeyCode shortcutKey = KeyCode.F12;
+#endif
 
     public bool includePlayerLog = true;
 
@@ -59,6 +66,28 @@ public class BH_BugReportUI : MonoBehaviour
             Destroy(gameObject);
         }
     }
+
+    void OnEnable()
+    {
+#if ENABLE_INPUT_SYSTEM
+        if (IsNewInputSystemEnabled())
+        {
+            shortcutAction.Enable();
+            shortcutAction.performed += OnShortcutActionPerformed;
+        }
+#endif
+    }
+
+    void OnDisable()
+    {
+#if ENABLE_INPUT_SYSTEM
+        if (IsNewInputSystemEnabled())
+        {
+            shortcutAction.performed -= OnShortcutActionPerformed;
+            shortcutAction.Disable();
+        }
+#endif
+    }
     
     void Start()
     {
@@ -89,11 +118,26 @@ public class BH_BugReportUI : MonoBehaviour
             }
         }
         
-        if (shortcutKey != KeyCode.None && Input.GetKeyDown(shortcutKey)) // Shortcut key to open bug report UI
+#if !ENABLE_INPUT_SYSTEM
+        if (shortcutKey != KeyCode.None && Input.GetKeyDown(shortcutKey))
         {
             StartCoroutine(CaptureScreenshotAndShowUI());
         }
+#endif
     }
+
+#if ENABLE_INPUT_SYSTEM
+    void OnShortcutActionPerformed(InputAction.CallbackContext context)
+    {
+        StartCoroutine(CaptureScreenshotAndShowUI());
+    }
+
+    bool IsNewInputSystemEnabled()
+    {
+        // Check if the new input system is enabled
+        return InputSystem.settings != null;
+    }
+#endif
 
     IEnumerator CaptureScreenshotAndShowUI()
     {
