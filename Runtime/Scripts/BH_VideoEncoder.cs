@@ -24,6 +24,9 @@ public class BH_VideoEncoder
 
     private volatile bool disposed;
 
+    // if true, the inner thread should stop
+    private volatile bool _stopRequest = false;
+
     public BH_VideoEncoder(int width, int height, int frameRate, int recordingDurationSeconds, string outputDir = "Recording")
     {
         this.width = width;
@@ -107,7 +110,7 @@ public class BH_VideoEncoder
             float nextFrameTime = 0f;
             float nextCleanupTime = segmentLength; // Schedule cleanup after the first segment duration
 
-            while (ffmpegProcess != null && !ffmpegProcess.HasExited)
+            while (ffmpegProcess != null && !ffmpegProcess.HasExited && !_stopRequest)
             {
                 float elapsedSeconds = (float)stopwatch.Elapsed.TotalSeconds;
 
@@ -142,6 +145,10 @@ public class BH_VideoEncoder
                 System.Threading.Thread.Sleep(1);
             }
 
+            _stopRequest = false; // reset the flag
+            ffmpegProcess.StandardInput.Close();
+            ffmpegProcess.WaitForExit();
+
             // If ffmpeg process has exited with exit code other than 0, log the stderr messages
             if (ffmpegProcess.ExitCode != 0 && !disposed)
             {
@@ -161,7 +168,7 @@ public class BH_VideoEncoder
     {
         if (ffmpegProcess != null && !ffmpegProcess.HasExited)
         {
-            ffmpegProcess.StandardInput.Close();
+            _stopRequest = true; // this will ask the thread to close the standard input and exit
             ffmpegProcess.WaitForExit();
         }
 
