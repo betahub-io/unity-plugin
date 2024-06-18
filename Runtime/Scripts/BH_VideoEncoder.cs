@@ -26,6 +26,7 @@ public class BH_VideoEncoder
 
     // if true, the inner thread should stop
     private volatile bool _stopRequest = false;
+    private volatile bool _stopRequestHandled = false;
 
     public BH_VideoEncoder(int width, int height, int frameRate, int recordingDurationSeconds, string outputDir = "Recording")
     {
@@ -146,8 +147,11 @@ public class BH_VideoEncoder
             }
 
             _stopRequest = false; // reset the flag
+
             ffmpegProcess.StandardInput.Close();
             ffmpegProcess.WaitForExit();
+
+            _stopRequestHandled = true; // let the main thread know that the stop request has been handled
 
             // If ffmpeg process has exited with exit code other than 0, log the stderr messages
             if (ffmpegProcess.ExitCode != 0 && !disposed)
@@ -166,11 +170,7 @@ public class BH_VideoEncoder
 
     public string StopEncoding()
     {
-        if (ffmpegProcess != null && !ffmpegProcess.HasExited)
-        {
-            _stopRequest = true; // this will ask the thread to close the standard input and exit
-            ffmpegProcess.WaitForExit();
-        }
+        SendStopRequestAndWait();
 
         string mergedFilePath = MergeSegments();
 
@@ -178,6 +178,31 @@ public class BH_VideoEncoder
         CleanupSegments();
 
         return mergedFilePath;
+    }
+
+    private string SendStopRequestAndWait()
+    {
+        if (ffmpegProcess != null && !ffmpegProcess.HasExited)
+        {
+            _stopRequestHandled = false;
+            _stopRequest = true; // this will ask the thread to close the standard input and exit
+
+            // wait until stop request
+            int timeout = 2000; // 2 seconds
+
+            while (!_stopRequestHandled && timeout > 0)
+            {
+                System.Threading.Thread.Sleep(10);
+                timeout -= 10;
+            }
+
+            if (timeout <= 0)
+            {
+                UnityEngine.Debug.LogError("Timeout while waiting for the encoding thread to stop.");
+            }
+        }
+
+        return MergeSegments();
     }
 
     private string MergeSegments()
