@@ -182,7 +182,7 @@ public class BH_VideoEncoder
         return mergedFilePath;
     }
 
-    private string SendStopRequestAndWait()
+    private void SendStopRequestAndWait()
     {
         if (ffmpegProcess != null && !ffmpegProcess.HasExited)
         {
@@ -203,8 +203,6 @@ public class BH_VideoEncoder
                 UnityEngine.Debug.LogError("Timeout while waiting for the encoding thread to stop.");
             }
         }
-
-        return MergeSegments();
     }
 
     private string MergeSegments()
