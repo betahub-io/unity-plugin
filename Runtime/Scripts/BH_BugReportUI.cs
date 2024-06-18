@@ -76,16 +76,23 @@ public class BH_BugReportUI : MonoBehaviour
         
         if (shortcutKey != KeyCode.None && Input.GetKeyDown(shortcutKey)) // Shortcut key to open bug report UI
         {
-            // Capture screenshot
-            string screenshotPath = Application.persistentDataPath + "/screenshot.png";
-            ScreenCapture.CaptureScreenshot(screenshotPath);
-
-            AddScreenshot(screenshotPath, true);
-            
-            bugReportPanel.SetActive(true);
-
-            ModifyCursorState();
+            StartCoroutine(CaptureScreenshotAndShowUI());
         }
+    }
+
+    IEnumerator CaptureScreenshotAndShowUI()
+    {
+        // Capture screenshot
+        string screenshotPath = Application.persistentDataPath + "/screenshot.png";
+        ScreenCapture.CaptureScreenshot(screenshotPath);
+
+        AddScreenshot(screenshotPath, true);
+
+        // wait for another frame
+        yield return null;
+        
+        bugReportPanel.SetActive(true);
+        ModifyCursorState();
     }
 
     // Sets screenshot path to be uploaded. Useful on manual invocation of bug report UI.
