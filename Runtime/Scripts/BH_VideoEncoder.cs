@@ -65,13 +65,21 @@ public class BH_VideoEncoder
         
         RemoveAllSegments();
         
-        string encoder = GetHardwareEncoder();
+        string encoder = FindPreferredEncoder();
+        string presetName = GetPresetName(encoder);
+        string presetString = "";
+
+        if (!string.IsNullOrEmpty(presetName))
+        {
+            presetString = $"-preset {presetName}";
+        }
+
         UnityEngine.Debug.Log($"Using encoder: {encoder}");
 
         ffmpegProcess = new Process();
         ffmpegProcess.StartInfo.FileName = ffmpegPath;
         ffmpegProcess.StartInfo.Arguments = $"-y -f rawvideo -pix_fmt rgb24 -s {width}x{height} -r {frameRate} -i - " +
-                                            $"-vf vflip -c:v {encoder} -pix_fmt yuv420p -f segment -segment_time {segmentLength} " +
+                                            $"-vf vflip -c:v {encoder} -pix_fmt yuv420p {presetString} -f segment -segment_time {segmentLength} " +
                                             $"-reset_timestamps 1 \"{outputPathPattern}\"";
         ffmpegProcess.StartInfo.UseShellExecute = false;
         ffmpegProcess.StartInfo.RedirectStandardInput = true;
@@ -232,7 +240,7 @@ public class BH_VideoEncoder
         }
     }
 
-    private static string GetHardwareEncoder()
+    private static string FindPreferredEncoder()
     {
         // Run ffmpeg to get the list of available encoders
         var process = new Process();
@@ -269,6 +277,31 @@ public class BH_VideoEncoder
         {
             // Default to software encoding if no hardware encoder is found
             return "libx264";
+        }
+    }
+
+    // It returns the fastest preset for the given encoder
+    private string GetPresetName(string encoder)
+    {
+        if (encoder == "h264_nvenc")
+        {
+            return "p1";
+        }
+        else if (encoder == "h264_videotoolbox")
+        {
+            return "ultrafast";
+        }
+        else if (encoder == "h264_vaapi")
+        {
+            return ""; // TODO: check what the fastest preset is
+        }
+        else if (encoder == "libx264")
+        {
+            return "ultrafast";
+        }
+        else
+        {
+            return "";
         }
     }
 
