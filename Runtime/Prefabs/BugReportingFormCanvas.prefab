@@ -493,7 +493,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0cd44c1031e13a943bb63640046fad76, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  m_UiScaleMode: 0
+  m_UiScaleMode: 1
   m_ReferencePixelsPerUnit: 100
   m_ScaleFactor: 1
   m_ReferenceResolution: {x: 800, y: 600}
@@ -541,6 +541,15 @@ MonoBehaviour:
   messagePanelUI: {fileID: 3630024248915368456}
   submitEndpoint: https://app.betahub.io
   projectID: 
+  shortcutKey: 293
+  includePlayerLog: 1
+  includeVideo: 1
+  OnBugReportWindowShown:
+    m_PersistentCalls:
+      m_Calls: []
+  OnBugReportWindowHidden:
+    m_PersistentCalls:
+      m_Calls: []
 --- !u!114 &3630024247677609246
 MonoBehaviour:
   m_ObjectHideFlags: 0
