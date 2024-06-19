@@ -19,6 +19,8 @@ public class BH_BugReportUI : MonoBehaviour
     public TMP_InputField stepsField;
     public Button submitButton;
 
+    public Button closeButton;
+
     public GameObject messagePanel;
 
     public BH_MessagePanelUI messagePanelUI;
@@ -37,8 +39,6 @@ public class BH_BugReportUI : MonoBehaviour
 
     public bool includeVideo = true;
 
-    private bool _startedRecordingInitially = false;
-
     public UnityEvent OnBugReportWindowShown;
     public UnityEvent OnBugReportWindowHidden;
 
@@ -48,6 +48,11 @@ public class BH_BugReportUI : MonoBehaviour
     private static BH_Logger logger;
     private bool _cursorStateChanged;
     private CursorLockMode _previousCursorLockMode;
+
+    private BH_GameRecorder _gameRecorder;
+
+    // if true, the report is being uploaded, some processes should be paused
+    private bool _uploadingReport = false;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void InitializeLogger()
@@ -91,8 +96,14 @@ public class BH_BugReportUI : MonoBehaviour
     
     void Start()
     {
+        _gameRecorder = GetComponent<BH_GameRecorder>();
+        
         bugReportPanel.SetActive(false);
         submitButton.onClick.AddListener(SubmitBugReport);
+        closeButton.onClick.AddListener(() =>
+        {
+            bugReportPanel.SetActive(false);
+        });
 
         if (string.IsNullOrEmpty(projectID))
         {
@@ -108,14 +119,29 @@ public class BH_BugReportUI : MonoBehaviour
         DontDestroyOnLoad(gameObject);
     }
 
+    
+
     void Update()
     {
-        if (includeVideo && !_startedRecordingInitially) {
-            var gameRecorder = GetComponent<BH_GameRecorder>();
-            if (gameRecorder != null && !gameRecorder.IsRecording) {
-                gameRecorder.StartRecording();
-                _startedRecordingInitially = true;
+        if (_gameRecorder != null)
+        {
+            if (SholdBeRecordingVideo() && (!_gameRecorder.IsRecording || _gameRecorder.IsPaused))
+            {
+                _gameRecorder.StartRecording();
             }
+            else if (!SholdBeRecordingVideo() && (_gameRecorder.IsRecording && !_gameRecorder.IsPaused))
+            {
+                _gameRecorder.PauseRecording();
+            }
+        }
+
+        if (bugReportPanel.activeSelf && _cursorStateChanged)
+        {
+            ModifyCursorState();
+        }
+        else if (!bugReportPanel.activeSelf && _cursorStateChanged)
+        {
+            RestoreCursorState();
         }
         
 #if !ENABLE_INPUT_SYSTEM
@@ -124,6 +150,35 @@ public class BH_BugReportUI : MonoBehaviour
             StartCoroutine(CaptureScreenshotAndShowUI());
         }
 #endif
+    }
+
+    private bool SholdBeRecordingVideo()
+    {
+        // if true, the report is being uploaded, some processes should be paused
+        return includeVideo && !bugReportPanel.activeSelf && !_uploadingReport;
+    }
+
+    private void ModifyCursorState()
+    {
+        if (!Cursor.visible || Cursor.lockState != CursorLockMode.None)
+        {
+            _cursorStateChanged = true;
+            _previousCursorLockMode = Cursor.lockState;
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+            OnBugReportWindowShown?.Invoke();
+        }
+    }
+
+    private void RestoreCursorState()
+    {
+        if (_cursorStateChanged)
+        {
+            Cursor.lockState = _previousCursorLockMode;
+            Cursor.visible = false;
+            _cursorStateChanged = false;
+            OnBugReportWindowHidden?.Invoke();
+        }
     }
 
 #if ENABLE_INPUT_SYSTEM
@@ -151,7 +206,6 @@ public class BH_BugReportUI : MonoBehaviour
         yield return null;
         
         bugReportPanel.SetActive(true);
-        ModifyCursorState();
     }
 
     // Sets screenshot path to be uploaded. Useful on manual invocation of bug report UI.
@@ -165,24 +219,25 @@ public class BH_BugReportUI : MonoBehaviour
         _logFiles.Add(new LogFileReference { path = path, removeAfterUpload = removeAfterUpload });
     }
 
-    private void ModifyCursorState()
-    {
-        if (!Cursor.visible || Cursor.lockState != CursorLockMode.None)
-        {
-            _cursorStateChanged = true;
-            _previousCursorLockMode = Cursor.lockState;
-            Cursor.lockState = CursorLockMode.None;
-            Cursor.visible = true;
-            OnBugReportWindowShown?.Invoke();
-        }
-    }
-
     void SubmitBugReport()
     {
         string description = descriptionField.text;
         string steps = stepsField.text;
 
-        StartCoroutine(PostIssue(description, steps));
+        _uploadingReport = true;
+        BH_CoroutineUtils.StartThrowingCoroutine(this, PostIssue(description, steps), (ex) =>
+        {
+            _uploadingReport = false;
+            bugReportPanel.SetActive(false);
+            submitButton.interactable = true;
+            submitButton.GetComponentInChildren<TMP_Text>().text = "Submit";
+
+            if (ex != null)
+            {
+                Debug.LogError("Error submitting bug report: " + ex);
+                messagePanelUI.ShowMessagePanel("Error", "Error submitting bug report. Please try again later.");
+            }
+        });
 
         submitButton.interactable = false;
         submitButton.GetComponentInChildren<TMP_Text>().text = "Submitting...";
@@ -210,9 +265,6 @@ public class BH_BugReportUI : MonoBehaviour
 
             yield return www.SendWebRequest();
 
-            submitButton.interactable = true;
-            submitButton.GetComponentInChildren<TMP_Text>().text = "Submit";
-
             if (www.result != UnityWebRequest.Result.Success)
             {
                 Debug.LogError(www.error);
@@ -233,22 +285,10 @@ public class BH_BugReportUI : MonoBehaviour
                 messagePanelUI.ShowMessagePanel("Success", "Bug report submitted successfully!", () =>
                 {
                     bugReportPanel.SetActive(false);
-                    RestoreCursorState();
                 });
 
-                StartCoroutine(UploadAdditionalFiles(issueId));
+                yield return UploadAdditionalFiles(issueId);
             }
-        }
-    }
-
-    private void RestoreCursorState()
-    {
-        if (_cursorStateChanged)
-        {
-            Cursor.lockState = _previousCursorLockMode;
-            Cursor.visible = false;
-            _cursorStateChanged = false;
-            OnBugReportWindowHidden?.Invoke();
         }
     }
 
@@ -320,7 +360,6 @@ public class BH_BugReportUI : MonoBehaviour
                     // Delete the video file after uploading
                     File.Delete(videoPath);
                 }
-                gameRecorder.StartRecording(); // Restart recording
             }
         }
 

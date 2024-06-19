@@ -8,8 +8,8 @@ public class BH_GameRecorder : MonoBehaviour
 
     public int RecordingDuration = 60;
     private Texture2D screenShot;
-    public bool IsRecording { get { return isRecording; } }
-    private bool isRecording;
+    public bool IsRecording { get; private set; }
+    public bool IsPaused { get { return videoEncoder.IsPaused; } set { videoEncoder.IsPaused = value; } }
     private BH_VideoEncoder videoEncoder;
     private BH_TexturePainter texturePainter;
 
@@ -33,7 +33,7 @@ public class BH_GameRecorder : MonoBehaviour
         // Create a Texture2D with the adjusted resolution
         screenShot = new Texture2D(gameWidth, gameHeight, TextureFormat.RGB24, false);
         texturePainter = new BH_TexturePainter(screenShot);
-        isRecording = false;
+        IsRecording = false;
 
         string outputDirectory = Path.Combine(Application.persistentDataPath, "BH_Recording");
         if (DebugMode)
@@ -67,20 +67,41 @@ public class BH_GameRecorder : MonoBehaviour
 
     public void StartRecording()
     {
-        videoEncoder.StartEncoding();
-        isRecording = true;
-        StartCoroutine(CaptureFrames());
+        if (IsPaused)
+        {
+            IsPaused = false; // this will unpause
+        }
+        else if (!IsRecording)
+        {
+            videoEncoder.StartEncoding();
+            IsRecording = true;
+            StartCoroutine(CaptureFrames());
+        } else
+        {
+            Debug.LogWarning("Cannot start recording when already recording.");
+        }
+    }
+
+    public void PauseRecording()
+    {
+        if (IsRecording)
+        {
+            IsPaused = true;
+        } else
+        {
+            Debug.LogWarning("Cannot pause recording when not recording.");
+        }
     }
 
     public string StopRecordingAndSaveLastMinute()
     {
-        isRecording = false;
+        IsRecording = false;
         return videoEncoder.StopEncoding();
     }
 
     private IEnumerator CaptureFrames()
     {
-        while (isRecording)
+        while (IsRecording)
         {
             yield return new WaitForEndOfFrame();
 

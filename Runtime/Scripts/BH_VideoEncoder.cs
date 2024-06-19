@@ -22,6 +22,9 @@ public class BH_VideoEncoder
 
     private bool debugMode;
 
+    // if set to true, the encoding thread will pause adding new frames
+    public bool IsPaused { get; set; }
+
     public bool Disposed { get { return disposed; } }
     private volatile bool disposed;
 
@@ -123,7 +126,7 @@ public class BH_VideoEncoder
 
                     try
                     {
-                        if (lastFrame != null)
+                        if (lastFrame != null && !IsPaused)
                         {
                             // TODO: This sometimes can cause NullReferenceException when the process is closed, fix it
                             // synchronization may be needed
