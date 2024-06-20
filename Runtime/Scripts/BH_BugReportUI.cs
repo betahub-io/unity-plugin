@@ -135,11 +135,11 @@ public class BH_BugReportUI : MonoBehaviour
             }
         }
 
-        if (bugReportPanel.activeSelf && _cursorStateChanged)
+        if (bugReportPanel.activeSelf && !_cursorStateChanged)
         {
             ModifyCursorState();
         }
-        else if (!bugReportPanel.activeSelf && _cursorStateChanged)
+        else if (!bugReportPanel.activeSelf && !messagePanelUI.gameObject.activeSelf && _cursorStateChanged)
         {
             RestoreCursorState();
         }
