@@ -2,9 +2,7 @@
 
 An easy in-game bug reporting plugin for Unity with video recording and log collection.
 
-![](https://i.imgur.com/6ty56zD.png)
-
-The installation and setup documentation is available [here](https://www.betahub.io/docs/integration-guides/).
+https://github.com/betahub-io/unity-plugin/assets/113201/b01f372c-c3ac-4f49-8b38-e892db873adf
 
 ## Features
 
@@ -24,6 +22,10 @@ The installation and setup documentation is available [here](https://www.betahub
 - A living, breathing game project
 - A bug or two to report
 - A human being to play the game
+
+## Installation
+
+The installation and setup documentation is available [here](https://www.betahub.io/docs/integration-guides/).
 
 ## Support
 
