@@ -17,6 +17,8 @@ public class BH_VideoEncoder
     private int maxSegments = 6; // Number of segments to keep (covering 60 seconds)
     private CircularBuffer<string> errorBuffer = new CircularBuffer<string>(256); // Circular buffer for stderr
 
+    private string _functionalEncoder = null;
+
     private byte[] lastFrame;
     private float frameInterval;
 
@@ -276,15 +278,65 @@ public class BH_VideoEncoder
         }
     }
 
-    private static string FindPreferredEncoder()
+    private string FindPreferredEncoder()
     {
+        string[] encoders = FindAvailableEncoders();
+        if (!string.IsNullOrEmpty(_functionalEncoder) && encoders.Contains(_functionalEncoder))
+        {
+            return _functionalEncoder;
+        }
+
+        // execute ffmpeg -f lavfi -i nullsrc=d=1 -c:v h264_nvenc -t 1 -f null - for each encoder on the list,
+        // exit code 0 menas the encoder is available
+
+        string ffmpegPath = GetFfmpegPath();
+        if (ffmpegPath == null)
+        {
+            return encoders[encoders.Length - 1];
+        }
+
+        foreach (var encoder in encoders)
+        {
+            UnityEngine.Debug.Log($"Checking encoder: {encoder}");
+            
+            var process = new Process();
+            process.StartInfo.FileName = ffmpegPath;
+            process.StartInfo.Arguments = $"-f lavfi -i nullsrc=d=1 -c:v {encoder} -t 1 -f null -";
+            process.StartInfo.UseShellExecute = false;
+            process.StartInfo.RedirectStandardOutput = true;
+            process.StartInfo.CreateNoWindow = true;
+            process.Start();
+
+            process.WaitForExit();
+
+            if (process.ExitCode == 0)
+            {
+                UnityEngine.Debug.Log($"Encoder {encoder} is available.");
+                _functionalEncoder = encoder;
+
+                return encoder;
+            }
+            else
+            {
+                UnityEngine.Debug.Log($"Encoder {encoder} is not available.");
+            }
+        }
+
+        return encoders[encoders.Length - 1];
+    }
+
+    // It returns the preferred encoder based on the available encoders in order of preference
+    private static string[] FindAvailableEncoders()
+    {
+        List<string> encoders = new List<string>();
+        
         // Run ffmpeg to get the list of available encoders
         var process = new Process();
 
         string ffmpegPath = GetFfmpegPath();
         if (ffmpegPath == null)
         {
-            return "libx264";
+            return encoders.ToArray();
         }
 
         process.StartInfo.FileName = ffmpegPath;
@@ -300,21 +352,28 @@ public class BH_VideoEncoder
         // Check for specific hardware encoders in the output
         if (output.Contains("h264_nvenc"))
         {
-            return "h264_nvenc";
+            encoders.Add("h264_nvenc");
         }
-        else if (output.Contains("h264_videotoolbox"))
+
+        if (output.Contains("h264_amf"))
         {
-            return "h264_videotoolbox";
+            encoders.Add("h264_amf");
         }
-        else if (output.Contains("h264_vaapi"))
+
+        if (output.Contains("h264_videotoolbox"))
         {
-            return "h264_vaapi";
+            encoders.Add("h264_videotoolbox");
         }
-        else
+        
+        if (output.Contains("h264_vaapi"))
         {
-            // Default to software encoding if no hardware encoder is found
-            return "libx264";
+            encoders.Add("h264_vaapi");
         }
+
+        // Always add libx264 as a fallback
+        encoders.Add("libx264");
+
+        return encoders.ToArray();
     }
 
     // It returns the fastest preset for the given encoder
