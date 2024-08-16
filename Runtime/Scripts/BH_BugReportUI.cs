@@ -17,6 +17,12 @@ public class BH_BugReportUI : MonoBehaviour
     public GameObject bugReportPanel;
     public TMP_InputField descriptionField;
     public TMP_InputField stepsField;
+    
+    public Toggle IncludeVideoToggle;
+    public Toggle IncludeScreenshotToggle;
+    public Toggle IncludePlayerLogToggle;
+
+
     public Button submitButton;
 
     public Button closeButton;
@@ -114,6 +120,23 @@ public class BH_BugReportUI : MonoBehaviour
         if (gameRecorder == null)
         {
             Debug.LogWarning("BH_GameRecorder component is not attached to the same GameObject as BH_BugReportUI. Video won't be recorded.");
+            IncludeVideoToggle.interactable = false;
+        }
+        else
+        {
+            // update {TIME} in toggle label
+            int recordingDurationSeconds = gameRecorder.RecordingDuration;
+            var textComponent = IncludeVideoToggle.GetComponentInChildren<Text>();
+
+            if (textComponent != null)
+            {
+                textComponent.text = textComponent.text.Replace("{TIME}", recordingDurationSeconds.ToString() + " Seconds");
+                Debug.Log("Updated IncludeVideoToggle label to: " + textComponent.text);
+            }
+            else
+            {
+                Debug.LogWarning("Could not find Text component in IncludeVideoToggle. Make sure the text is set in the inspector.");
+            }
         }
 
         DontDestroyOnLoad(gameObject);
@@ -296,46 +319,53 @@ public class BH_BugReportUI : MonoBehaviour
     {
         // Upload screenshots
 
-        foreach (var screenshot in _screenshots)
+        if (IncludeScreenshotToggle.isOn)
         {
-            if (File.Exists(screenshot.path))
+            foreach (var screenshot in _screenshots)
             {
-                yield return StartCoroutine(UploadFile(issueId, "screenshots", "screenshot[image]", screenshot.path, "image/png"));
-
-                if (screenshot.removeAfterUpload)
+                if (File.Exists(screenshot.path))
                 {
-                    File.Delete(screenshot.path);
+                    yield return StartCoroutine(UploadFile(issueId, "screenshots", "screenshot[image]", screenshot.path, "image/png"));
+
+                    if (screenshot.removeAfterUpload)
+                    {
+                        File.Delete(screenshot.path);
+                    }
                 }
             }
+
+            _screenshots.Clear();
         }
 
-        _screenshots.Clear();
-
-        // Upload logger log files
-        if (includePlayerLog && !string.IsNullOrEmpty(logger.LogPath) && File.Exists(logger.LogPath))
+        if (IncludePlayerLogToggle.isOn)
         {
-            // skip if size over 200MB
-            if (new FileInfo(logger.LogPath).Length < 200 * 1024 * 1024)
-            {
-                yield return StartCoroutine(UploadFile(issueId, "log_files", "log_file[file]", logger.LogPath, "text/plain"));
-            }
-        }
 
-        // Upload custom log files
-        foreach (var logFile in _logFiles)
-        {
-            if (File.Exists(logFile.path))
+            // Upload logger log files
+            if (includePlayerLog && !string.IsNullOrEmpty(logger.LogPath) && File.Exists(logger.LogPath))
             {
-                yield return StartCoroutine(UploadFile(issueId, "log_files", "log_file[file]", logFile.path, "text/plain"));
-
-                if (logFile.removeAfterUpload)
+                // skip if size over 200MB
+                if (new FileInfo(logger.LogPath).Length < 200 * 1024 * 1024)
                 {
-                    File.Delete(logFile.path);
+                    yield return StartCoroutine(UploadFile(issueId, "log_files", "log_file[file]", logger.LogPath, "text/plain"));
                 }
             }
-        }
 
-        _logFiles.Clear();
+            // Upload custom log files
+            foreach (var logFile in _logFiles)
+            {
+                if (File.Exists(logFile.path))
+                {
+                    yield return StartCoroutine(UploadFile(issueId, "log_files", "log_file[file]", logFile.path, "text/plain"));
+
+                    if (logFile.removeAfterUpload)
+                    {
+                        File.Delete(logFile.path);
+                    }
+                }
+            }
+
+            _logFiles.Clear();
+        }
 
         // // Upload performance samples (if any)
         // string samplesFile = Application.persistentDataPath + "/samples.csv";
@@ -347,7 +377,7 @@ public class BH_BugReportUI : MonoBehaviour
         // }
 
         // Upload video file
-        if (includeVideo)
+        if (includeVideo && IncludeVideoToggle.isOn)
         {
             BH_GameRecorder gameRecorder = GetComponent<BH_GameRecorder>();
             if (gameRecorder != null)
