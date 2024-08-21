@@ -70,7 +70,9 @@
             <ul>
                 <li>Log in to your account</li>
                 <li>Click the "New Project" button</li>
-                <li>Note down your Project ID (you'll need this for plugin configuration)</li>
+                <li>Follow up with the project creation wizard</li>
+                <li>While on the project page, click the "Settings/General" menu on the left</li>
+                <li>Note down your Project ID from the "Project Information" frame (you'll need this for plugin configuration)</li>
             </ul>
         </li>
     </ol>
@@ -100,13 +102,13 @@
 
     <ul>
         <li><strong>Shortcut Key</strong>: Default is F12. Set to None to disable and open the form programmatically.</li>
-        <li><strong>BH_Performance_Sampler</strong>
+        <li><strong>Performance_Sampler</strong>
             <ul>
                 <li><strong>Sample Frequency</strong>: How often to sample game performance.</li>
                 <li><strong>Sample Duration</strong>: How long to sample game performance.</li>
             </ul>
         </li>
-        <li><strong>BH_Game_Recorder</strong>
+        <li><strong>Game_Recorder</strong>
             <ul>
                 <li><strong>Frame Rate</strong>: Default is 30. Higher rates may increase file size and resource usage.</li>
                 <li><strong>Recording Duration</strong>: Default is 60 seconds.</li>
@@ -119,7 +121,7 @@
     <p>To open the bug report form on specific events:</p>
 
     <ol>
-        <li>Call <code>SetActive</code> on the <code>BH_BugReportUI</code> object.</li>
+        <li>Call <code>SetActive</code> on the <code>BugReportUI</code> object.</li>
         <li>Be aware of default inclusions:
             <ul>
                 <li>Video: Yes (control with <code>IncludeVideo</code>)</li>
@@ -131,7 +133,7 @@
 
     <h4>Including Screenshots</h4>
 
-    <p>Use <code>AddScreenshot</code> on the <code>BH_BugReportUI</code> object:</p>
+    <p>Use <code>AddScreenshot</code> on the <code>BugReportUI</code> object:</p>
 
     <pre><code>public void AddScreenshot(string path, bool removeAfterUpload)</code></pre>
 
@@ -141,7 +143,7 @@
 
     <h4>Including Logs</h4>
 
-    <p>Use <code>AddLog</code> on the <code>BH_BugReportUI</code> object:</p>
+    <p>Use <code>AddLog</code> on the <code>BugReportUI</code> object:</p>
 
     <pre><code>public void AddLog(string path, bool removeAfterUpload)</code></pre>
 
