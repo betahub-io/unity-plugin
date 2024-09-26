@@ -26,6 +26,9 @@ namespace BetaHub
         private float fps;
         private float deltaTime = 0.0f;
 
+        public TextureFilterManager TextureFilterManager => _textureFilterManager;
+        private TextureFilterManager _textureFilterManager = new TextureFilterManager();
+
         void Start()
         {
             // Adjust the game resolution to be divisible by 2
@@ -124,6 +127,8 @@ namespace BetaHub
                     // Draw a number as an example
                     // texturePainter.DrawNumber(50, 10, (int) fps, Color.white, 4);
                     texturePainter.DrawNumber(5, 5, (int)fps, Color.white, 2);
+
+                    _textureFilterManager.ApplyFilters(texturePainter);
 
                     byte[] frameData = screenShot.GetRawTextureData();
                     videoEncoder.AddFrame(frameData);
