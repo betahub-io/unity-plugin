@@ -41,12 +41,11 @@ namespace BetaHub
         public KeyCode shortcutKey = KeyCode.F12;
 #endif
 
-        public bool includePlayerLog = true;
-        public bool includeVideo = true;
-
         public UnityEvent OnBugReportWindowShown;
         public UnityEvent OnBugReportWindowHidden;
 
+        private bool includePlayerLog = true;
+        private bool includeVideo = true;
         private List<ScreenshotFileReference> _screenshots = new List<ScreenshotFileReference>();
         private List<LogFileReference> _logFiles = new List<LogFileReference>();
 
