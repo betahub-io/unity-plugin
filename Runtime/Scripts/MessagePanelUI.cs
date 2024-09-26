@@ -19,7 +19,6 @@ namespace BetaHub
 
         void Start()
         {
-            gameObject.SetActive(false);
             messagePanelOkButton.onClick.AddListener(CloseMessagePanel);
         }
 
