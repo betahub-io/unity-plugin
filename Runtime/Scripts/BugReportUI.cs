@@ -222,9 +222,18 @@ namespace BetaHub
 
         IEnumerator CaptureScreenshotAndShowUI()
         {
-            // Capture screenshot
+            // Wait for the end of the frame to ensure the screen is fully rendered
+            yield return new WaitForEndOfFrame();
+
+            // Capture the screenshot as a texture after the frame has been rendered
+            Texture2D texture = ScreenCapture.CaptureScreenshotAsTexture();
+
+            // Apply the filters (including DrawBox) to the RenderTexture
+            Texture2D screenshot = ApplyFiltersToScreenshot(texture);
+
+            // Save the screenshot to a file
             string screenshotPath = Application.persistentDataPath + "/screenshot.png";
-            ScreenCapture.CaptureScreenshot(screenshotPath);
+            File.WriteAllBytes(screenshotPath, screenshot.EncodeToPNG());
 
             AddScreenshot(screenshotPath, true);
 
@@ -232,6 +241,15 @@ namespace BetaHub
             yield return null;
 
             bugReportPanel.SetActive(true);
+        }
+
+        // Method to apply filters (DrawBox or others) to the screenshot
+        private Texture2D ApplyFiltersToScreenshot(Texture2D texture)
+        {
+            // Use the TextureFilterManager to apply filters, including DrawBox
+            _gameRecorder.TextureFilterManager.ApplyFilters(new TexturePainter(texture));
+
+            return texture;
         }
 
         // Sets screenshot path to be uploaded. Useful on manual invocation of bug report UI.
@@ -300,6 +318,10 @@ namespace BetaHub
                         Debug.LogError(www.downloadHandler.text);
                         ErrorMessage message = JsonUtility.FromJson<ErrorMessage>(www.downloadHandler.text);
                         messagePanelUI.ShowMessagePanel("Error", message.error);
+                    }
+                    else
+                    {
+                        messagePanelUI.ShowMessagePanel("Error", "An unexpected error occurred. Please try again later.");
                     }
                 }
                 else
