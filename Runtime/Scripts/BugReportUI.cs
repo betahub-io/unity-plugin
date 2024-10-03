@@ -15,11 +15,11 @@ namespace BetaHub
     public class BugReportUI : MonoBehaviour
     {
         private static BugReportUI instance;
-        
+
         public GameObject bugReportPanel;
         public TMP_InputField descriptionField;
         public TMP_InputField stepsField;
-        
+
         public Toggle IncludeVideoToggle;
         public Toggle IncludeScreenshotToggle;
         public Toggle IncludePlayerLogToggle;
@@ -35,18 +35,17 @@ namespace BetaHub
 
         public string projectID;
 
-    #if ENABLE_INPUT_SYSTEM
+#if ENABLE_INPUT_SYSTEM
         public InputAction shortcutAction = new InputAction("BugReportShortcut", binding: "<Keyboard>/f12");
-    #else
+#else
         public KeyCode shortcutKey = KeyCode.F12;
-    #endif
-
-        public bool includePlayerLog = true;
-        public bool includeVideo = true;
+#endif
 
         public UnityEvent OnBugReportWindowShown;
         public UnityEvent OnBugReportWindowHidden;
 
+        private bool includePlayerLog = true;
+        private bool includeVideo = true;
         private List<ScreenshotFileReference> _screenshots = new List<ScreenshotFileReference>();
         private List<LogFileReference> _logFiles = new List<LogFileReference>();
 
@@ -59,12 +58,14 @@ namespace BetaHub
         // if true, the report is being uploaded, some processes should be paused
         private bool _uploadingReport = false;
 
+        private DefaultSettings _defaultSettings;
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void InitializeLogger()
         {
             logger = new Logger();
         }
-        
+
         void Awake()
         {
             if (instance == null)
@@ -75,34 +76,38 @@ namespace BetaHub
             {
                 Destroy(gameObject);
             }
+
+
+            messagePanel.SetActive(false);
+            SaveDefaultValue();
         }
 
         void OnEnable()
         {
-    #if ENABLE_INPUT_SYSTEM
+#if ENABLE_INPUT_SYSTEM
             if (IsNewInputSystemEnabled())
             {
                 shortcutAction.Enable();
                 shortcutAction.performed += OnShortcutActionPerformed;
             }
-    #endif
+#endif
         }
 
         void OnDisable()
         {
-    #if ENABLE_INPUT_SYSTEM
+#if ENABLE_INPUT_SYSTEM
             if (IsNewInputSystemEnabled())
             {
                 shortcutAction.performed -= OnShortcutActionPerformed;
                 shortcutAction.Disable();
             }
-    #endif
+#endif
         }
-        
+
         void Start()
         {
             _gameRecorder = GetComponent<GameRecorder>();
-            
+
             bugReportPanel.SetActive(false);
             submitButton.onClick.AddListener(SubmitBugReport);
             closeButton.onClick.AddListener(() =>
@@ -163,13 +168,13 @@ namespace BetaHub
             {
                 RestoreCursorState();
             }
-            
-    #if !ENABLE_INPUT_SYSTEM
+
+#if !ENABLE_INPUT_SYSTEM
             if (shortcutKey != KeyCode.None && Input.GetKeyDown(shortcutKey))
             {
                 StartCoroutine(CaptureScreenshotAndShowUI());
             }
-    #endif
+#endif
         }
 
         private bool SholdBeRecordingVideo()
@@ -201,7 +206,7 @@ namespace BetaHub
             }
         }
 
-    #if ENABLE_INPUT_SYSTEM
+#if ENABLE_INPUT_SYSTEM
         void OnShortcutActionPerformed(InputAction.CallbackContext context)
         {
             StartCoroutine(CaptureScreenshotAndShowUI());
@@ -212,20 +217,38 @@ namespace BetaHub
             // Check if the new input system is enabled
             return InputSystem.settings != null;
         }
-    #endif
+#endif
 
         IEnumerator CaptureScreenshotAndShowUI()
         {
-            // Capture screenshot
+            // Wait for the end of the frame to ensure the screen is fully rendered
+            yield return new WaitForEndOfFrame();
+
+            // Capture the screenshot as a texture after the frame has been rendered
+            Texture2D texture = ScreenCapture.CaptureScreenshotAsTexture();
+
+            // Apply the filters (including DrawBox) to the RenderTexture
+            Texture2D screenshot = ApplyFiltersToScreenshot(texture);
+
+            // Save the screenshot to a file
             string screenshotPath = Application.persistentDataPath + "/screenshot.png";
-            ScreenCapture.CaptureScreenshot(screenshotPath);
+            File.WriteAllBytes(screenshotPath, screenshot.EncodeToPNG());
 
             AddScreenshot(screenshotPath, true);
 
             // wait for another frame
             yield return null;
-            
+
             bugReportPanel.SetActive(true);
+        }
+
+        // Method to apply filters (DrawBox or others) to the screenshot
+        private Texture2D ApplyFiltersToScreenshot(Texture2D texture)
+        {
+            // Use the TextureFilterManager to apply filters, including DrawBox
+            _gameRecorder.TextureFilterManager.ApplyFilters(new TexturePainter(texture));
+
+            return texture;
         }
 
         // Sets screenshot path to be uploaded. Useful on manual invocation of bug report UI.
@@ -274,7 +297,7 @@ namespace BetaHub
             {
                 url += "/";
             }
-            
+
             url += "projects/" + projectID + "/issues.json";
 
             using (UnityWebRequest www = UnityWebRequest.Post(url, form))
@@ -295,6 +318,10 @@ namespace BetaHub
                         ErrorMessage message = JsonUtility.FromJson<ErrorMessage>(www.downloadHandler.text);
                         messagePanelUI.ShowMessagePanel("Error", message.error);
                     }
+                    else
+                    {
+                        messagePanelUI.ShowMessagePanel("Error", "An unexpected error occurred. Please try again later.");
+                    }
                 }
                 else
                 {
@@ -307,6 +334,7 @@ namespace BetaHub
                         bugReportPanel.SetActive(false);
                     });
 
+                    ResetToDefaultValue();
                     yield return UploadAdditionalFiles(issueId);
                 }
             }
@@ -361,7 +389,7 @@ namespace BetaHub
 
                 _logFiles.Clear();
             }
-            
+
             // // Upload performance samples (if any)
             // string samplesFile = Application.persistentDataPath + "/samples.csv";
             // GetComponent<BH_PerformanceSampler>().SaveSamplesToFile(samplesFile);
@@ -370,7 +398,7 @@ namespace BetaHub
             //     yield return StartCoroutine(UploadFile(issueId, "log_files", "log_file[file]", samplesFile, "text/csv"));
             //     File.Delete(samplesFile);
             // }
-            
+
             // Upload video file
             if (includeVideo && IncludeVideoToggle.isOn)
             {
@@ -418,12 +446,36 @@ namespace BetaHub
             }
         }
 
-        class ErrorMessage {
+        // Method to save the current values as defaults
+        void SaveDefaultValue()
+        {
+            _defaultSettings = new DefaultSettings(
+                descriptionField.text,
+                stepsField.text,
+                IncludeVideoToggle.isOn,
+                IncludeScreenshotToggle.isOn,
+                IncludePlayerLogToggle.isOn
+            );
+        }
+
+        // Method to reset fields to their default values
+        void ResetToDefaultValue()
+        {
+            descriptionField.text = _defaultSettings.description;
+            stepsField.text = _defaultSettings.steps;
+            IncludeVideoToggle.isOn = _defaultSettings.includeVideo;
+            IncludeScreenshotToggle.isOn = _defaultSettings.includeScreenshot;
+            IncludePlayerLogToggle.isOn = _defaultSettings.includePlayerLog;
+        }
+
+        class ErrorMessage
+        {
             public string error;
             public string status;
         }
 
-        class IssueResponse {
+        class IssueResponse
+        {
             public string id;
         }
 

@@ -1,3 +1,4 @@
+using System.Linq;
 using UnityEngine;
 
 namespace BetaHub
@@ -115,21 +116,10 @@ namespace BetaHub
             texture.Apply();
         }
 
-        private void DrawRectangle(int x, int y, int width, int height, Color color)
+        public void DrawRectangle(int x, int y, int width, int height, Color color)
         {
-            // Draw top and bottom borders
-            for (int i = 0; i < width; i++)
-            {
-                texture.SetPixel(x + i, y, color);
-                texture.SetPixel(x + i, y + height - 1, color);
-            }
-
-            // Draw left and right borders
-            for (int i = 0; i < height; i++)
-            {
-                texture.SetPixel(x, y + i, color);
-                texture.SetPixel(x + width - 1, y + i, color);
-            }
+            Color[] colors = Enumerable.Repeat(color, width * height).ToArray();
+            texture.SetPixels(x, y, width, height, colors);
         }
 
         public void DrawNumber(int x, int y, int number, Color color, int scale = 1)
