@@ -16,7 +16,7 @@ https://github.com/betahub-io/unity-plugin/assets/113201/b01f372c-c3ac-4f49-8b38
 ## System Requirements
 
 - Unity 2021.3 or later
-- A BetaHub account ([sign up here](https://www.betahub.io))
+- A BetaHub free account ([sign up here](https://www.betahub.io))
 - Supported platforms: Windows, macOS, or Linux
 - Active internet connection
 - An existing Unity game project
