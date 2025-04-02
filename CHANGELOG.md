@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.3.0
+
+### Added
+
+- Can now provide an email to receive a link to the report and updates on the report status.
+
+### Changed
+
+- Using the new draf submission flow.
+
 ## 1.2.0
 
 ### Added

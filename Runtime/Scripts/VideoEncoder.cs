@@ -420,10 +420,11 @@ namespace BetaHub
 
             if (!File.Exists(path))
             {
-                UnityEngine.Debug.LogError("FFmpeg binary not found, BetaHub video recording will not work. " +
+                UnityEngine.Debug.LogWarning("FFmpeg binary not found, BetaHub video recording will not work. " +
                     "You can download it by clicking on the Windows/BetaHub/Download FFmpeg menu item. " +
                     "If that doesn't work, you can download it manually from https://ffmpeg.org/download.html " +
-                    "and place the executable directly in the StreamingAssets/BetaHub directory.");
+                    "and place the executable directly in the StreamingAssets/BetaHub directory. " +
+                    "If you don't want to see this warning, set the Include Video property to false.");
 
                 return null;
             }

@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using System;
 using System.IO;
 using System.Collections;
 using UnityEngine.Networking;
@@ -31,9 +32,13 @@ namespace BetaHub
 
         public MessagePanelUI messagePanelUI;
 
+        public ReportSubmittedUI reportSubmittedUI;
+
         public string submitEndpoint = "https://app.betahub.io";
 
         public string projectID;
+
+        public string authToken;
 
     #if ENABLE_INPUT_SYSTEM
         public InputAction shortcutAction = new InputAction("BugReportShortcut", binding: "<Keyboard>/f12");
@@ -47,8 +52,8 @@ namespace BetaHub
         public UnityEvent OnBugReportWindowShown;
         public UnityEvent OnBugReportWindowHidden;
 
-        private List<ScreenshotFileReference> _screenshots = new List<ScreenshotFileReference>();
-        private List<LogFileReference> _logFiles = new List<LogFileReference>();
+        private List<Issue.ScreenshotFileReference> _screenshots = new List<Issue.ScreenshotFileReference>();
+        private List<Issue.LogFileReference> _logFiles = new List<Issue.LogFileReference>();
 
         private static Logger logger;
         private bool _cursorStateChanged;
@@ -56,8 +61,8 @@ namespace BetaHub
 
         private GameRecorder _gameRecorder;
 
-        // if true, the report is being uploaded, some processes should be paused
-        private bool _uploadingReport = false;
+        // we keep track of the issues to not record the video when any of the issues are being uploaded
+        private List<Issue> _issues = new List<Issue>();
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void InitializeLogger()
@@ -115,6 +120,17 @@ namespace BetaHub
                 Debug.LogError("Project ID is not set. I won't be able to submit bug reports.");
             }
 
+            if (string.IsNullOrEmpty(authToken))
+            {
+                Debug.LogError("Auth token is not set. I won't be able to submit bug reports.");
+            }
+
+            // auth token must start with tkn-
+            if (!authToken.StartsWith("tkn-"))
+            {
+                Debug.LogError("Auth token must start with tkn-. I won't be able to submit bug reports.");
+            }
+
             var gameRecorder = GetComponent<GameRecorder>();
             if (gameRecorder == null)
             {
@@ -130,7 +146,6 @@ namespace BetaHub
                 if (textComponent != null)
                 {
                     textComponent.text = textComponent.text.Replace("{TIME}", recordingDurationSeconds.ToString() + " Seconds");
-                    Debug.Log("Updated IncludeVideoToggle label to: " + textComponent.text);
                 }
                 else
                 {
@@ -175,7 +190,7 @@ namespace BetaHub
         private bool SholdBeRecordingVideo()
         {
             // if true, the report is being uploaded, some processes should be paused
-            return includeVideo && !bugReportPanel.activeSelf && !_uploadingReport;
+            return includeVideo && !bugReportPanel.activeSelf && !_issues.Exists(issue => !issue.IsMediaUploadComplete);
         }
 
         private void ModifyCursorState()
@@ -224,6 +239,13 @@ namespace BetaHub
 
             // wait for another frame
             yield return null;
+
+            // reset the fields
+            descriptionField.text = "";
+            stepsField.text = "";
+            IncludeVideoToggle.isOn = true;
+            IncludeScreenshotToggle.isOn = true;
+            IncludePlayerLogToggle.isOn = true;
             
             bugReportPanel.SetActive(true);
         }
@@ -231,12 +253,12 @@ namespace BetaHub
         // Sets screenshot path to be uploaded. Useful on manual invocation of bug report UI.
         public void AddScreenshot(string path, bool removeAfterUpload)
         {
-            _screenshots.Add(new ScreenshotFileReference { path = path, removeAfterUpload = removeAfterUpload });
+            _screenshots.Add(new Issue.ScreenshotFileReference { path = path, removeAfterUpload = removeAfterUpload });
         }
 
         public void AddLogFile(string path, bool removeAfterUpload)
         {
-            _logFiles.Add(new LogFileReference { path = path, removeAfterUpload = removeAfterUpload });
+            _logFiles.Add(new Issue.LogFileReference { path = path, removeAfterUpload = removeAfterUpload });
         }
 
         void SubmitBugReport()
@@ -244,18 +266,98 @@ namespace BetaHub
             string description = descriptionField.text;
             string steps = stepsField.text;
 
-            _uploadingReport = true;
-            CoroutineUtils.StartThrowingCoroutine(this, PostIssue(description, steps), (ex) =>
+            // Filter screenshots and logs based on toggle state
+            List<Issue.ScreenshotFileReference> screenshots = null;
+            List<Issue.LogFileReference> logFiles = null;
+            GameRecorder gameRecorder = null;
+            
+            if (IncludeScreenshotToggle.isOn && _screenshots.Count > 0)
             {
-                _uploadingReport = false;
-                bugReportPanel.SetActive(false);
-                submitButton.interactable = true;
-                submitButton.GetComponentInChildren<TMP_Text>().text = "Submit";
+                // copy to new list
+                screenshots = new List<Issue.ScreenshotFileReference>(_screenshots);
+            }
+            
+            if (IncludePlayerLogToggle.isOn)
+            {
+                logFiles = new List<Issue.LogFileReference>(_logFiles);
+                
+                // Add logger log file if it exists
+                if (includePlayerLog && !string.IsNullOrEmpty(logger.LogPath) && File.Exists(logger.LogPath))
+                {
+                    // skip if size over 200MB
+                    if (new FileInfo(logger.LogPath).Length < 200 * 1024 * 1024)
+                    {
+                        logFiles.Add(new Issue.LogFileReference { path = logger.LogPath, removeAfterUpload = false });
+                    }
+                }
+            }
+            
+            if (includeVideo && IncludeVideoToggle.isOn)
+            {
+                gameRecorder = _gameRecorder;
+            }
+            
+            // Create Issue instance and post it
+            Issue issue = new Issue(submitEndpoint, projectID, authToken, messagePanelUI, reportSubmittedUI, gameRecorder);
+            _issues.Add(issue);
 
+
+            Action<ErrorMessage> onIssueError = (ErrorMessage errorMessage) =>
+            {
+                try {
+                    // error, get ready to try again
+                    submitButton.interactable = true;
+                    submitButton.GetComponentInChildren<TMP_Text>().text = "Submit";
+
+                    if (errorMessage.exception != null)
+                    {
+                        Debug.LogError("Error submitting bug report: " + errorMessage.exception);
+                        messagePanelUI.ShowMessagePanel("Error", "Error submitting bug report. Please try again later.");
+                    }
+                    else if (!string.IsNullOrEmpty(errorMessage.error))
+                    {
+                        messagePanelUI.ShowMessagePanel("Error", errorMessage.error);
+                    }
+                    else
+                    {
+                        messagePanelUI.ShowMessagePanel("Error", "Unknown error submitting bug report. Please try again later.");
+                    }
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError("Error displaying error message: " + e);
+                }
+            };
+
+
+            CoroutineUtils.StartThrowingCoroutine(this,
+            issue.PostIssue(description, steps, screenshots, logFiles, false,
+                (issueId) => // successful post
+                {
+                    bugReportPanel.SetActive(false);
+                    submitButton.interactable = true;
+                    submitButton.GetComponentInChildren<TMP_Text>().text = "Submit";
+
+                    // Clear lists after successful upload
+                    _screenshots.Clear();
+                    _logFiles.Clear();
+
+                    // show the report submitted UI
+                    reportSubmittedUI.Show(issue);
+
+                    // hide bug report panel
+                    bugReportPanel.SetActive(false);
+                },
+                (error) =>
+                {
+                    onIssueError(new ErrorMessage { error = error });
+                }
+            ),
+            (ex) => // done
+            {
                 if (ex != null)
                 {
-                    Debug.LogError("Error submitting bug report: " + ex);
-                    messagePanelUI.ShowMessagePanel("Error", "Error submitting bug report. Please try again later.");
+                    onIssueError(new ErrorMessage { exception = ex });
                 }
             });
 
@@ -263,180 +365,13 @@ namespace BetaHub
             submitButton.GetComponentInChildren<TMP_Text>().text = "Submitting...";
         }
 
-        IEnumerator PostIssue(string description, string steps)
-        {
-            WWWForm form = new WWWForm();
-            form.AddField("issue[description]", description);
-            form.AddField("issue[unformatted_steps_to_reproduce]", steps);
-
-            string url = submitEndpoint;
-            if (!url.EndsWith("/"))
-            {
-                url += "/";
-            }
-            
-            url += "projects/" + projectID + "/issues.json";
-
-            using (UnityWebRequest www = UnityWebRequest.Post(url, form))
-            {
-                www.SetRequestHeader("Authorization", "FormUser " + "anonymous");
-                www.SetRequestHeader("BetaHub-Project-ID", projectID);
-                www.SetRequestHeader("Accept", "application/json");
-
-                yield return www.SendWebRequest();
-
-                if (www.result != UnityWebRequest.Result.Success)
-                {
-                    Debug.LogError(www.error);
-                    Debug.LogError("Response code: " + www.responseCode);
-                    if (www.responseCode == 422)
-                    {
-                        Debug.LogError(www.downloadHandler.text);
-                        ErrorMessage message = JsonUtility.FromJson<ErrorMessage>(www.downloadHandler.text);
-                        messagePanelUI.ShowMessagePanel("Error", message.error);
-                    }
-                }
-                else
-                {
-                    Debug.Log("Bug report submitted successfully!");
-                    string response = www.downloadHandler.text;
-                    IssueResponse issueResponse = JsonUtility.FromJson<IssueResponse>(response);
-                    string issueId = issueResponse.id;
-                    messagePanelUI.ShowMessagePanel("Success", "Bug report submitted successfully!", () =>
-                    {
-                        bugReportPanel.SetActive(false);
-                    });
-
-                    yield return UploadAdditionalFiles(issueId);
-                }
-            }
-        }
-
-        IEnumerator UploadAdditionalFiles(string issueId)
-        {
-            // Upload screenshots
-            if (IncludeScreenshotToggle.isOn)
-            {
-                foreach (var screenshot in _screenshots)
-                {
-                    if (File.Exists(screenshot.path))
-                    {
-                        yield return StartCoroutine(UploadFile(issueId, "screenshots", "screenshot[image]", screenshot.path, "image/png"));
-
-                        if (screenshot.removeAfterUpload)
-                        {
-                            File.Delete(screenshot.path);
-                        }
-                    }
-                }
-
-                _screenshots.Clear();
-            }
-
-            if (IncludePlayerLogToggle.isOn)
-            {
-                // Upload logger log files
-                if (includePlayerLog && !string.IsNullOrEmpty(logger.LogPath) && File.Exists(logger.LogPath))
-                {
-                    // skip if size over 200MB
-                    if (new FileInfo(logger.LogPath).Length < 200 * 1024 * 1024)
-                    {
-                        yield return StartCoroutine(UploadFile(issueId, "log_files", "log_file[file]", logger.LogPath, "text/plain"));
-                    }
-                }
-
-                // Upload custom log files
-                foreach (var logFile in _logFiles)
-                {
-                    if (File.Exists(logFile.path))
-                    {
-                        yield return StartCoroutine(UploadFile(issueId, "log_files", "log_file[file]", logFile.path, "text/plain"));
-
-                        if (logFile.removeAfterUpload)
-                        {
-                            File.Delete(logFile.path);
-                        }
-                    }
-                }
-
-                _logFiles.Clear();
-            }
-            
-            // // Upload performance samples (if any)
-            // string samplesFile = Application.persistentDataPath + "/samples.csv";
-            // GetComponent<BH_PerformanceSampler>().SaveSamplesToFile(samplesFile);
-            // if (File.Exists(samplesFile))
-            // {
-            //     yield return StartCoroutine(UploadFile(issueId, "log_files", "log_file[file]", samplesFile, "text/csv"));
-            //     File.Delete(samplesFile);
-            // }
-            
-            // Upload video file
-            if (includeVideo && IncludeVideoToggle.isOn)
-            {
-                GameRecorder gameRecorder = GetComponent<GameRecorder>();
-                if (gameRecorder != null)
-                {
-                    string videoPath = gameRecorder.StopRecordingAndSaveLastMinute();
-                    if (!string.IsNullOrEmpty(videoPath) && File.Exists(videoPath))
-                    {
-                        yield return StartCoroutine(UploadFile(issueId, "video_clips", "video_clip[video]", videoPath, "video/mp4"));
-
-                        // Delete the video file after uploading
-                        File.Delete(videoPath);
-                    }
-                }
-            }
-
-            // Final debug message
-            Debug.Log("All files uploaded successfully!");
-        }
-
-        IEnumerator UploadFile(string issueId, string endpoint, string fieldName, string filePath, string contentType)
-        {
-            WWWForm form = new WWWForm();
-            byte[] fileData = File.ReadAllBytes(filePath);
-            form.AddBinaryData(fieldName, fileData, Path.GetFileName(filePath), contentType);
-
-            string url = $"{submitEndpoint}/projects/{projectID}/issues/g-{issueId}/{endpoint}";
-            using (UnityWebRequest www = UnityWebRequest.Post(url, form))
-            {
-                www.SetRequestHeader("Authorization", "FormUser " + "anonymous");
-                www.SetRequestHeader("BetaHub-Project-ID", projectID);
-                www.SetRequestHeader("Accept", "application/json");
-
-                yield return www.SendWebRequest();
-
-                if (www.result != UnityWebRequest.Result.Success)
-                {
-                    Debug.LogError($"Error uploading {Path.GetFileName(filePath)}: {www.error}");
-                }
-                else
-                {
-                    Debug.Log($"{Path.GetFileName(filePath)} uploaded successfully!");
-                }
-            }
-        }
-
         class ErrorMessage {
             public string error;
-            public string status;
+            public Exception exception;
         }
 
         class IssueResponse {
             public string id;
-        }
-
-        struct LogFileReference
-        {
-            public string path;
-            public bool removeAfterUpload;
-        }
-
-        struct ScreenshotFileReference
-        {
-            public string path;
-            public bool removeAfterUpload;
         }
     }
 }
