@@ -1,32 +1,51 @@
 # BetaHub Bug Reporter Plugin
 
-Welcome to the BetaHub Bug Reporter Plugin for Unity! This plugin simplifies in-game bug reporting by allowing players to submit issues directly from your game. With powerful features like video recording, log collection, and AI-assisted tagging, it streamlines your debugging process and enhances your game's quality.
+An easy in-game bug reporting plugin for Unity with video recording and log collection.
 
 https://github.com/betahub-io/unity-plugin/assets/113201/b01f372c-c3ac-4f49-8b38-e892db873adf
 
-## Key Features
+## QuickStart Demo
 
-- **Effortless Bug Submission**: Report bugs using an intuitive in-game form that only requires a description and steps to reproduce—our AI automatically generates titles, priorities, and tags.
-- **Video Capture**: Automatically record and attach videos of bugs as they happen in-game.
-- **Comprehensive Logging**: Collect and include Unity logs by default, with the option to add custom logs to your reports.
-- **Instant Screenshots**: Capture and attach a screenshot of the game with every bug report.
-- **Ready-to-Use Example**: Get started quickly with a fully functional example scene included in the plugin.
-- **Fully Customizable**: Adjust the form’s fields and appearance to match your game’s needs and style.
+This plugin is ready for immediate testing. The included configuration (project ID and token) points to a public **demo project on BetaHub**:
 
-## System Requirements
+👉 [View the Demo Project](https://app.betahub.io/projects/pr-5287510306)
+
+To test the plugin:
+
+1. Run the demo scene included in the package.
+2. Submit a bug report using the in-game form.
+3. **Be sure to enter your email address** in the submission form.
+
+You'll receive a link to your report via email, allowing you to see how bug submissions appear in the BetaHub dashboard.
+
+Note: Submissions to the demo project are only visible to the person who submitted them via the email link. However, there is a quota on how many reports can be submitted to this shared demo project. Once the limit is reached, you may encounter errors when trying to submit new reports.
+
+For continued use and more extensive testing, we strongly recommend creating your own BetaHub project. **Free BetaHub accounts do not enforce hard limits** on the number of bug reports, making them suitable for active development and testing.
+
+## Features
+
+- **In-game bug submission form**: Easily submit bugs with a form that only asks for a description and steps to reproduce. Titles, priority, and tags are handled by BetaHub's AI algorithms.
+- **Video recording**: Record a video of the bug happening in-game. The video is automatically recorded and attached to the bug report.
+- **Log collection**: Collect logs from the game and attach them to the bug report. By default, Unity logs are collected, but you can also add custom logs.
+- **Screenshot of the game**: A screenshot of the game is automatically attached to the bug report when the user submits a bug.
+- **Working Example Scene**: The plugin comes with a working example scene that demonstrates how to use the plugin, serving as a good starting point for your implementation.
+- **Customizable**: Customize the bug submission form to ask for more information or to change the look and feel of the form.
+
+## Requirements
 
 - Unity 2021.3 or later
-- A BetaHub free account ([sign up here](https://www.betahub.io))
-- Supported platforms: Windows, macOS, or Linux
-- Active internet connection
-- An existing Unity game project
-- At least one bug to test the reporting process
-- A player to interact with the game
+- BetaHub account (sign up at [betahub.io](https://www.betahub.io))
+- Windows, macOS, or Linux
+- Internet connection
+- A living, breathing game project
+- A bug or two to report
+- A human being to play the game
 
-## Installation and Setup
+## Installation
 
-Get up and running with our **[official documentation](https://www.betahub.io/docs/integration-guides/)**. It provides detailed, step-by-step instructions to install and configure the plugin in your Unity project.
+The installation and setup documentation is available [here](https://www.betahub.io/docs/integration-guides/).
 
-## Need Help?
+## Support
 
-Join our **[Discord community](https://discord.gg/g2wpRtG)** to connect with other users, ask questions, share feedback, or suggest new features. We’re here to support you!
+Join our [Discord server](https://discord.gg/g2wpRtG) for support, feedback, and feature requests.
+

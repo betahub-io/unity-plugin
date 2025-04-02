@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BetaHub Unity Plugin Documentation</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1, h2, h3 {
+            color: #2c3e50;
+        }
+        h1 {
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+        code {
+            background-color: #f8f8f8;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            font-family: Consolas, Monaco, 'Andale Mono', monospace;
+            font-size: 0.9em;
+            padding: 2px 4px;
+        }
+        pre {
+            background-color: #f8f8f8;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            padding: 10px;
+            overflow-x: auto;
+        }
+        blockquote {
+            border-left: 4px solid #3498db;
+            margin: 0;
+            padding-left: 20px;
+            color: #7f8c8d;
+        }
+        .note {
+            background-color: #e8f4f8;
+            border-left: 4px solid #3498db;
+            padding: 10px;
+            margin: 20px 0;
+        }
+        .warning {
+            background-color: #fff5f5;
+            border-left: 4px solid #e74c3c;
+            padding: 10px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>BetaHub Unity Plugin Documentation</h1>
+
+    <p>Welcome to the BetaHub Unity Plugin! This guide will help you integrate our bug reporting tool into your Unity project, streamlining the process of collecting and managing bug reports from your game testers and players.</p>
+
+    <h2>Prerequisites</h2>
+
+    <p>Before you begin, please ensure you have:</p>
+
+    <ol>
+        <li>A free BetaHub account (Sign up at <a href="https://app.betahub.io">app.betahub.io</a>)</li>
+        <li>Created a project on BetaHub:
+            <ul>
+                <li>Log in to your account</li>
+                <li>Click the "New Project" button</li>
+                <li>Follow up with the project creation wizard</li>
+                <li>While on the project page, click the "Settings/General" menu on the left</li>
+                <li>Note down your Project ID from the "Project Information" frame (you'll need this for plugin configuration)</li>
+            </ul>
+        </li>
+    </ol>
+
+    <h4>FFmpeg Installation</h4>
+
+    <p>The plugin uses FFmpeg for video recording. Install it in your project by clicking on <code>Tools > BetaHub > Install FFmpeg</code> in the Unity editor.</p>
+
+    <div class="warning">
+        <strong>Note:</strong> The plugin currently supports <strong>Windows</strong>, <strong>macOS</strong>, and <strong>Linux</strong>. For other platforms, manual FFmpeg installation and code adjustments may be necessary.
+    </div>
+
+    <h3>Quick Start</h3>
+
+    <ol>
+        <li>Locate the BugReportingFormCanvas prefab in Packages/BetaHub Bug Reporter/Runtime/Prefabs.</li>
+        <li>Drag it into your scene.</li>
+        <li>Select the newly created BugReportingFormCanvas object in the hierarchy.</li>
+        <li>In the inspector, find the <code>Project ID</code> field and enter your BetaHub project ID.</li>
+    </ol>
+
+    <p>You're all set! Run your game and press <code>F12</code> to open the bug report form.</p>
+
+    <h3>Configuration</h3>
+
+    <p>Adjust these settings in the BugReportingFormCanvas inspector:</p>
+
+    <ul>
+        <li><strong>Shortcut Key</strong>: Default is F12. Set to None to disable and open the form programmatically.</li>
+        <li><strong>Performance_Sampler</strong>
+            <ul>
+                <li><strong>Sample Frequency</strong>: How often to sample game performance.</li>
+                <li><strong>Sample Duration</strong>: How long to sample game performance.</li>
+            </ul>
+        </li>
+        <li><strong>Game_Recorder</strong>
+            <ul>
+                <li><strong>Frame Rate</strong>: Default is 30. Higher rates may increase file size and resource usage.</li>
+                <li><strong>Recording Duration</strong>: Default is 60 seconds.</li>
+            </ul>
+        </li>
+    </ul>
+
+    <h3>Programmatic Integration</h3>
+
+    <p>To open the bug report form on specific events:</p>
+
+    <ol>
+        <li>Call <code>SetActive</code> on the <code>BugReportUI</code> object.</li>
+        <li>Be aware of default inclusions:
+            <ul>
+                <li>Video: Yes (control with <code>IncludeVideo</code>)</li>
+                <li>Player.log: Yes (control with <code>IncludePlayerLog</code>)</li>
+                <li>Screenshots: No (add manually)</li>
+            </ul>
+        </li>
+    </ol>
+
+    <h4>Including Screenshots</h4>
+
+    <p>Use <code>AddScreenshot</code> on the <code>BugReportUI</code> object:</p>
+
+    <pre><code>public void AddScreenshot(string path, bool removeAfterUpload)</code></pre>
+
+    <div class="note">
+        <strong>Tip:</strong> Capture screenshots before opening menus for more valuable bug context.
+    </div>
+
+    <h4>Including Logs</h4>
+
+    <p>Use <code>AddLog</code> on the <code>BugReportUI</code> object:</p>
+
+    <pre><code>public void AddLog(string path, bool removeAfterUpload)</code></pre>
+
+    <div class="note">
+        <strong>Note:</strong> Call these functions each time you want to include screenshots or logs. The plugin doesn't store them between reports.
+    </div>
+
+    <h2>Support</h2>
+
+    <p>For any questions or issues, please contact us:</p>
+
+    <ul>
+        <li>Email: <a href="mailto:support@betahub.io">support@betahub.io</a></li>
+        <li>Discord: <a href="https://discord.gg/g2wpRtG">Join our community</a></li>
+    </ul>
+
+    <p>Thank you for choosing BetaHub for your game development needs!</p>
+</body>
+</html>
