@@ -334,7 +334,6 @@ namespace BetaHub
             issue.PostIssue(description, steps, screenshots, logFiles, false,
                 (issueId) => // successful post
                 {
-                    bugReportPanel.SetActive(false);
                     submitButton.interactable = true;
                     submitButton.GetComponentInChildren<TMP_Text>().text = "Submit";
 
