@@ -107,7 +107,7 @@ namespace BetaHub
         public IEnumerator PostIssue(string description, string steps = null,
                                      List<ScreenshotFileReference> screenshots = null, List<LogFileReference> logFiles = null,
                                      bool autoPublish = false,
-                                     Action<string> onAllMediaUploaded = null, Action<string> onError = null)
+                                     Action<string> onAllMediaUploaded = null, MediaUploadType mediaUploadType = MediaUploadType.UploadInBackground, Action<string> onError = null)
         {
             if (Id != null)
             {
@@ -141,9 +141,17 @@ namespace BetaHub
             this.Id = issueIdLocal;
             this._updateIssueAuthToken = updateIssueAuthTokenLocal;
 
+            if (mediaUploadType == MediaUploadType.UploadInBackground)
+            {
+                onAllMediaUploaded?.Invoke(this.Id); // Notify caller with the persistent ID
+            }
+
             yield return PostAllMedia(screenshots, logFiles, _gameRecorder);
 
-            onAllMediaUploaded?.Invoke(this.Id); // Notify caller with the persistent ID
+            if (mediaUploadType == MediaUploadType.WaitForUpload)
+            {
+                onAllMediaUploaded?.Invoke(this.Id); // Notify caller with the persistent ID
+            }
 
             // Mark media as complete and attempt to publish if requested
             yield return MarkMediaCompleteAndTryPublish();

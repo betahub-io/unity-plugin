@@ -12,6 +12,18 @@ using UnityEngine.InputSystem;
 
 namespace BetaHub
 {
+    public enum MediaUploadType
+    {
+        /// <summary>
+        /// The media will be uploaded in the background without blocking the process
+        /// </summary>
+        UploadInBackground,
+        /// <summary>
+        /// The process will wait until the media has finished uploading before continuing
+        /// </summary>
+        WaitForUpload
+    }
+
     public class BugReportUI : MonoBehaviour
     {
         private static BugReportUI instance;
@@ -30,6 +42,10 @@ namespace BetaHub
         public GameObject messagePanel;
 
         public MessagePanelUI messagePanelUI;
+
+        [Tooltip("Upload in background : The media will be uploaded in the background without blocking the process" +
+            " \n Wait for upload : The process will wait until the media has finished uploading before continuing")]
+        public MediaUploadType mediaUploadType;
 
         public ReportSubmittedUI reportSubmittedUI;
 
@@ -346,6 +362,7 @@ namespace BetaHub
                     // hide bug report panel
                     bugReportPanel.SetActive(false);
                 },
+                mediaUploadType,
                 (error) =>
                 {
                     onIssueError(new ErrorMessage { error = error });
