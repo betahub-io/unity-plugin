@@ -55,6 +55,11 @@ namespace BetaHub
 
         public string authToken;
 
+        // If set, this email address will be used as the default email address of the reporter.
+        // This is a hidden field since it's purpose is to be pre-filled programmatically by the developer if the user is somehow already logged in with a specific email address.
+        [HideInInspector]
+        public string defaultEmailAddress;
+
     #if ENABLE_INPUT_SYSTEM
         public InputAction shortcutAction = new InputAction("BugReportShortcut", binding: "<Keyboard>/f12");
     #else
@@ -357,7 +362,7 @@ namespace BetaHub
                     _logFiles.Clear();
 
                     // show the report submitted UI
-                    reportSubmittedUI.Show(issue);
+                    reportSubmittedUI.Show(issue, defaultEmailAddress);
 
                     // hide bug report panel
                     bugReportPanel.SetActive(false);
