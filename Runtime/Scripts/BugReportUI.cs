@@ -266,6 +266,13 @@ namespace BetaHub
             IncludeVideoToggle.isOn = true;
             IncludeScreenshotToggle.isOn = true;
             IncludePlayerLogToggle.isOn = true;
+
+            #if BETAHUB_DEBUG
+                Debug.Log("BETAHUB_DEBUG: Prefilling description and steps for reproduce for faster testing");
+                // prefill the description and steps for reproduce for faster testing
+                descriptionField.text = "The game is crashing when I press the sounds setting button. It happens on the main menu and on the settings menu.";
+                stepsField.text = "1. Go to the main menu\n2. Press the settings button\n3. Press the sounds button\n4. Crash the game";
+            #endif
             
             bugReportPanel.SetActive(true);
         }
