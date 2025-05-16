@@ -1,40 +1,45 @@
 using UnityEngine;
 using System.Collections;
 using System.IO;
+using UnityEngine.Serialization;
 
 namespace BetaHub
 {
     public class GameRecorder : MonoBehaviour
     {
-        public int frameRate = 30;
+        [FormerlySerializedAs("frameRate")]
+        public int FrameRate = 30;
 
         public int RecordingDuration = 60;
-        private Texture2D screenShot;
+
+        private Texture2D _screenShot;
+
         public bool IsRecording { get; private set; }
-        public bool IsPaused { get { return videoEncoder.IsPaused; } set { videoEncoder.IsPaused = value; } }
-        private VideoEncoder videoEncoder;
-        private TexturePainter texturePainter;
+        public bool IsPaused { get { return _videoEncoder.IsPaused; } set { _videoEncoder.IsPaused = value; } }
 
-        private int gameWidth;
-        private int gameHeight;
+        private VideoEncoder _videoEncoder;
+        private TexturePainter _texturePainter;
 
-        private float captureInterval;
-        private float nextCaptureTime;
+        private int _gameWidth;
+        private int _gameHeight;
+
+        private float _captureInterval;
+        private float _nextCaptureTime;
 
         public bool DebugMode = false;
 
-        private float fps;
-        private float deltaTime = 0.0f;
+        private float _fps;
+        private float _deltaTime = 0.0f;
 
         void Start()
         {
             // Adjust the game resolution to be divisible by 2
-            gameWidth = Screen.width % 2 == 0 ? Screen.width : Screen.width - 1;
-            gameHeight = Screen.height % 2 == 0 ? Screen.height : Screen.height - 1;
+            _gameWidth = Screen.width % 2 == 0 ? Screen.width : Screen.width - 1;
+            _gameHeight = Screen.height % 2 == 0 ? Screen.height : Screen.height - 1;
 
             // Create a Texture2D with the adjusted resolution
-            screenShot = new Texture2D(gameWidth, gameHeight, TextureFormat.RGB24, false);
-            texturePainter = new TexturePainter(screenShot);
+            _screenShot = new Texture2D(_gameWidth, _gameHeight, TextureFormat.RGB24, false);
+            _texturePainter = new TexturePainter(_screenShot);
             IsRecording = false;
 
             string outputDirectory = Path.Combine(Application.persistentDataPath, "BH_Recording");
@@ -44,27 +49,27 @@ namespace BetaHub
             }
 
             // Initialize the video encoder with the adjusted resolution
-            videoEncoder = new VideoEncoder(gameWidth, gameHeight, frameRate, RecordingDuration, outputDirectory);
+            _videoEncoder = new VideoEncoder(_gameWidth, _gameHeight, FrameRate, RecordingDuration, outputDirectory);
 
-            captureInterval = 1.0f / frameRate;
-            nextCaptureTime = Time.time;
+            _captureInterval = 1.0f / FrameRate;
+            _nextCaptureTime = Time.time;
         }
 
         void OnDestroy()
         {
-            if (videoEncoder != null) // can be null since Start() may not have been called
+            if (_videoEncoder != null) // can be null since Start() may not have been called
             {
-                videoEncoder.Dispose();
+                _videoEncoder.Dispose();
             }
         }
 
         void Update()
         {
             // Accumulate the time since the last frame
-            deltaTime += (Time.unscaledDeltaTime - deltaTime) * 0.1f;
+            _deltaTime += (Time.unscaledDeltaTime - _deltaTime) * 0.1f;
 
             // Calculate FPS as the reciprocal of the averaged delta time
-            fps = 1.0f / deltaTime;
+            _fps = 1.0f / _deltaTime;
         }
 
         public void StartRecording()
@@ -75,7 +80,7 @@ namespace BetaHub
             }
             else if (!IsRecording)
             {
-                videoEncoder.StartEncoding();
+                _videoEncoder.StartEncoding();
                 IsRecording = true;
                 StartCoroutine(CaptureFrames());
             }
@@ -100,7 +105,7 @@ namespace BetaHub
         public string StopRecordingAndSaveLastMinute()
         {
             IsRecording = false;
-            return videoEncoder.StopEncoding();
+            return _videoEncoder.StopEncoding();
         }
 
         private IEnumerator CaptureFrames()
@@ -109,13 +114,13 @@ namespace BetaHub
             {
                 yield return new WaitForEndOfFrame();
 
-                if (Time.time >= nextCaptureTime)
+                if (Time.time >= _nextCaptureTime)
                 {
-                    nextCaptureTime += captureInterval;
+                    _nextCaptureTime += _captureInterval;
 
                     // Capture the screen content into the Texture2D
-                    screenShot.ReadPixels(new Rect(0, 0, gameWidth, gameHeight), 0, 0);
-                    screenShot.Apply();
+                    _screenShot.ReadPixels(new Rect(0, 0, _gameWidth, _gameHeight), 0, 0);
+                    _screenShot.Apply();
 
                     // Draw a vertical progress bar as an example
                     // float cpuUsage = 0.5f; // Replace this with actual CPU usage value
@@ -123,10 +128,10 @@ namespace BetaHub
 
                     // Draw a number as an example
                     // texturePainter.DrawNumber(50, 10, (int) fps, Color.white, 4);
-                    texturePainter.DrawNumber(5, 5, (int)fps, Color.white, 2);
+                    _texturePainter.DrawNumber(5, 5, (int)_fps, Color.white, 2);
 
-                    byte[] frameData = screenShot.GetRawTextureData();
-                    videoEncoder.AddFrame(frameData);
+                    byte[] frameData = _screenShot.GetRawTextureData();
+                    _videoEncoder.AddFrame(frameData);
                 }
             }
         }
