@@ -141,8 +141,12 @@ namespace BetaHub
 
         private IEnumerator CaptureFrames()
         {
+            #if BETAHUB_DEBUG
+            
             UnityEngine.Debug.Log($"Game resolution: {_gameWidth}x{_gameHeight}");
             UnityEngine.Debug.Log($"Output resolution: {_outputWidth}x{_outputHeight}");
+            
+            #endif
 
             RenderTexture scaledRT = null;
             Texture2D scaledTexture = null;
