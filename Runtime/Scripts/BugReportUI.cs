@@ -105,6 +105,8 @@ namespace BetaHub
         // we keep track of the issues to not record the video when any of the issues are being uploaded
         private List<Issue> _issues = new List<Issue>();
 
+        private bool _uiWasVisible = false;
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void InitializeLogger()
         {
@@ -211,13 +213,23 @@ namespace BetaHub
                 }
             }
 
-            if (BugReportPanel.activeSelf && !_cursorStateChanged)
+            if (UiIsVisible())
             {
-                ModifyCursorState();
+                if (!_uiWasVisible)
+                {
+                    OnBugReportWindowShown?.Invoke();
+                    ModifyCursorState();
+                }
+                _uiWasVisible = true;
             }
-            else if (!BugReportPanel.activeSelf && !MessagePanelUI.gameObject.activeSelf && _cursorStateChanged)
+            else if (!UiIsVisible())
             {
-                RestoreCursorState();
+                if (_uiWasVisible)
+                {
+                    OnBugReportWindowHidden?.Invoke();
+                    RestoreCursorState();
+                }
+                _uiWasVisible = false;
             }
             
     #if !ENABLE_INPUT_SYSTEM
@@ -231,7 +243,12 @@ namespace BetaHub
         private bool SholdBeRecordingVideo()
         {
             // if true, the report is being uploaded, some processes should be paused
-            return IncludeVideo && !BugReportPanel.activeSelf && !_issues.Exists(issue => !issue.IsMediaUploadComplete);
+            return IncludeVideo && !UiIsVisible() && !_issues.Exists(issue => !issue.IsMediaUploadComplete);
+        }
+
+        private bool UiIsVisible()
+        {
+            return BugReportPanel.activeSelf || MessagePanelUI.gameObject.activeSelf || ReportSubmittedUI.gameObject.activeSelf;
         }
 
         private void ModifyCursorState()
@@ -242,7 +259,6 @@ namespace BetaHub
                 _previousCursorLockMode = Cursor.lockState;
                 Cursor.lockState = CursorLockMode.None;
                 Cursor.visible = true;
-                OnBugReportWindowShown?.Invoke();
             }
         }
 
@@ -253,7 +269,6 @@ namespace BetaHub
                 Cursor.lockState = _previousCursorLockMode;
                 Cursor.visible = false;
                 _cursorStateChanged = false;
-                OnBugReportWindowHidden?.Invoke();
             }
         }
 
