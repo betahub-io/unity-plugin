@@ -299,6 +299,7 @@ namespace BetaHub
             {
                 UnityEngine.Debug.Log($"Checking encoder: {encoder}");
                 
+                // Process class is supported with the IL2CPP scripting backend
                 var process = new Process();
                 process.StartInfo.FileName = ffmpegPath;
                 process.StartInfo.Arguments = $"-f lavfi -i nullsrc=d=1 -c:v {encoder} -t 1 -f null -";
