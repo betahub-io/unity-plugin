@@ -130,8 +130,8 @@ namespace BetaHub
     #if ENABLE_INPUT_SYSTEM
             if (IsNewInputSystemEnabled())
             {
-                shortcutAction.Enable();
-                shortcutAction.performed += OnShortcutActionPerformed;
+               ShortcutAction.Enable();
+               ShortcutAction.performed += OnShortcutActionPerformed;
             }
     #endif
         }
@@ -141,8 +141,8 @@ namespace BetaHub
     #if ENABLE_INPUT_SYSTEM
             if (IsNewInputSystemEnabled())
             {
-                shortcutAction.performed -= OnShortcutActionPerformed;
-                shortcutAction.Disable();
+                ShortcutAction.performed -= OnShortcutActionPerformed;
+                ShortcutAction.Disable();
             }
     #endif
         }
