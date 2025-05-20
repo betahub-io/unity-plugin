@@ -19,7 +19,7 @@ namespace BetaHub
 
         private Issue _issue;
 
-        public void Show(Issue issue)
+        public void Show(Issue issue, string defaultEmailAddress = "")
         {
             if (issue == null)
             {
@@ -28,7 +28,7 @@ namespace BetaHub
 
             _issue = issue;
             gameObject.SetActive(true);
-            
+            EmailInputField.text = defaultEmailAddress;
         }
 
         public void Hide()

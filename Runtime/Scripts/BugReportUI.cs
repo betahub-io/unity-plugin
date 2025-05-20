@@ -6,6 +6,7 @@ using System.IO;
 using System.Collections;
 using UnityEngine.Events;
 using System.Collections.Generic;
+using UnityEngine.Serialization;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
 #endif
@@ -26,43 +27,68 @@ namespace BetaHub
 
     public class BugReportUI : MonoBehaviour
     {
-        private static BugReportUI instance;
+        private static BugReportUI _instance;
         
-        public GameObject bugReportPanel;
-        public TMP_InputField descriptionField;
-        public TMP_InputField stepsField;
+        [FormerlySerializedAs("bugReportPanel")]
+        public GameObject BugReportPanel;
+
+        [FormerlySerializedAs("descriptionField")]
+        public TMP_InputField DescriptionField;
+
+        [FormerlySerializedAs("stepsField")]
+        public TMP_InputField StepsField;
         
         public Toggle IncludeVideoToggle;
         public Toggle IncludeScreenshotToggle;
         public Toggle IncludePlayerLogToggle;
 
-        public Button submitButton;
-        public Button closeButton;
+        [FormerlySerializedAs("submitButton")]
+        public Button SubmitButton;
 
-        public GameObject messagePanel;
+        [FormerlySerializedAs("closeButton")]
+        public Button CloseButton;
 
-        public MessagePanelUI messagePanelUI;
+        [FormerlySerializedAs("messagePanel")]
+        public GameObject MessagePanel;
+
+        [FormerlySerializedAs("messagePanelUI")]
+        public MessagePanelUI MessagePanelUI;
 
         [Tooltip("Upload in background : The media will be uploaded in the background without blocking the process" +
             " \n Wait for upload : The process will wait until the media has finished uploading before continuing")]
-        public MediaUploadType mediaUploadType;
+        [FormerlySerializedAs("mediaUploadType")]
+        public MediaUploadType MediaUploadType;
 
-        public ReportSubmittedUI reportSubmittedUI;
+        [FormerlySerializedAs("reportSubmittedUI")]
+        public ReportSubmittedUI ReportSubmittedUI;
 
-        public string submitEndpoint = "https://app.betahub.io";
+        [FormerlySerializedAs("submitEndpoint")]
+        public string SubmitEndpoint = "https://app.betahub.io";
 
-        public string projectID;
+        [FormerlySerializedAs("projectID")]
+        public string ProjectID;
 
-        public string authToken;
+        [FormerlySerializedAs("authToken")]
+        public string AuthToken;
+
+        // If set, this email address will be used as the default email address of the reporter.
+        // This is a hidden field since it's purpose is to be pre-filled programmatically by the developer if the user is somehow already logged in with a specific email address.
+        [HideInInspector, FormerlySerializedAs("defaultEmailAddress")]
+        public string DefaultEmailAddress;
 
     #if ENABLE_INPUT_SYSTEM
-        public InputAction shortcutAction = new InputAction("BugReportShortcut", binding: "<Keyboard>/f12");
+        [FormerlySerializedAs("shortcutAction")]
+        public InputAction ShortcutAction = new InputAction("BugReportShortcut", binding: "<Keyboard>/f12");
     #else
-        public KeyCode shortcutKey = KeyCode.F12;
+        [FormerlySerializedAs("shortcutKey")]
+        public KeyCode ShortcutKey = KeyCode.F12;
     #endif
 
-        public bool includePlayerLog = true;
-        public bool includeVideo = true;
+        [FormerlySerializedAs("includePlayerLog")]
+        public bool IncludePlayerLog = true;
+
+        [FormerlySerializedAs("includeVideo")]
+        public bool IncludeVideo = true;
 
         public UnityEvent OnBugReportWindowShown;
         public UnityEvent OnBugReportWindowHidden;
@@ -70,7 +96,7 @@ namespace BetaHub
         private List<Issue.ScreenshotFileReference> _screenshots = new List<Issue.ScreenshotFileReference>();
         private List<Issue.LogFileReference> _logFiles = new List<Issue.LogFileReference>();
 
-        private static Logger logger;
+        private static Logger _logger;
         private bool _cursorStateChanged;
         private CursorLockMode _previousCursorLockMode;
 
@@ -79,17 +105,19 @@ namespace BetaHub
         // we keep track of the issues to not record the video when any of the issues are being uploaded
         private List<Issue> _issues = new List<Issue>();
 
+        private bool _uiWasVisible = false;
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void InitializeLogger()
         {
-            logger = new Logger();
+            _logger = new Logger();
         }
         
         void Awake()
         {
-            if (instance == null)
+            if (_instance == null)
             {
-                instance = this;
+                _instance = this;
             }
             else
             {
@@ -102,8 +130,8 @@ namespace BetaHub
     #if ENABLE_INPUT_SYSTEM
             if (IsNewInputSystemEnabled())
             {
-                shortcutAction.Enable();
-                shortcutAction.performed += OnShortcutActionPerformed;
+               ShortcutAction.Enable();
+               ShortcutAction.performed += OnShortcutActionPerformed;
             }
     #endif
         }
@@ -113,8 +141,8 @@ namespace BetaHub
     #if ENABLE_INPUT_SYSTEM
             if (IsNewInputSystemEnabled())
             {
-                shortcutAction.performed -= OnShortcutActionPerformed;
-                shortcutAction.Disable();
+                ShortcutAction.performed -= OnShortcutActionPerformed;
+                ShortcutAction.Disable();
             }
     #endif
         }
@@ -123,25 +151,25 @@ namespace BetaHub
         {
             _gameRecorder = GetComponent<GameRecorder>();
             
-            bugReportPanel.SetActive(false);
-            submitButton.onClick.AddListener(SubmitBugReport);
-            closeButton.onClick.AddListener(() =>
+            BugReportPanel.SetActive(false);
+            SubmitButton.onClick.AddListener(SubmitBugReport);
+            CloseButton.onClick.AddListener(() =>
             {
-                bugReportPanel.SetActive(false);
+                BugReportPanel.SetActive(false);
             });
 
-            if (string.IsNullOrEmpty(projectID))
+            if (string.IsNullOrEmpty(ProjectID))
             {
                 Debug.LogError("Project ID is not set. I won't be able to submit bug reports.");
             }
 
-            if (string.IsNullOrEmpty(authToken))
+            if (string.IsNullOrEmpty(AuthToken))
             {
                 Debug.LogError("Auth token is not set. I won't be able to submit bug reports.");
             }
 
             // auth token must start with tkn-
-            if (!authToken.StartsWith("tkn-"))
+            if (!AuthToken.StartsWith("tkn-"))
             {
                 Debug.LogError("Auth token must start with tkn-. I won't be able to submit bug reports.");
             }
@@ -185,17 +213,27 @@ namespace BetaHub
                 }
             }
 
-            if (bugReportPanel.activeSelf && !_cursorStateChanged)
+            if (UiIsVisible())
             {
-                ModifyCursorState();
+                if (!_uiWasVisible)
+                {
+                    OnBugReportWindowShown?.Invoke();
+                    ModifyCursorState();
+                }
+                _uiWasVisible = true;
             }
-            else if (!bugReportPanel.activeSelf && !messagePanelUI.gameObject.activeSelf && _cursorStateChanged)
+            else if (!UiIsVisible())
             {
-                RestoreCursorState();
+                if (_uiWasVisible)
+                {
+                    OnBugReportWindowHidden?.Invoke();
+                    RestoreCursorState();
+                }
+                _uiWasVisible = false;
             }
             
     #if !ENABLE_INPUT_SYSTEM
-            if (shortcutKey != KeyCode.None && Input.GetKeyDown(shortcutKey))
+            if (ShortcutKey != KeyCode.None && Input.GetKeyDown(ShortcutKey))
             {
                 StartCoroutine(CaptureScreenshotAndShowUI());
             }
@@ -205,7 +243,12 @@ namespace BetaHub
         private bool SholdBeRecordingVideo()
         {
             // if true, the report is being uploaded, some processes should be paused
-            return includeVideo && !bugReportPanel.activeSelf && !_issues.Exists(issue => !issue.IsMediaUploadComplete);
+            return IncludeVideo && !UiIsVisible() && !_issues.Exists(issue => !issue.IsMediaUploadComplete);
+        }
+
+        private bool UiIsVisible()
+        {
+            return BugReportPanel.activeSelf || MessagePanelUI.gameObject.activeSelf || ReportSubmittedUI.gameObject.activeSelf;
         }
 
         private void ModifyCursorState()
@@ -216,7 +259,6 @@ namespace BetaHub
                 _previousCursorLockMode = Cursor.lockState;
                 Cursor.lockState = CursorLockMode.None;
                 Cursor.visible = true;
-                OnBugReportWindowShown?.Invoke();
             }
         }
 
@@ -227,7 +269,6 @@ namespace BetaHub
                 Cursor.lockState = _previousCursorLockMode;
                 Cursor.visible = false;
                 _cursorStateChanged = false;
-                OnBugReportWindowHidden?.Invoke();
             }
         }
 
@@ -256,13 +297,20 @@ namespace BetaHub
             yield return null;
 
             // reset the fields
-            descriptionField.text = "";
-            stepsField.text = "";
+            DescriptionField.text = "";
+            StepsField.text = "";
             IncludeVideoToggle.isOn = true;
             IncludeScreenshotToggle.isOn = true;
             IncludePlayerLogToggle.isOn = true;
+
+            #if BETAHUB_DEBUG
+                Debug.Log("BETAHUB_DEBUG: Prefilling description and steps for reproduce for faster testing");
+                // prefill the description and steps for reproduce for faster testing
+                DescriptionField.text = "The game is crashing when I press the sounds setting button. It happens on the main menu and on the settings menu.";
+                StepsField.text = "1. Go to the main menu\n2. Press the settings button\n3. Press the sounds button\n4. Crash the game";
+            #endif
             
-            bugReportPanel.SetActive(true);
+            BugReportPanel.SetActive(true);
         }
 
         // Sets screenshot path to be uploaded. Useful on manual invocation of bug report UI.
@@ -278,8 +326,8 @@ namespace BetaHub
 
         void SubmitBugReport()
         {
-            string description = descriptionField.text;
-            string steps = stepsField.text;
+            string description = DescriptionField.text;
+            string steps = StepsField.text;
 
             // Filter screenshots and logs based on toggle state
             List<Issue.ScreenshotFileReference> screenshots = null;
@@ -297,23 +345,23 @@ namespace BetaHub
                 logFiles = new List<Issue.LogFileReference>(_logFiles);
                 
                 // Add logger log file if it exists
-                if (includePlayerLog && !string.IsNullOrEmpty(logger.LogPath) && File.Exists(logger.LogPath))
+                if (IncludePlayerLog && !string.IsNullOrEmpty(_logger.LogPath) && File.Exists(_logger.LogPath))
                 {
                     // skip if size over 200MB
-                    if (new FileInfo(logger.LogPath).Length < 200 * 1024 * 1024)
+                    if (new FileInfo(_logger.LogPath).Length < 200 * 1024 * 1024)
                     {
-                        logFiles.Add(new Issue.LogFileReference { path = logger.LogPath, removeAfterUpload = false });
+                        logFiles.Add(new Issue.LogFileReference { path = _logger.LogPath, removeAfterUpload = false });
                     }
                 }
             }
             
-            if (includeVideo && IncludeVideoToggle.isOn)
+            if (IncludeVideo && IncludeVideoToggle.isOn)
             {
                 gameRecorder = _gameRecorder;
             }
             
             // Create Issue instance and post it
-            Issue issue = new Issue(submitEndpoint, projectID, authToken, messagePanelUI, reportSubmittedUI, gameRecorder);
+            Issue issue = new Issue(SubmitEndpoint, ProjectID, AuthToken, MessagePanelUI, ReportSubmittedUI, gameRecorder);
             _issues.Add(issue);
 
 
@@ -321,21 +369,21 @@ namespace BetaHub
             {
                 try {
                     // error, get ready to try again
-                    submitButton.interactable = true;
-                    submitButton.GetComponentInChildren<TMP_Text>().text = "Submit";
+                    SubmitButton.interactable = true;
+                    SubmitButton.GetComponentInChildren<TMP_Text>().text = "Submit";
 
                     if (errorMessage.exception != null)
                     {
                         Debug.LogError("Error submitting bug report: " + errorMessage.exception);
-                        messagePanelUI.ShowMessagePanel("Error", "Error submitting bug report. Please try again later.");
+                        MessagePanelUI.ShowMessagePanel("Error", "Error submitting bug report. Please try again later.");
                     }
                     else if (!string.IsNullOrEmpty(errorMessage.error))
                     {
-                        messagePanelUI.ShowMessagePanel("Error", errorMessage.error);
+                        MessagePanelUI.ShowMessagePanel("Error", errorMessage.error);
                     }
                     else
                     {
-                        messagePanelUI.ShowMessagePanel("Error", "Unknown error submitting bug report. Please try again later.");
+                        MessagePanelUI.ShowMessagePanel("Error", "Unknown error submitting bug report. Please try again later.");
                     }
                 }
                 catch (Exception e)
@@ -349,20 +397,20 @@ namespace BetaHub
             issue.PostIssue(description, steps, screenshots, logFiles, false,
                 (issueId) => // successful post
                 {
-                    submitButton.interactable = true;
-                    submitButton.GetComponentInChildren<TMP_Text>().text = "Submit";
+                    SubmitButton.interactable = true;
+                    SubmitButton.GetComponentInChildren<TMP_Text>().text = "Submit";
 
                     // Clear lists after successful upload
                     _screenshots.Clear();
                     _logFiles.Clear();
 
                     // show the report submitted UI
-                    reportSubmittedUI.Show(issue);
+                    ReportSubmittedUI.Show(issue, DefaultEmailAddress);
 
                     // hide bug report panel
-                    bugReportPanel.SetActive(false);
+                    BugReportPanel.SetActive(false);
                 },
-                mediaUploadType,
+                MediaUploadType,
                 (error) =>
                 {
                     onIssueError(new ErrorMessage { error = error });
@@ -376,8 +424,8 @@ namespace BetaHub
                 }
             });
 
-            submitButton.interactable = false;
-            submitButton.GetComponentInChildren<TMP_Text>().text = "Submitting...";
+            SubmitButton.interactable = false;
+            SubmitButton.GetComponentInChildren<TMP_Text>().text = "Submitting...";
         }
 
         class ErrorMessage {
