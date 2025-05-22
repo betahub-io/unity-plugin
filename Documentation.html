@@ -85,6 +85,23 @@
         <strong>Note:</strong> The plugin currently supports <strong>Windows</strong>, <strong>macOS</strong>, and <strong>Linux</strong>. For other platforms, manual FFmpeg installation and code adjustments may be necessary.
     </div>
 
+    <div class="warning">
+        <h2>IL2CPP Support and FFmpeg Video Recording</h2>
+        <p><strong>If you are building your Unity project with IL2CPP as the scripting backend, special handling is required for video recording to work:</strong></p>
+        <ul>
+            <li>The plugin uses a native process wrapper library to launch and communicate with FFmpeg when running under IL2CPP. The standard .NET <code>Process</code> class is not available in IL2CPP builds.</li>
+            <li><strong>You must define the scripting symbol <code>ENABLE_BETAHUB_FFMPEG</code> in your project settings</strong> to enable native FFmpeg support for IL2CPP builds.</li>
+            <li>The native library (<code>libbetahub_process_wrapper</code>) must be present in your build's <code>Plugins</code> directory for your platform (e.g., <code>Plugins/macOS/</code>, <code>Plugins/Linux/</code>).</li>
+            <li>If you do not define <code>ENABLE_BETAHUB_FFMPEG</code>, video recording will be disabled in IL2CPP builds and a warning will be logged at runtime.</li>
+            <li>If you are using Mono or .NET scripting backend, the plugin will use the standard .NET <code>Process</code> class and does not require the native library or the scripting symbol.</li>
+        </ul>
+        <p><strong>Summary:</strong></p>
+        <ul>
+            <li>For IL2CPP: define <code>ENABLE_BETAHUB_FFMPEG</code> and ensure the native library is present.</li>
+            <li>For Mono/.NET: no special action is needed.</li>
+        </ul>
+    </div>
+
     <h3>Quick Start</h3>
 
     <ol>

@@ -9,7 +9,7 @@ namespace BetaHub
 {
     public class VideoEncoder
     {
-        private Process ffmpegProcess;
+        private IProcessWrapper ffmpegProcess;
         private string outputDir;
         private string outputPathPattern;
         private int width;
@@ -44,6 +44,10 @@ namespace BetaHub
             this.outputDir = outputDir;
             this.outputPathPattern = Path.Combine(outputDir, "segment_%03d.mp4");
 
+            #if BETAHUB_DEBUG
+            UnityEngine.Debug.Log("Video output directory: " + outputDir);
+            #endif
+
             Directory.CreateDirectory(outputDir);
 
             maxSegments = recordingDurationSeconds / segmentLength;
@@ -59,7 +63,7 @@ namespace BetaHub
         {
             disposed = true;
             
-            if (ffmpegProcess != null && !ffmpegProcess.HasExited)
+            if (ffmpegProcess != null && ffmpegProcess.IsRunning())
             {
                 SendStopRequestAndWait();
             }
@@ -88,22 +92,57 @@ namespace BetaHub
 
             UnityEngine.Debug.Log($"Using encoder: {encoder}");
 
-            ffmpegProcess = new Process();
-            ffmpegProcess.StartInfo.FileName = ffmpegPath;
-            ffmpegProcess.StartInfo.Arguments = $"-y -f rawvideo -pix_fmt rgb24 -s {width}x{height} -r {frameRate} -i - " +
-                                                $"-vf vflip -c:v {encoder} -pix_fmt yuv420p {presetString} -f segment -segment_time {segmentLength} " +
-                                                $"-reset_timestamps 1 \"{outputPathPattern}\"";
-            ffmpegProcess.StartInfo.UseShellExecute = false;
-            ffmpegProcess.StartInfo.RedirectStandardInput = true;
-            ffmpegProcess.StartInfo.RedirectStandardError = true;
-            ffmpegProcess.StartInfo.CreateNoWindow = true;
-            ffmpegProcess.ErrorDataReceived += (sender, e) => { if (e.Data != null) errorBuffer.Add(e.Data); };
-            ffmpegProcess.Start();
+            List<string> arguments = new List<string>
+            {
+                "-y",
+                "-f", "rawvideo",
+                "-pix_fmt", "rgb24",
+                "-s", $"{width}x{height}",
+                "-r", frameRate.ToString(),
+                "-i", "-",
+                "-vf", "vflip",
+                "-c:v", encoder,
+                "-pix_fmt", "yuv420p"
+            };
 
-            ffmpegProcess.BeginErrorReadLine(); // Start reading the standard error asynchronously
+            if (!string.IsNullOrEmpty(presetString))
+            {
+                arguments.Add("-preset");
+                arguments.Add(presetName);
+            }
 
-            // Start a background task to feed frames at a constant rate
-            Task.Run(() => FeedFrames());
+            arguments.AddRange(new[]
+            {
+                "-f", "segment",
+                "-segment_time", segmentLength.ToString(),
+                "-reset_timestamps", "1",
+                outputPathPattern
+            });
+
+            #if ENABLE_IL2CPP && ENABLE_BETAHUB_FFMPEG
+            ffmpegProcess = new NativeProcessWrapper();
+            #if BETAHUB_DEBUG
+            UnityEngine.Debug.Log("Using native process wrapper");
+            #endif
+
+            #elif !ENABLE_IL2CPP
+            ffmpegProcess = new DotNetProcessWrapper();
+            #if BETAHUB_DEBUG
+            UnityEngine.Debug.Log("Using dotnet process wrapper");
+            #endif
+            #endif
+
+            #if !ENABLE_IL2CPP || ENABLE_BETAHUB_FFMPEG
+            if (ffmpegProcess != null && ffmpegProcess.Start(ffmpegPath, arguments.ToArray()))
+            {
+                // Start a background task to feed frames at a constant rate
+                Task.Run(() => FeedFrames());
+            }
+            else
+            {
+                UnityEngine.Debug.LogError("Failed to start FFmpeg process");
+            }
+            #endif
         }
 
         public void AddFrame(byte[] frameData)
@@ -120,7 +159,7 @@ namespace BetaHub
                 float nextFrameTime = 0f;
                 float nextCleanupTime = segmentLength; // Schedule cleanup after the first segment duration
 
-                while (ffmpegProcess != null && !ffmpegProcess.HasExited && !_stopRequest)
+                while (ffmpegProcess != null && ffmpegProcess.IsRunning() && !_stopRequest)
                 {
                     float elapsedSeconds = (float)stopwatch.Elapsed.TotalSeconds;
 
@@ -132,15 +171,17 @@ namespace BetaHub
                         {
                             if (lastFrame != null && !IsPaused)
                             {
-                                // TODO: This sometimes can cause NullReferenceException when the process is closed, fix it
-                                // synchronization may be needed
-                                ffmpegProcess.StandardInput.BaseStream.Write(lastFrame, 0, lastFrame.Length);
+                                int result = ffmpegProcess.WriteStdin(lastFrame);
+                                if (result < 0)
+                                {
+                                    UnityEngine.Debug.LogError("Error writing frame data to FFmpeg");
+                                }
                             }
                         }
-                        catch (IOException e)
+                        catch (System.Exception e)
                         {
                             UnityEngine.Debug.LogError($"Error adding frame data: {e.Message}");
-                            UnityEngine.Debug.LogError(string.Join("\n", errorBuffer.ToArray())); // Log collected stderr messages
+                            UnityEngine.Debug.LogError(string.Join("\n", ffmpegProcess.ReadStderr())); // Log collected stderr messages
                         }
                     }
 
@@ -157,16 +198,17 @@ namespace BetaHub
 
                 _stopRequest = false; // reset the flag
 
-                ffmpegProcess.StandardInput.Close();
-                ffmpegProcess.WaitForExit();
-
-                _stopRequestHandled = true; // let the main thread know that the stop request has been handled
-
-                // If ffmpeg process has exited with exit code other than 0, log the stderr messages
-                if (ffmpegProcess.ExitCode != 0 && !disposed)
+                if (ffmpegProcess != null)
                 {
-                    UnityEngine.Debug.LogError("Error during encoding.");
-                    UnityEngine.Debug.LogError(string.Join("\n", errorBuffer.ToArray())); // Log collected stderr messages
+                    ffmpegProcess.Close();
+                    _stopRequestHandled = true; // let the main thread know that the stop request has been handled
+
+                    // If ffmpeg process has exited with exit code other than 0, log the stderr messages
+                    if (ffmpegProcess.ExitCode != 0 && !disposed)
+                    {
+                        UnityEngine.Debug.LogError("Error during encoding.");
+                        UnityEngine.Debug.LogError(string.Join("\n", ffmpegProcess.ReadStderr())); // Log collected stderr messages
+                    }
                 }
             }
             catch (System.Exception e)
@@ -190,7 +232,7 @@ namespace BetaHub
 
         private void SendStopRequestAndWait()
         {
-            if (ffmpegProcess != null && !ffmpegProcess.HasExited)
+            if (ffmpegProcess != null && ffmpegProcess.IsRunning())
             {
                 _stopRequestHandled = false;
                 _stopRequest = true; // this will ask the thread to close the standard input and exit
@@ -231,24 +273,35 @@ namespace BetaHub
             string concatFilePath = Path.Combine(outputDir, "concat.txt");
             File.WriteAllLines(concatFilePath, files.Select(f => $"file '{f.FullName.Replace("'", @"'\''")}'")); // Properly escape single quotes
 
-            var mergeProcess = new Process();
-            mergeProcess.StartInfo.FileName = ffmpegPath;
-            mergeProcess.StartInfo.Arguments = $"-f concat -safe 0 -i \"{concatFilePath}\" -c copy \"{mergedFilePath}\"";
-            mergeProcess.StartInfo.UseShellExecute = false;
-            mergeProcess.StartInfo.RedirectStandardError = true;
-            mergeProcess.StartInfo.CreateNoWindow = true;
-            mergeProcess.ErrorDataReceived += (sender, e) => { if (e.Data != null) errorBuffer.Add(e.Data); };
-            mergeProcess.Start();
-            mergeProcess.BeginErrorReadLine();
+            #if ENABLE_IL2CPP && ENABLE_BETAHUB_FFMPEG
+            var mergeProcess = new NativeProcessWrapper();
+            #elif !ENABLE_IL2CPP
+            var mergeProcess = new DotNetProcessWrapper();
+            #else
+            return null;
+            #endif
+
+            #if !ENABLE_IL2CPP || ENABLE_BETAHUB_FFMPEG
+            string[] mergeArguments = new string[]
+            {
+                "-f", "concat",
+                "-safe", "0",
+                "-i", concatFilePath,
+                "-c", "copy",
+                mergedFilePath
+            };
+            
+            mergeProcess.Start(ffmpegPath, mergeArguments);
             mergeProcess.WaitForExit();
 
             if (mergeProcess.ExitCode != 0)
             {
                 UnityEngine.Debug.LogError("Error during merging segments.");
-                UnityEngine.Debug.LogError(string.Join("\n", errorBuffer.ToArray())); // Log collected stderr messages
+                UnityEngine.Debug.LogError(string.Join("\n", mergeProcess.ReadStderr())); // Log collected stderr messages
             }
 
             File.Delete(concatFilePath); // Clean up the concat file
+            #endif
 
             return mergedFilePath;
         }
@@ -299,14 +352,26 @@ namespace BetaHub
             {
                 UnityEngine.Debug.Log($"Checking encoder: {encoder}");
                 
-                var process = new Process();
-                process.StartInfo.FileName = ffmpegPath;
-                process.StartInfo.Arguments = $"-f lavfi -i nullsrc=d=1 -c:v {encoder} -t 1 -f null -";
-                process.StartInfo.UseShellExecute = false;
-                process.StartInfo.RedirectStandardOutput = true;
-                process.StartInfo.CreateNoWindow = true;
-                process.Start();
+                #if ENABLE_IL2CPP && ENABLE_BETAHUB_FFMPEG
+                var process = new NativeProcessWrapper();
+                #elif !ENABLE_IL2CPP
+                var process = new DotNetProcessWrapper();
+                #else
+                return encoders[encoders.Length - 1];
+                #endif
 
+                #if !ENABLE_IL2CPP || ENABLE_BETAHUB_FFMPEG
+                string[] encoderTestArgs = new string[]
+                {
+                    "-f", "lavfi",
+                    "-i", "nullsrc=d=1",
+                    "-c:v", encoder,
+                    "-t", "1",
+                    "-f", "null",
+                    "-"
+                };
+                
+                process.Start(ffmpegPath, encoderTestArgs);
                 process.WaitForExit();
 
                 if (process.ExitCode == 0)
@@ -320,6 +385,7 @@ namespace BetaHub
                 {
                     UnityEngine.Debug.Log($"Encoder {encoder} is not available.");
                 }
+                #endif
             }
 
             return encoders[encoders.Length - 1];
@@ -331,23 +397,30 @@ namespace BetaHub
             List<string> encoders = new List<string>();
             
             // Run ffmpeg to get the list of available encoders
-            var process = new Process();
+            #if ENABLE_IL2CPP && ENABLE_BETAHUB_FFMPEG
+            var process = new NativeProcessWrapper();
+            #elif !ENABLE_IL2CPP
+            var process = new DotNetProcessWrapper();
+            #else
+            // If IL2CPP is enabled but BETAHUB_FFMPEG is not, return default encoders
+            encoders.Add("libx264");
+            return encoders.ToArray();
+            #endif
 
             string ffmpegPath = GetFfmpegPath();
             if (ffmpegPath == null)
             {
+                encoders.Add("libx264");
                 return encoders.ToArray();
             }
 
-            process.StartInfo.FileName = ffmpegPath;
-            process.StartInfo.Arguments = "-encoders";
-            process.StartInfo.UseShellExecute = false;
-            process.StartInfo.RedirectStandardOutput = true;
-            process.StartInfo.CreateNoWindow = true;
-            process.Start();
-
-            string output = process.StandardOutput.ReadToEnd();
-            process.WaitForExit();
+            #if !ENABLE_IL2CPP || ENABLE_BETAHUB_FFMPEG
+            string output = "";
+            if (process.Start(ffmpegPath, new string[] { "-encoders" }))
+            {
+                process.WaitForExit();
+                output = string.Join("\n", process.ReadStderr());
+            }
 
             // Check for specific hardware encoders in the output
             if (output.Contains("h264_nvenc"))
@@ -369,6 +442,7 @@ namespace BetaHub
             {
                 encoders.Add("h264_vaapi");
             }
+            #endif
 
             // Always add libx264 as a fallback
             encoders.Add("libx264");

@@ -24,7 +24,11 @@ namespace BetaHub
         private Texture2D _screenShot;
 
         public bool IsRecording { get; private set; }
-        public bool IsPaused { get { return _videoEncoder.IsPaused; } set { _videoEncoder.IsPaused = value; } }
+#if ENABLE_IL2CPP && !ENABLE_BETAHUB_FFMPEG
+        public bool IsPaused { get; set; }
+#else
+        public bool IsPaused { get { return _videoEncoder?.IsPaused ?? false; } set { if (_videoEncoder != null) _videoEncoder.IsPaused = value; } }
+#endif
 
         private VideoEncoder _videoEncoder;
         private TexturePainter _texturePainter;
@@ -44,6 +48,13 @@ namespace BetaHub
 
         void Start()
         {
+#if ENABLE_IL2CPP && !ENABLE_BETAHUB_FFMPEG
+            Debug.LogWarning("Video recording is disabled in IL2CPP builds without ENABLE_BETAHUB_FFMPEG. " +
+                            "Please enable ENABLE_BETAHUB_FFMPEG in your scripting define symbols " +
+                            "or disable video recording features in your game.");
+            return;
+#endif
+
             // Adjust the game resolution to be divisible by 2
             _gameWidth = Screen.width % 2 == 0 ? Screen.width : Screen.width - 1;
             _gameHeight = Screen.height % 2 == 0 ? Screen.height : Screen.height - 1;
@@ -105,6 +116,10 @@ namespace BetaHub
 
         public void StartRecording()
         {
+#if ENABLE_IL2CPP && !ENABLE_BETAHUB_FFMPEG
+            return; // no log here as it would spam the log file
+#endif
+
             if (IsPaused)
             {
                 IsPaused = false; // this will unpause
@@ -123,6 +138,10 @@ namespace BetaHub
 
         public void PauseRecording()
         {
+#if ENABLE_IL2CPP && !ENABLE_BETAHUB_FFMPEG
+            return;
+#endif
+
             if (IsRecording)
             {
                 IsPaused = true;
@@ -135,6 +154,10 @@ namespace BetaHub
 
         public string StopRecordingAndSaveLastMinute()
         {
+#if ENABLE_IL2CPP && !ENABLE_BETAHUB_FFMPEG
+            return null;
+#endif
+
             IsRecording = false;
             return _videoEncoder.StopEncoding();
         }

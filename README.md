@@ -49,3 +49,17 @@ The installation and setup documentation is available [here](https://www.betahub
 
 Join our [Discord server](https://discord.gg/g2wpRtG) for support, feedback, and feature requests.
 
+## ⚠️ IL2CPP Support and FFmpeg Video Recording
+
+**If you are building your Unity project with IL2CPP as the scripting backend, special handling is required for video recording to work:**
+
+- The plugin uses a native process wrapper library to launch and communicate with FFmpeg when running under IL2CPP. This is necessary because the standard .NET `Process` class is not available in IL2CPP builds.
+- **You must define the scripting symbol `ENABLE_BETAHUB_FFMPEG` in your project settings** to enable native FFmpeg support for IL2CPP builds.
+- The native library (`libbetahub_process_wrapper`) must be present in your build's Plugins directory for your platform (e.g., `Plugins/macOS/`, `Plugins/Linux/`).
+- If you do not define `ENABLE_BETAHUB_FFMPEG`, video recording will be disabled in IL2CPP builds and a warning will be logged at runtime.
+- If you are using Mono or .NET scripting backend, the plugin will use the standard .NET `Process` class and does not require the native library or the scripting symbol.
+
+**Summary:**
+- For IL2CPP: define `ENABLE_BETAHUB_FFMPEG` and ensure the native library is present.
+- For Mono/.NET: no special action is needed.
+
