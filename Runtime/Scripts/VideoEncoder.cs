@@ -403,27 +403,48 @@ namespace BetaHub
 
         private static string GetFfmpegPath()
         {
-            // ffmpeg should be installed in streaming assets directory of the current platform, e.g:
-            // - Windows: <ProjectRoot>/Assets/StreamingAssets/BetaHub/ffmpeg.exe
-            // - macOS: <ProjectRoot>/Assets/StreamingAssets/BetaHub/ffmpeg
-            // - Linux: <ProjectRoot>/Assets/StreamingAssets/BetaHub/ffmpeg
-            
             string path = null;
-        
+            string legacyPath = null;
+            
+            // Define platform-specific paths
+            string platformFolder = null;
+            string executableName = null;
+
     #if UNITY_EDITOR_WIN || UNITY_STANDALONE_WIN
-            path = Path.Combine(Application.streamingAssetsPath, "BetaHub", "ffmpeg.exe");
+            platformFolder = "Windows";
+            executableName = "ffmpeg.exe";
+            legacyPath = Path.Combine(Application.streamingAssetsPath, "BetaHub", "ffmpeg.exe");
     #elif UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX
-            path = Path.Combine(Application.streamingAssetsPath, "BetaHub", "ffmpeg");
+            platformFolder = "MacOS";
+            executableName = "ffmpeg";
+            legacyPath = Path.Combine(Application.streamingAssetsPath, "BetaHub", "ffmpeg");
     #elif UNITY_EDITOR_LINUX || UNITY_STANDALONE_LINUX
-            path = Path.Combine(Application.streamingAssetsPath, "BetaHub", "ffmpeg");
+            platformFolder = "Linux";
+            executableName = "ffmpeg";
+            legacyPath = Path.Combine(Application.streamingAssetsPath, "BetaHub", "ffmpeg");
+    #else
+            UnityEngine.Debug.LogError("Unsupported platform for FFmpeg");
+            return null;
     #endif
 
+            // Try the new platform-specific path first
+            path = Path.Combine(Application.streamingAssetsPath, "BetaHub", platformFolder, executableName);
+            
+            // If the new path doesn't exist, try the legacy path
+            if (!File.Exists(path) && File.Exists(legacyPath))
+            {
+    #if BETAHUB_DEBUG
+                UnityEngine.Debug.Log($"Using legacy FFmpeg path: {legacyPath}");
+    #endif
+                return legacyPath;
+            }
+            
             if (!File.Exists(path))
             {
                 UnityEngine.Debug.LogWarning("FFmpeg binary not found, BetaHub video recording will not work. " +
                     "You can download it by clicking on the Windows/BetaHub/Download FFmpeg menu item. " +
                     "If that doesn't work, you can download it manually from https://ffmpeg.org/download.html " +
-                    "and place the executable directly in the StreamingAssets/BetaHub directory. " +
+                    "and place the executable in the StreamingAssets/BetaHub/" + platformFolder + " directory. " +
                     "If you don't want to see this warning, set the Include Video property to false.");
 
                 return null;
