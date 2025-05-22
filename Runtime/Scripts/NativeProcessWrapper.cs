@@ -15,27 +15,51 @@ namespace BetaHub
         private bool _isRunning = false;
         private int _exitCode = -1;
 
-        // Import the native functions
+        // Import the native functions with platform-specific library names
+        #if UNITY_EDITOR_WIN || UNITY_STANDALONE_WIN
+        [DllImport("betahub_process_wrapper")]
+        #else
         [DllImport("libbetahub_process_wrapper")]
+        #endif
         private static extern IntPtr process_start_with_args(
             string program, 
             [MarshalAs(UnmanagedType.LPArray, ArraySubType = UnmanagedType.LPStr)] 
             string[] args, 
             int args_len);
 
+        #if UNITY_EDITOR_WIN || UNITY_STANDALONE_WIN
+        [DllImport("betahub_process_wrapper")]
+        #else
         [DllImport("libbetahub_process_wrapper")]
+        #endif
         private static extern int process_write_stdin(IntPtr proc, byte[] data, int len);
 
+        #if UNITY_EDITOR_WIN || UNITY_STANDALONE_WIN
+        [DllImport("betahub_process_wrapper")]
+        #else
         [DllImport("libbetahub_process_wrapper")]
+        #endif
         private static extern int process_read_stderr(IntPtr proc, byte[] buf, int len);
 
+        #if UNITY_EDITOR_WIN || UNITY_STANDALONE_WIN
+        [DllImport("betahub_process_wrapper")]
+        #else
         [DllImport("libbetahub_process_wrapper")]
+        #endif
         private static extern int process_is_running(IntPtr proc);
 
+        #if UNITY_EDITOR_WIN || UNITY_STANDALONE_WIN
+        [DllImport("betahub_process_wrapper")]
+        #else
         [DllImport("libbetahub_process_wrapper")]
+        #endif
         private static extern int process_wait(IntPtr proc);
 
+        #if UNITY_EDITOR_WIN || UNITY_STANDALONE_WIN
+        [DllImport("betahub_process_wrapper")]
+        #else
         [DllImport("libbetahub_process_wrapper")]
+        #endif
         private static extern void process_close(IntPtr proc);
 
         public int ExitCode => _exitCode;
