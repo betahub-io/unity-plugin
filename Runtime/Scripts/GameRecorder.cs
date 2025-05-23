@@ -2,6 +2,7 @@ using UnityEngine;
 using System.Collections;
 using System.IO;
 using UnityEngine.Serialization;
+using Unity.Collections;
 
 namespace BetaHub
 {
@@ -173,6 +174,8 @@ namespace BetaHub
 
             RenderTexture scaledRT = null;
             Texture2D scaledTexture = null;
+            byte[] frameData = null;
+
             if (_outputWidth != _gameWidth || _outputHeight != _gameHeight)
             {
                 scaledRT = new RenderTexture(_outputWidth, _outputHeight, 0, RenderTextureFormat.ARGB32);
@@ -191,8 +194,6 @@ namespace BetaHub
                     _screenShot.ReadPixels(new Rect(0, 0, _gameWidth, _gameHeight), 0, 0);
                     _screenShot.Apply();
 
-                    byte[] frameData;
-
                     if (scaledRT != null)
                     {
                         // 2a. Blit (scale) to RT
@@ -208,13 +209,13 @@ namespace BetaHub
                         var painter = new TexturePainter(scaledTexture);
                         painter.DrawNumber(5, 5, (int)_fps, Color.white, 2);
 
-                        frameData = scaledTexture.GetRawTextureData();
+                        SmartCopyRawDataTextureToByteArray(scaledTexture, ref frameData);
                     }
                     else
                     {
                         // 2b. Draw overlays on the original screenshot
                         _texturePainter.DrawNumber(5, 5, (int)_fps, Color.white, 2);
-                        frameData = _screenShot.GetRawTextureData();
+                        SmartCopyRawDataTextureToByteArray(_screenShot, ref frameData);
                     }
 
                     _videoEncoder.AddFrame(frameData);
@@ -224,6 +225,27 @@ namespace BetaHub
             // Clean up if needed
             if (scaledTexture != null) Destroy(scaledTexture);
             if (scaledRT != null) scaledRT.Release();
+        }
+
+        // tries to copy the raw data texture to byte array and resize the byte array 
+        // if it is of a different size
+        private void SmartCopyRawDataTextureToByteArray(Texture2D texture, ref byte[] data)
+        {
+            NativeArray<byte> rawData = texture.GetRawTextureData<byte>();
+            if (data == null || rawData.Length != data.Length)
+            {
+                #if BETAHUB_DEBUG
+                UnityEngine.Debug.Log($"Recording: Resizing buffer byte array from {data?.Length ?? 0} to {rawData.Length}");
+                #endif
+                
+                var buffer = new byte[rawData.Length];
+                rawData.CopyTo(buffer);
+                data = buffer;
+            }
+            else
+            {
+                rawData.CopyTo(data);
+            }
         }
     }
 }
