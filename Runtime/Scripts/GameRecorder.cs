@@ -202,19 +202,18 @@ namespace BetaHub
                         // 2b. Read pixels from scaled RT
                         RenderTexture.active = scaledRT;
                         scaledTexture.ReadPixels(new Rect(0, 0, _outputWidth, _outputHeight), 0, 0);
-                        scaledTexture.Apply();
                         RenderTexture.active = null;
 
                         // 3a. Draw overlays on the scaled texture
                         var painter = new TexturePainter(scaledTexture);
-                        painter.DrawNumber(5, 5, (int)_fps, Color.white, 2);
+                        painter.DrawNumber(5, 5, (int)_fps, Color.white, 2, false);
 
                         SmartCopyRawDataTextureToByteArray(scaledTexture, ref frameData);
                     }
                     else
                     {
                         // 2b. Draw overlays on the original screenshot
-                        _texturePainter.DrawNumber(5, 5, (int)_fps, Color.white, 2);
+                        _texturePainter.DrawNumber(5, 5, (int)_fps, Color.white, 2, false);
                         SmartCopyRawDataTextureToByteArray(_screenShot, ref frameData);
                     }
 

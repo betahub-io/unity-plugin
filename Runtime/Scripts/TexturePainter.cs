@@ -132,7 +132,7 @@ namespace BetaHub
             }
         }
 
-        public void DrawNumber(int x, int y, int number, Color color, int scale = 1)
+        public void DrawNumber(int x, int y, int number, Color color, int scale = 1, bool apply = true)
         {
             string numberString = number.ToString();
             int digitWidth = 3;
@@ -163,7 +163,10 @@ namespace BetaHub
             }
 
             // Apply the changes to the texture
-            texture.Apply();
+            if (apply)
+            {
+                texture.Apply();
+            }
         }
     }
 }
