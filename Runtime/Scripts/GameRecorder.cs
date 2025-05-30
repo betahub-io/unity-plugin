@@ -23,6 +23,9 @@ namespace BetaHub
         [Tooltip("The maximum width of the video. The video will be downscaled if the screen resolution is higher.")]
         public int MaxVideoWidth = 1920;
 
+        [Tooltip("If enabled, renders the mouse cursor position in the recorded video.")]
+        public bool RenderCursor = false;
+
         // set this to a render texture to capture a specific render texture instead of the screen
         [HideInInspector]
         public RenderTexture CaptureRenderTexture;
@@ -312,6 +315,35 @@ namespace BetaHub
             // flipY=true means Y=0 is at the bottom, so coordinates work like mathematical coordinates
             var painter = new TexturePainter(bufferWrapper, flipY: true);
             painter.DrawNumber(5, 5, (int)_fps, Color.white, 2); // This will draw near bottom-left corner
+
+            // Draw cursor if enabled
+            if (RenderCursor)
+            {
+                // Get mouse position in screen coordinates
+                Vector3 mousePos = Input.mousePosition;
+                
+                // Convert screen coordinates to texture coordinates
+                // Screen coordinates: (0,0) at bottom-left, (Screen.width, Screen.height) at top-right
+                // Texture coordinates depend on scaling and capture source
+                int cursorX, cursorY;
+                
+                if (CaptureRenderTexture != null)
+                {
+                    // When using a custom render texture, we need to map mouse position to texture space
+                    // This assumes the render texture represents the full screen view
+                    cursorX = Mathf.RoundToInt((mousePos.x / Screen.width) * width);
+                    cursorY = Mathf.RoundToInt((mousePos.y / Screen.height) * height);
+                }
+                else
+                {
+                    // Direct screen capture - account for potential downscaling
+                    cursorX = Mathf.RoundToInt((mousePos.x / _gameWidth) * width);
+                    cursorY = Mathf.RoundToInt((mousePos.y / _gameHeight) * height);
+                }
+                
+                // Draw cursor with white fill and black outline for visibility
+                painter.DrawCursor(cursorX, cursorY, Color.white, Color.black, 1);
+            }
 
             // Convert RGBA32 to RGB24 by removing alpha channel
             for (int i = 0, j = 0; i < _rgbaDataBuffer.Length; i += 4, j += 3)

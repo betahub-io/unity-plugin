@@ -130,6 +130,7 @@
                 <li><strong>Frame Rate</strong>: Default is 30. Higher rates may increase file size and resource usage.</li>
                 <li><strong>Recording Duration</strong>: Default is 60 seconds.</li>
                 <li><strong>Downscale Video</strong>: <em>Off by default.</em> If enabled, the video will be downscaled to a maximum resolution (default: 1920x1080) if your game runs at a higher resolution. This helps reduce CPU usage and file size when recording on high-resolution displays. Enable this option in the inspector if you notice high CPU usage or stuttering during recording at large resolutions.</li>
+                <li><strong>Render Cursor</strong>: <em>Off by default.</em> When enabled, the mouse cursor position will be rendered in the recorded video. This is useful for showing user interactions and click locations during bug reports. The cursor is drawn as a white arrow with a black outline for visibility against different backgrounds.</li>
                 <li><strong>Capture Render Texture</strong>: <em>Optional.</em> When set, the recorder will capture from this specific render texture instead of the main screen. This is useful for recording from specific cameras, UI canvases, or other render targets. The recorder will automatically handle scaling if the render texture dimensions don't match the output resolution. Leave empty to record the main screen.</li>
             </ul>
         </li>

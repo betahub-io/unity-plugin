@@ -239,5 +239,67 @@ namespace BetaHub
                 }
             }
         }
+
+        /// <summary>
+        /// Draws a simple mouse cursor at the specified coordinates.
+        /// The cursor is drawn as an arrow shape with an outline for visibility.
+        /// </summary>
+        /// <param name="x">X coordinate of the cursor tip</param>
+        /// <param name="y">Y coordinate of the cursor tip</param>
+        /// <param name="color">Main color of the cursor</param>
+        /// <param name="outlineColor">Outline color for better visibility</param>
+        /// <param name="scale">Scale factor for the cursor size</param>
+        public void DrawCursor(int x, int y, Color color, Color outlineColor, int scale = 1)
+        {
+            // Define cursor shape as a simple arrow
+            // This represents a 11x16 cursor bitmap
+            byte[] cursorBitmap = new byte[]
+            {
+                1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  // row 0
+                1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0,  // row 1
+                1, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0,  // row 2
+                1, 2, 2, 1, 0, 0, 0, 0, 0, 0, 0,  // row 3
+                1, 2, 2, 2, 1, 0, 0, 0, 0, 0, 0,  // row 4
+                1, 2, 2, 2, 2, 1, 0, 0, 0, 0, 0,  // row 5
+                1, 2, 2, 2, 2, 2, 1, 0, 0, 0, 0,  // row 6
+                1, 2, 2, 2, 2, 2, 2, 1, 0, 0, 0,  // row 7
+                1, 2, 2, 2, 2, 2, 2, 2, 1, 0, 0,  // row 8
+                1, 2, 2, 2, 2, 2, 2, 2, 2, 1, 0,  // row 9
+                1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1,  // row 10
+                1, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1,  // row 11
+                1, 2, 2, 1, 2, 2, 1, 0, 0, 0, 0,  // row 12
+                1, 2, 1, 0, 1, 2, 2, 1, 0, 0, 0,  // row 13
+                1, 1, 0, 0, 1, 2, 2, 1, 0, 0, 0,  // row 14
+                1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0   // row 15
+            };
+
+            int cursorWidth = 11;
+            int cursorHeight = 16;
+
+            // Draw the cursor with scaling
+            for (int dy = 0; dy < cursorHeight; dy++)
+            {
+                for (int dx = 0; dx < cursorWidth; dx++)
+                {
+                    // Flip the cursor vertically if flipY is true to account for coordinate system
+                    int bitmapRow = flipY ? (cursorHeight - 1 - dy) : dy;
+                    byte pixelValue = cursorBitmap[bitmapRow * cursorWidth + dx];
+                    
+                    if (pixelValue > 0)
+                    {
+                        Color pixelColor = pixelValue == 1 ? outlineColor : color;
+                        
+                        // Apply scaling
+                        for (int sy = 0; sy < scale; sy++)
+                        {
+                            for (int sx = 0; sx < scale; sx++)
+                            {
+                                SetPixel(x + (dx * scale) + sx, y + (dy * scale) + sy, pixelColor);
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
