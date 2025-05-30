@@ -23,6 +23,10 @@ namespace BetaHub
         [Tooltip("The maximum width of the video. The video will be downscaled if the screen resolution is higher.")]
         public int MaxVideoWidth = 1920;
 
+        // set this to a render texture to capture a specific render texture instead of the screen
+        [HideInInspector]
+        public RenderTexture CaptureRenderTexture;
+
         // Optimized: Use RenderTextures for efficient GPU-based capture
         private RenderTexture _captureRT;
         private RenderTexture _fullScreenRT; // For capturing full screen when downscaling
@@ -66,6 +70,13 @@ namespace BetaHub
             // Adjust the game resolution to be divisible by 4
             _gameWidth  = Screen.width  - (Screen.width  % 4);
             _gameHeight = Screen.height - (Screen.height % 4);
+
+            // if custom render texture is not set and the screen w and h is not divisible by 4, print a warning
+            if (CaptureRenderTexture == null && (_gameWidth % 4 != 0 || _gameHeight % 4 != 0))
+            {
+                UnityEngine.Debug.LogWarning("Current screen width and height are not divisible by 4. " +
+                    "This may cause severe performance issues.");
+            }
 
             // Determine target (output) resolution
             _outputWidth = _gameWidth;
@@ -215,22 +226,41 @@ namespace BetaHub
                 {
                     _nextCaptureTime += _captureInterval;
 
-                    // Optimized: Capture screen with proper scaling support
-                    if (_fullScreenRT != null)
+                    // Check if we should use a custom render texture or capture from screen
+                    if (CaptureRenderTexture != null)
                     {
-                        // First capture full screen
-                        Graphics.Blit(null, _fullScreenRT);
-                        // Then scale down to output resolution
-                        Graphics.Blit(_fullScreenRT, _captureRT);
+                        // Use the specified render texture instead of screen capture
+                        if (CaptureRenderTexture.width == _outputWidth && CaptureRenderTexture.height == _outputHeight)
+                        {
+                            // Direct readback if dimensions match output resolution
+                            AsyncGPUReadback.Request(CaptureRenderTexture, 0, OnCompleteReadback);
+                        }
+                        else
+                        {
+                            // Scale to output resolution if dimensions don't match
+                            Graphics.Blit(CaptureRenderTexture, _captureRT);
+                            AsyncGPUReadback.Request(_captureRT, 0, OnCompleteReadback);
+                        }
                     }
                     else
                     {
-                        // Direct capture when no scaling needed
-                        Graphics.Blit(null, _captureRT);
+                        // Original screen capture logic
+                        if (_fullScreenRT != null)
+                        {
+                            // First capture full screen
+                            Graphics.Blit(null, _fullScreenRT);
+                            // Then scale down to output resolution
+                            Graphics.Blit(_fullScreenRT, _captureRT);
+                        }
+                        else
+                        {
+                            // Direct capture when no scaling needed
+                            Graphics.Blit(null, _captureRT);
+                        }
+                        
+                        // Use AsyncGPUReadback for non-blocking frame capture
+                        AsyncGPUReadback.Request(_captureRT, 0, OnCompleteReadback);
                     }
-
-                    // Optimized: Use AsyncGPUReadback for non-blocking frame capture
-                    AsyncGPUReadback.Request(_captureRT, 0, OnCompleteReadback);
                 }
             }
         }
