@@ -41,6 +41,9 @@ namespace BetaHub
         
         // Unique instance identifier to prevent conflicts between multiple instances
         private readonly string instanceId;
+        
+        // Control vertical mirroring of the video
+        private readonly bool mirrorVertically;
 
         // if set to true, the encoding thread will pause adding new frames
         public bool IsPaused { get; set; }
@@ -52,11 +55,12 @@ namespace BetaHub
         private volatile bool _stopRequest = false;
         private volatile bool _stopRequestHandled = false;
 
-        public VideoEncoder(int width, int height, int frameRate, int recordingDurationSeconds, string baseOutputDir = "Recording")
+        public VideoEncoder(int width, int height, int frameRate, int recordingDurationSeconds, string baseOutputDir = "Recording", bool mirrorVertically = false)
         {
             this.width = width;
             this.height = height;
             this.frameRate = frameRate;
+            this.mirrorVertically = mirrorVertically;
             
             // Create unique instance identifier and output directory
             this.instanceId = Guid.NewGuid().ToString("N").Substring(0, 8); // Use first 8 characters of GUID
@@ -134,6 +138,13 @@ namespace BetaHub
             {
                 arguments.Add("-preset");
                 arguments.Add(presetName);
+            }
+            
+            // Add vertical mirroring filter if enabled
+            if (mirrorVertically)
+            {
+                arguments.Add("-vf");
+                arguments.Add("vflip");
             }
 
             arguments.AddRange(new[]

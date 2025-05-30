@@ -26,6 +26,9 @@ namespace BetaHub
         [Tooltip("If enabled, renders the mouse cursor position in the recorded video.")]
         public bool RenderCursor = false;
 
+        [Tooltip("If enabled, mirrors the video vertically (flips it upside down).")]
+        public bool MirrorVertically = false;
+
         // set this to a render texture to capture a specific render texture instead of the screen
         [HideInInspector]
         public RenderTexture CaptureRenderTexture;
@@ -129,7 +132,7 @@ namespace BetaHub
             }
 
             // Initialize the video encoder with the output resolution
-            _videoEncoder = new VideoEncoder(_outputWidth, _outputHeight, FrameRate, RecordingDuration, outputDirectory);
+            _videoEncoder = new VideoEncoder(_outputWidth, _outputHeight, FrameRate, RecordingDuration, outputDirectory, MirrorVertically);
 
             _captureInterval = 1.0f / FrameRate;
             _nextCaptureTime = Time.time;
