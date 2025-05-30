@@ -100,7 +100,6 @@ namespace BetaHub
                 "-s", $"{width}x{height}",
                 "-r", frameRate.ToString(),
                 "-i", "-",
-                "-vf", "vflip",
                 "-c:v", encoder,
                 "-pix_fmt", "yuv420p"
             };
