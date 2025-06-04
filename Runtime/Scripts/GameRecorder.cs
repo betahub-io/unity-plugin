@@ -23,6 +23,9 @@ namespace BetaHub
         [Tooltip("The maximum width of the video. The video will be downscaled if the screen resolution is higher.")]
         public int MaxVideoWidth = 1920;
 
+        [Tooltip("If enabled, renders the FPS overlay on the video.")]
+        public bool RenderFPSOverlay = true;
+
         [Tooltip("If enabled, renders the mouse cursor position in the recorded video.")]
         public bool RenderCursor = false;
 
@@ -314,14 +317,27 @@ namespace BetaHub
             // Create a byte buffer wrapper to work with the frame data directly
             var bufferWrapper = new ByteBufferWrapper(_rgbaDataBuffer, width, height, 4); // RGBA format
             
-            // Draw FPS overlay directly on the buffer
             // flipY=true means Y=0 is at the bottom, so coordinates work like mathematical coordinates
-            var painter = new TexturePainter(bufferWrapper, flipY: true);
-            painter.DrawNumber(5, 5, (int)_fps, Color.white, 2); // This will draw near bottom-left corner
+            TexturePainter painter = null;
+
+            // Draw FPS overlay directly on the buffer
+            if (RenderFPSOverlay)
+            {
+                if (painter == null)
+                {
+                    painter = new TexturePainter(bufferWrapper, flipY: true);
+                }
+                painter.DrawNumber(5, 5, (int)_fps, Color.white, 2); // This will draw near bottom-left corner
+            }
 
             // Draw cursor if enabled
             if (RenderCursor)
             {
+                if (painter == null)
+                {
+                    painter = new TexturePainter(bufferWrapper, flipY: true);
+                }
+                
                 // Get mouse position in screen coordinates
                 Vector3 mousePos = Input.mousePosition;
                 
