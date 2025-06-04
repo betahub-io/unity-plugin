@@ -45,8 +45,8 @@ namespace BetaHub
         {
             if (isSampling)
             {
-                sampleTimer += Time.deltaTime;
-                durationTimer += Time.deltaTime;
+                sampleTimer += Time.unscaledDeltaTime;
+                durationTimer += Time.unscaledDeltaTime;
 
                 if (sampleTimer >= sampleFrequency)
                 {
@@ -75,14 +75,14 @@ namespace BetaHub
         {
             PerformanceSample sample = new PerformanceSample
             {
-                timestamp = Time.time,
+                timestamp = Time.unscaledTime,
                 totalAllocatedMemory = Profiler.GetTotalAllocatedMemoryLong(),
                 totalReservedMemory = Profiler.GetTotalReservedMemoryLong(),
                 totalUnusedReservedMemory = Profiler.GetTotalUnusedReservedMemoryLong(),
                 monoHeapSize = Profiler.GetMonoHeapSizeLong(),
                 monoUsedSize = Profiler.GetMonoUsedSizeLong(),
                 allocatedMemoryForGraphicsDriver = Profiler.GetAllocatedMemoryForGraphicsDriver(),
-                frameTime = Time.deltaTime,
+                frameTime = Time.unscaledDeltaTime,
                 cpuUsage = GetCPUUsage()
             };
             samples.Add(sample);

@@ -138,7 +138,7 @@ namespace BetaHub
             _videoEncoder = new VideoEncoder(_outputWidth, _outputHeight, FrameRate, RecordingDuration, outputDirectory, MirrorVertically);
 
             _captureInterval = 1.0f / FrameRate;
-            _nextCaptureTime = Time.time;
+            _nextCaptureTime = Time.unscaledTime;
         }
 
         void OnDestroy()
@@ -231,7 +231,7 @@ namespace BetaHub
             {
                 yield return new WaitForEndOfFrame();
 
-                if (Time.time >= _nextCaptureTime)
+                if (Time.unscaledTime >= _nextCaptureTime)
                 {
                     _nextCaptureTime += _captureInterval;
 
