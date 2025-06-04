@@ -2,6 +2,8 @@ using UnityEngine;
 using System.Collections;
 using System.IO;
 using UnityEngine.Serialization;
+using Unity.Collections;
+using UnityEngine.Rendering;
 
 namespace BetaHub
 {
@@ -21,7 +23,24 @@ namespace BetaHub
         [Tooltip("The maximum width of the video. The video will be downscaled if the screen resolution is higher.")]
         public int MaxVideoWidth = 1920;
 
-        private Texture2D _screenShot;
+        [Tooltip("If enabled, renders the mouse cursor position in the recorded video.")]
+        public bool RenderCursor = false;
+
+        [Tooltip("If enabled, mirrors the video vertically (flips it upside down).")]
+        public bool MirrorVertically = false;
+
+        // set this to a render texture to capture a specific render texture instead of the screen
+        [HideInInspector]
+        public RenderTexture CaptureRenderTexture;
+
+        // Optimized: Use RenderTextures for efficient GPU-based capture
+        private RenderTexture _captureRT;
+        private RenderTexture _fullScreenRT; // For capturing full screen when downscaling
+        private byte[] _rgbConversionBuffer; // Reusable buffer for RGBA to RGB conversion
+
+        // GC Optimization: Reusable buffers to avoid allocations in capture loop
+        private byte[] _frameDataBuffer; // Reusable buffer for frame data from GPU
+        private byte[] _rgbaDataBuffer; // Reusable buffer for RGBA texture data
 
         public bool IsRecording { get; private set; }
 #if ENABLE_IL2CPP && !ENABLE_BETAHUB_FFMPEG
@@ -31,7 +50,6 @@ namespace BetaHub
 #endif
 
         private VideoEncoder _videoEncoder;
-        private TexturePainter _texturePainter;
 
         private int _gameWidth;
         private int _gameHeight;
@@ -55,9 +73,16 @@ namespace BetaHub
             return;
 #endif
 
-            // Adjust the game resolution to be divisible by 2
-            _gameWidth = Screen.width % 2 == 0 ? Screen.width : Screen.width - 1;
-            _gameHeight = Screen.height % 2 == 0 ? Screen.height : Screen.height - 1;
+            // Adjust the game resolution to be divisible by 4
+            _gameWidth  = Screen.width  - (Screen.width  % 4);
+            _gameHeight = Screen.height - (Screen.height % 4);
+
+            // if custom render texture is not set and the screen w and h is not divisible by 4, print a warning
+            if (CaptureRenderTexture == null && (_gameWidth % 4 != 0 || _gameHeight % 4 != 0))
+            {
+                UnityEngine.Debug.LogWarning("Current screen width and height are not divisible by 4. " +
+                    "This may cause severe performance issues.");
+            }
 
             // Determine target (output) resolution
             _outputWidth = _gameWidth;
@@ -72,16 +97,32 @@ namespace BetaHub
                     _outputWidth = MaxVideoWidth;
                     _outputHeight = Mathf.RoundToInt(_outputWidth / aspect);
                 }
-                // Ensure both dimensions are even
-                _outputWidth -= _outputWidth % 2;
-                _outputHeight -= _outputHeight % 2;
+                // Ensure both dimensions are multiples of 4 (for AsyncGPUReadback)
+                _outputWidth -= _outputWidth % 4;
+                _outputHeight -= _outputHeight % 4;
 
                 UnityEngine.Debug.Log($"Video is to be downscaled to {_outputWidth}x{_outputHeight}");
             }
 
-            // Create a Texture2D with the adjusted resolution
-            _screenShot = new Texture2D(_gameWidth, _gameHeight, TextureFormat.RGB24, false);
-            _texturePainter = new TexturePainter(_screenShot);
+            // Optimized: Create RenderTexture once at output resolution (handles downscaling automatically)
+            _captureRT = new RenderTexture(_outputWidth, _outputHeight, 0, RenderTextureFormat.ARGB32);
+            _captureRT.Create();
+
+            // If we're downscaling, we need a full-screen texture to capture from first
+            if (DownscaleVideo && (_gameWidth != _outputWidth || _gameHeight != _outputHeight))
+            {
+                _fullScreenRT = new RenderTexture(_gameWidth, _gameHeight, 0, RenderTextureFormat.ARGB32);
+                _fullScreenRT.Create();
+            }
+
+            // Initialize RGB conversion buffer
+            _rgbConversionBuffer = new byte[_outputWidth * _outputHeight * 3]; // RGB24 format
+            
+            // GC Optimization: Initialize reusable buffers and textures
+            int expectedFrameSize = _outputWidth * _outputHeight * 4; // RGBA32 format
+            _frameDataBuffer = new byte[expectedFrameSize];
+            _rgbaDataBuffer = new byte[expectedFrameSize];
+            
             IsRecording = false;
 
             string outputDirectory = Path.Combine(Application.persistentDataPath, "BH_Recording");
@@ -91,7 +132,7 @@ namespace BetaHub
             }
 
             // Initialize the video encoder with the output resolution
-            _videoEncoder = new VideoEncoder(_outputWidth, _outputHeight, FrameRate, RecordingDuration, outputDirectory);
+            _videoEncoder = new VideoEncoder(_outputWidth, _outputHeight, FrameRate, RecordingDuration, outputDirectory, MirrorVertically);
 
             _captureInterval = 1.0f / FrameRate;
             _nextCaptureTime = Time.time;
@@ -99,6 +140,20 @@ namespace BetaHub
 
         void OnDestroy()
         {
+            // Optimized: Proper cleanup of RenderTextures
+            if (_captureRT != null)
+            {
+                _captureRT.Release();
+                _captureRT = null;
+            }
+            if (_fullScreenRT != null)
+            {
+                _fullScreenRT.Release();
+                _fullScreenRT = null;
+            }
+            _rgbConversionBuffer = null;
+            _frameDataBuffer = null;
+            _rgbaDataBuffer = null;
             if (_videoEncoder != null) // can be null since Start() may not have been called
             {
                 _videoEncoder.Dispose();
@@ -165,19 +220,9 @@ namespace BetaHub
         private IEnumerator CaptureFrames()
         {
             #if BETAHUB_DEBUG
-            
             UnityEngine.Debug.Log($"Game resolution: {_gameWidth}x{_gameHeight}");
             UnityEngine.Debug.Log($"Output resolution: {_outputWidth}x{_outputHeight}");
-            
             #endif
-
-            RenderTexture scaledRT = null;
-            Texture2D scaledTexture = null;
-            if (_outputWidth != _gameWidth || _outputHeight != _gameHeight)
-            {
-                scaledRT = new RenderTexture(_outputWidth, _outputHeight, 0, RenderTextureFormat.ARGB32);
-                scaledTexture = new Texture2D(_outputWidth, _outputHeight, TextureFormat.RGB24, false);
-            }
 
             while (IsRecording)
             {
@@ -187,43 +232,159 @@ namespace BetaHub
                 {
                     _nextCaptureTime += _captureInterval;
 
-                    // 1. Capture the full-res frame
-                    _screenShot.ReadPixels(new Rect(0, 0, _gameWidth, _gameHeight), 0, 0);
-                    _screenShot.Apply();
-
-                    byte[] frameData;
-
-                    if (scaledRT != null)
+                    // Check if we should use a custom render texture or capture from screen
+                    if (CaptureRenderTexture != null)
                     {
-                        // 2a. Blit (scale) to RT
-                        Graphics.Blit(_screenShot, scaledRT);
-
-                        // 2b. Read pixels from scaled RT
-                        RenderTexture.active = scaledRT;
-                        scaledTexture.ReadPixels(new Rect(0, 0, _outputWidth, _outputHeight), 0, 0);
-                        scaledTexture.Apply();
-                        RenderTexture.active = null;
-
-                        // 3a. Draw overlays on the scaled texture
-                        var painter = new TexturePainter(scaledTexture);
-                        painter.DrawNumber(5, 5, (int)_fps, Color.white, 2);
-
-                        frameData = scaledTexture.GetRawTextureData();
+                        // Use the specified render texture instead of screen capture
+                        if (CaptureRenderTexture.width == _outputWidth && CaptureRenderTexture.height == _outputHeight)
+                        {
+                            // Direct readback if dimensions match output resolution
+                            AsyncGPUReadback.Request(CaptureRenderTexture, 0, OnCompleteReadback);
+                        }
+                        else
+                        {
+                            // Scale to output resolution if dimensions don't match
+                            Graphics.Blit(CaptureRenderTexture, _captureRT);
+                            AsyncGPUReadback.Request(_captureRT, 0, OnCompleteReadback);
+                        }
                     }
                     else
                     {
-                        // 2b. Draw overlays on the original screenshot
-                        _texturePainter.DrawNumber(5, 5, (int)_fps, Color.white, 2);
-                        frameData = _screenShot.GetRawTextureData();
+                        // Original screen capture logic
+                        if (_fullScreenRT != null)
+                        {
+                            // First capture full screen
+                            Graphics.Blit(null, _fullScreenRT);
+                            // Then scale down to output resolution
+                            Graphics.Blit(_fullScreenRT, _captureRT);
+                        }
+                        else
+                        {
+                            // Direct capture when no scaling needed
+                            Graphics.Blit(null, _captureRT);
+                        }
+                        
+                        // Use AsyncGPUReadback for non-blocking frame capture
+                        AsyncGPUReadback.Request(_captureRT, 0, OnCompleteReadback);
                     }
-
-                    _videoEncoder.AddFrame(frameData);
                 }
             }
+        }
 
-            // Clean up if needed
-            if (scaledTexture != null) Destroy(scaledTexture);
-            if (scaledRT != null) scaledRT.Release();
+        // Optimized: Async callback for GPU readback completion
+        private void OnCompleteReadback(AsyncGPUReadbackRequest request)
+        {
+            if (request.hasError)
+            {
+                #if BETAHUB_DEBUG
+                UnityEngine.Debug.LogError("AsyncGPUReadback request failed");
+                #endif
+                return;
+            }
+
+            if (!IsRecording) return; // Recording might have stopped while waiting for readback
+
+            // Get the raw data from GPU using safe copy to avoid allocation
+            var rawData = request.GetData<byte>();
+            SafeCopyNativeArrayToByteArray(rawData, ref _frameDataBuffer);
+
+            // Apply FPS overlay and get the processed RGB data
+            var processedFrameData = ApplyFPSOverlay(_frameDataBuffer, _outputWidth, _outputHeight);
+
+            // Send frame to encoder
+            _videoEncoder.AddFrame(processedFrameData);
+        }
+
+        // Helper method to apply FPS overlay to raw frame data
+        private byte[] ApplyFPSOverlay(byte[] frameData, int width, int height)
+        {
+            if (_rgbConversionBuffer == null)
+            {
+                // no buffer could mean that we're in the middle of shutting down
+                return frameData;
+            }
+
+            // Copy frameData to _rgbaDataBuffer to avoid modifying the original
+            if (_rgbaDataBuffer == null || _rgbaDataBuffer.Length != frameData.Length)
+            {
+                _rgbaDataBuffer = new byte[frameData.Length];
+            }
+            System.Array.Copy(frameData, _rgbaDataBuffer, frameData.Length);
+
+            // Create a byte buffer wrapper to work with the frame data directly
+            var bufferWrapper = new ByteBufferWrapper(_rgbaDataBuffer, width, height, 4); // RGBA format
+            
+            // Draw FPS overlay directly on the buffer
+            // flipY=true means Y=0 is at the bottom, so coordinates work like mathematical coordinates
+            var painter = new TexturePainter(bufferWrapper, flipY: true);
+            painter.DrawNumber(5, 5, (int)_fps, Color.white, 2); // This will draw near bottom-left corner
+
+            // Draw cursor if enabled
+            if (RenderCursor)
+            {
+                // Get mouse position in screen coordinates
+                Vector3 mousePos = Input.mousePosition;
+                
+                // Convert screen coordinates to texture coordinates
+                // Screen coordinates: (0,0) at bottom-left, (Screen.width, Screen.height) at top-right
+                // Texture coordinates depend on scaling and capture source
+                int cursorX, cursorY;
+                
+                if (CaptureRenderTexture != null)
+                {
+                    // When using a custom render texture, we need to map mouse position to texture space
+                    // This assumes the render texture represents the full screen view
+                    cursorX = Mathf.RoundToInt((mousePos.x / Screen.width) * width);
+                    cursorY = Mathf.RoundToInt((mousePos.y / Screen.height) * height);
+                }
+                else
+                {
+                    // Direct screen capture - account for potential downscaling
+                    cursorX = Mathf.RoundToInt((mousePos.x / _gameWidth) * width);
+                    cursorY = Mathf.RoundToInt((mousePos.y / _gameHeight) * height);
+                }
+                
+                // Draw cursor with white fill and black outline for visibility
+                painter.DrawCursor(cursorX, cursorY, Color.white, Color.black, 1);
+            }
+
+            // Convert RGBA32 to RGB24 by removing alpha channel
+            for (int i = 0, j = 0; i < _rgbaDataBuffer.Length; i += 4, j += 3)
+            {
+                _rgbConversionBuffer[j] = _rgbaDataBuffer[i];     // R
+                _rgbConversionBuffer[j + 1] = _rgbaDataBuffer[i + 1]; // G
+                _rgbConversionBuffer[j + 2] = _rgbaDataBuffer[i + 2]; // B
+                // Skip alpha channel (_rgbaDataBuffer[i + 3])
+            }
+
+            return _rgbConversionBuffer;
+        }
+
+        /// <summary>
+        /// Safely copies data from a NativeArray to a byte array, resizing the target array if necessary.
+        /// This avoids GC allocations by reusing existing arrays when possible.
+        /// </summary>
+        /// <param name="source">The source NativeArray to copy from</param>
+        /// <param name="target">The target byte array to copy to (will be resized if needed)</param>
+        private void SafeCopyNativeArrayToByteArray(NativeArray<byte> source, ref byte[] target)
+        {
+            int requiredSize = source.Length;
+            
+            // Resize target array if it's null or too small
+            if (target == null || target.Length != requiredSize)
+            {
+                int oldSize = target?.Length ?? 0;
+                
+                target = new byte[requiredSize];
+                #if BETAHUB_DEBUG
+                UnityEngine.Debug.Log($"Resized buffer from {oldSize} to {requiredSize} bytes");
+                #endif
+            }
+            
+            // Use CopyTo for efficient copying without allocation
+            
+            source.CopyTo(target);
+
         }
     }
 }

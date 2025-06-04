@@ -4,9 +4,22 @@ using System.Linq;
 using System.Collections.Generic;
 using UnityEngine;
 using System.Threading.Tasks;
+using System; // Added for Guid
 
 namespace BetaHub
 {
+    /// <summary>
+    /// VideoEncoder handles video recording and encoding using FFmpeg.
+    /// 
+    /// Bug Fix (File Access Conflicts):
+    /// - Uses unique instance directories to prevent conflicts between multiple VideoEncoder instances
+    /// - Implements retry logic with exponential backoff for file deletion operations
+    /// - Gracefully handles IOException when files are still in use by FFmpeg processes
+    /// - Properly cleans up instance directories when empty
+    /// 
+    /// This fixes the issue where scene reloads would cause IOException spam due to
+    /// multiple VideoEncoder instances trying to access the same segment files.
+    /// </summary>
     public class VideoEncoder
     {
         private IProcessWrapper ffmpegProcess;
@@ -25,6 +38,12 @@ namespace BetaHub
         private float frameInterval;
 
         private bool debugMode;
+        
+        // Unique instance identifier to prevent conflicts between multiple instances
+        private readonly string instanceId;
+        
+        // Control vertical mirroring of the video
+        private readonly bool mirrorVertically;
 
         // if set to true, the encoding thread will pause adding new frames
         public bool IsPaused { get; set; }
@@ -36,16 +55,20 @@ namespace BetaHub
         private volatile bool _stopRequest = false;
         private volatile bool _stopRequestHandled = false;
 
-        public VideoEncoder(int width, int height, int frameRate, int recordingDurationSeconds, string outputDir = "Recording")
+        public VideoEncoder(int width, int height, int frameRate, int recordingDurationSeconds, string baseOutputDir = "Recording", bool mirrorVertically = false)
         {
             this.width = width;
             this.height = height;
             this.frameRate = frameRate;
-            this.outputDir = outputDir;
+            this.mirrorVertically = mirrorVertically;
+            
+            // Create unique instance identifier and output directory
+            this.instanceId = Guid.NewGuid().ToString("N").Substring(0, 8); // Use first 8 characters of GUID
+            this.outputDir = Path.Combine(baseOutputDir, instanceId);
             this.outputPathPattern = Path.Combine(outputDir, "segment_%03d.mp4");
 
             #if BETAHUB_DEBUG
-            UnityEngine.Debug.Log("Video output directory: " + outputDir);
+            UnityEngine.Debug.Log($"Video output directory: {outputDir} (instance: {instanceId})");
             #endif
 
             Directory.CreateDirectory(outputDir);
@@ -66,9 +89,16 @@ namespace BetaHub
             if (ffmpegProcess != null && ffmpegProcess.IsRunning())
             {
                 SendStopRequestAndWait();
+                
+                // Give the process a moment to fully release file handles
+                System.Threading.Thread.Sleep(100);
             }
 
-            RemoveAllSegments();
+            // Clean up segments with retry logic for better file access handling
+            RemoveAllSegmentsWithRetry();
+            
+            // Clean up the unique instance directory if it's empty
+            CleanupInstanceDirectory();
         }
 
         public void StartEncoding()
@@ -100,7 +130,6 @@ namespace BetaHub
                 "-s", $"{width}x{height}",
                 "-r", frameRate.ToString(),
                 "-i", "-",
-                "-vf", "vflip",
                 "-c:v", encoder,
                 "-pix_fmt", "yuv420p"
             };
@@ -109,6 +138,13 @@ namespace BetaHub
             {
                 arguments.Add("-preset");
                 arguments.Add(presetName);
+            }
+            
+            // Add vertical mirroring filter if enabled
+            if (mirrorVertically)
+            {
+                arguments.Add("-vf");
+                arguments.Add("vflip");
             }
 
             arguments.AddRange(new[]
@@ -318,6 +354,9 @@ namespace BetaHub
         // cleanups only the old segments, keeping the ones with the latest segment numbers
         private void CleanupSegments()
         {
+            if (!Directory.Exists(outputDir))
+                return;
+                
             var directoryInfo = new DirectoryInfo(outputDir);
         
             var filesToDelete = directoryInfo.GetFiles("segment_*.mp4")
@@ -327,7 +366,40 @@ namespace BetaHub
             
             foreach (var file in filesToDelete)
             {
-                file.Delete();
+                // Retry logic for file deletion to handle file access conflicts
+                int retryCount = 0;
+                const int maxRetries = 3;
+                const int retryDelayMs = 25;
+                
+                while (retryCount < maxRetries)
+                {
+                    try
+                    {
+                        file.Delete();
+                        break; // Success, exit retry loop
+                    }
+                    catch (IOException ex) when (ex.Message.Contains("being used by another process"))
+                    {
+                        retryCount++;
+                        if (retryCount >= maxRetries)
+                        {
+                            #if BETAHUB_DEBUG
+                            UnityEngine.Debug.LogWarning($"Could not delete old segment file {file.Name} after {maxRetries} attempts. File may still be in use.");
+                            #endif
+                        }
+                        else
+                        {
+                            System.Threading.Thread.Sleep(retryDelayMs * retryCount);
+                        }
+                    }
+                    catch (System.Exception ex)
+                    {
+                        #if BETAHUB_DEBUG
+                        UnityEngine.Debug.LogError($"Unexpected error deleting old segment file {file.Name}: {ex.Message}");
+                        #endif
+                        break; // Don't retry for unexpected errors
+                    }
+                }
             }
         }
 
@@ -525,6 +597,85 @@ namespace BetaHub
             }
 
             return path;
+        }
+
+        private void RemoveAllSegmentsWithRetry()
+        {
+            if (!Directory.Exists(outputDir))
+                return;
+                
+            var directoryInfo = new DirectoryInfo(outputDir);
+            var files = directoryInfo.GetFiles("segment_*.mp4");
+            
+            foreach (var file in files)
+            {
+                // Retry logic for file deletion to handle file access conflicts
+                int retryCount = 0;
+                const int maxRetries = 5;
+                const int retryDelayMs = 50;
+                
+                while (retryCount < maxRetries)
+                {
+                    try
+                    {
+                        file.Delete();
+                        break; // Success, exit retry loop
+                    }
+                    catch (IOException ex) when (ex.Message.Contains("being used by another process"))
+                    {
+                        retryCount++;
+                        if (retryCount >= maxRetries)
+                        {
+                            UnityEngine.Debug.LogWarning($"Could not delete segment file {file.Name} after {maxRetries} attempts. File may still be in use. Error: {ex.Message}");
+                        }
+                        else
+                        {
+                            #if BETAHUB_DEBUG
+                            UnityEngine.Debug.Log($"Retrying deletion of {file.Name} (attempt {retryCount}/{maxRetries})");
+                            #endif
+                            System.Threading.Thread.Sleep(retryDelayMs * retryCount); // Exponential backoff
+                        }
+                    }
+                    catch (System.Exception ex)
+                    {
+                        UnityEngine.Debug.LogError($"Unexpected error deleting segment file {file.Name}: {ex.Message}");
+                        break; // Don't retry for unexpected errors
+                    }
+                }
+            }
+        }
+
+        private void CleanupInstanceDirectory()
+        {
+            try
+            {
+                if (Directory.Exists(outputDir))
+                {
+                    // Check if directory is empty (no files left)
+                    var remainingFiles = Directory.GetFiles(outputDir);
+                    var remainingDirs = Directory.GetDirectories(outputDir);
+                    
+                    if (remainingFiles.Length == 0 && remainingDirs.Length == 0)
+                    {
+                        Directory.Delete(outputDir);
+                        #if BETAHUB_DEBUG
+                        UnityEngine.Debug.Log($"Cleaned up empty instance directory: {outputDir}");
+                        #endif
+                    }
+                    else
+                    {
+                        #if BETAHUB_DEBUG
+                        UnityEngine.Debug.Log($"Instance directory not empty, keeping: {outputDir} (files: {remainingFiles.Length}, dirs: {remainingDirs.Length})");
+                        #endif
+                    }
+                }
+            }
+            catch (System.Exception ex)
+            {
+                #if BETAHUB_DEBUG
+                UnityEngine.Debug.LogWarning($"Could not clean up instance directory {outputDir}: {ex.Message}");
+                #endif
+            }
         }
     }
 
