@@ -81,7 +81,7 @@ namespace BetaHub
             _gameHeight = Screen.height - (Screen.height % 4);
 
             // if custom render texture is not set and the screen w and h is not divisible by 4, print a warning
-            if (CaptureRenderTexture == null && (_gameWidth % 4 != 0 || _gameHeight % 4 != 0))
+            if (CaptureRenderTexture == null && (Screen.width % 4 != 0 || Screen.height % 4 != 0))
             {
                 UnityEngine.Debug.LogWarning("Current screen width and height are not divisible by 4. " +
                     "This may cause severe performance issues.");
