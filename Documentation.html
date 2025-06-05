@@ -58,6 +58,18 @@
 <body>
     <h1>BetaHub Unity Plugin Documentation</h1>
 
+    <div class="note">
+        <h3>API Usage and Terms</h3>
+        <p>This plugin connects to the BetaHub API at <a href="https://betahub.io">betahub.io</a>. Key points:</p>
+        <ul>
+            <li><strong>Free Access:</strong> All users get full access to every feature without volume limits</li>
+            <li><strong>Video Storage:</strong> Free users can upload up to 60 seconds of video per submission, with no additional fees</li>
+            <li><strong>No Subscription Required:</strong> The free account allows unlimited feedback reporting</li>
+            <li><strong>Demo Project Included:</strong> The plugin includes a demo project for immediate testing without configuration</li>
+        </ul>
+        <p>For complete API terms and conditions, visit <a href="https://betahub.io/api-terms">betahub.io/api-terms</a></p>
+    </div>
+
     <p>Welcome to the BetaHub Unity Plugin! This guide will help you integrate our bug reporting tool into your Unity project, streamlining the process of collecting and managing bug reports from your game testers and players.</p>
 
     <h2>Prerequisites</h2>
@@ -104,11 +116,21 @@
 
     <h3>Quick Start</h3>
 
+    <div class="note">
+        <strong>Demo Project:</strong> The plugin comes pre-configured with a demo project, so you can test bug submissions immediately without any setup. Demo submissions are unlisted, and you'll find a link to view them in the Unity console log after submission.
+    </div>
+
     <ol>
         <li>Locate the BugReportingFormCanvas prefab in Packages/BetaHub Bug Reporter/Runtime/Prefabs.</li>
         <li>Drag it into your scene.</li>
-        <li>Select the newly created BugReportingFormCanvas object in the hierarchy.</li>
-        <li>In the inspector, find the <code>Project ID</code> field and enter your BetaHub project ID.</li>
+        <li>Run your game and press <code>F12</code> to test the bug report form with the demo project.</li>
+        <li>To use your own project:
+            <ul>
+                <li>Select the BugReportingFormCanvas object in the hierarchy</li>
+                <li>In the inspector, find the <code>Project ID</code> field and enter your BetaHub project ID</li>
+                <li>Enter your <code>Auth Token</code> (found in Project Settings > Integrations > Tokens)</li>
+            </ul>
+        </li>
     </ol>
 
     <p>You're all set! Run your game and press <code>F12</code> to open the bug report form.</p>
@@ -118,6 +140,8 @@
     <p>Adjust these settings in the BugReportingFormCanvas inspector:</p>
 
     <ul>
+        <li><strong>Project ID</strong>: Your BetaHub project identifier (found in Project Settings > General > Project Information).</li>
+        <li><strong>Auth Token</strong>: Your application token for API authentication (found in Project Settings > Integrations > Tokens). This is <strong>not an API key</strong> and does not need to be kept secret - it's a project identifier that helps prevent API abuse and spam while identifying your application.</li>
         <li><strong>Shortcut Key</strong>: Default is F12. Set to None to disable and open the form programmatically.</li>
         <li><strong>Performance_Sampler</strong>
             <ul>
