@@ -33,7 +33,7 @@ For continued use and more extensive testing, we strongly recommend creating you
 
 ## Requirements
 
-- Unity 2021.3 or later
+- Unity 2021.3 or later (for Mac builds we recommend at least 2022.3 due to Metal handling bugs in 2021)
 - BetaHub account (sign up at [betahub.io](https://www.betahub.io))
 - Windows, macOS, or Linux
 - Internet connection
