@@ -27,6 +27,8 @@ namespace BetaHub
 
     public class BugReportUI : MonoBehaviour
     {
+        public const string DEMO_PROJECT_ID = "pr-5287510306";
+
         private static BugReportUI _instance;
         
         [FormerlySerializedAs("bugReportPanel")]

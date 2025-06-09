@@ -13,6 +13,8 @@ namespace BetaHub
         // set if the issue is persistent on BetaHub
         public string Id { get; private set; }
 
+        public string Url { get; private set; }
+
         // returns true if the media upload is complete
         public bool IsMediaUploadComplete { get { return _mediaUploadComplete; } }
 
@@ -120,6 +122,7 @@ namespace BetaHub
             _isPublished = false;
 
             string issueIdLocal = null; // Use local variables for draft result callback
+            string issueUrlLocal = null;
             string updateIssueAuthTokenLocal = null;
             string error = null;
 
@@ -128,6 +131,7 @@ namespace BetaHub
                 issueIdLocal = draftResult.IssueId;
                 updateIssueAuthTokenLocal = draftResult.UpdateIssueAuthToken;
                 error = draftResult.Error;
+                issueUrlLocal = draftResult.Url;
             });
 
             if (error != null)
@@ -139,6 +143,7 @@ namespace BetaHub
 
             // Draft created successfully, store ID and token in member variables
             this.Id = issueIdLocal;
+            this.Url = issueUrlLocal;
             this._updateIssueAuthToken = updateIssueAuthTokenLocal;
 
             if (mediaUploadType == MediaUploadType.UploadInBackground)
@@ -271,13 +276,13 @@ namespace BetaHub
                     }
 
                     Debug.LogError("Response code: " + www.responseCode);
-                    onResult?.Invoke(new DraftResult { IssueId = null, UpdateIssueAuthToken = null, Error = errorMessage });
+                    onResult?.Invoke(new DraftResult { IssueId = null, UpdateIssueAuthToken = null, Url = null, Error = errorMessage });
                     yield break;
                 }
 
                 string response = www.downloadHandler.text;
                 IssueResponse issueResponse = JsonUtility.FromJson<IssueResponse>(response);
-                onResult?.Invoke(new DraftResult { IssueId = issueResponse.id, UpdateIssueAuthToken = issueResponse.token, Error = null });
+                onResult?.Invoke(new DraftResult { IssueId = issueResponse.id, UpdateIssueAuthToken = issueResponse.token, Url = issueResponse.url, Error = null });
             }
         }
 
@@ -426,6 +431,11 @@ namespace BetaHub
                 else
                 {
                     Debug.Log("Issue published successfully!");
+
+                    if (_projectId == BugReportUI.DEMO_PROJECT_ID)
+                    {
+                        Debug.Log("Demo project published issue: " + Url);
+                    }
                 }
             }
         }
@@ -441,12 +451,14 @@ namespace BetaHub
         {
             public string id;
             public string token;
+            public string url;
         }
 
         private struct DraftResult {
             public string IssueId;
             public string UpdateIssueAuthToken;
             public string Error;
+            public string Url;
         }
     }
 }
