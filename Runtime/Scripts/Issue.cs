@@ -54,8 +54,9 @@ namespace BetaHub
             public bool removeAfterUpload;
         }
 
-        public Issue(string betahubEndpoint, string projectId, string authToken,
-                     MessagePanelUI messagePanelUI, ReportSubmittedUI reportSubmittedUI, GameRecorder gameRecorder)
+        public Issue(string betahubEndpoint, string projectId,
+                    string authToken,
+                    MessagePanelUI messagePanelUI, ReportSubmittedUI reportSubmittedUI, GameRecorder gameRecorder)
         {
             _betahubEndpoint = betahubEndpoint;
             if (!betahubEndpoint.EndsWith("/"))
@@ -108,12 +109,18 @@ namespace BetaHub
         // - autoPublish: (optional) if true, the issue will be requested to be published automatically after media upload.
         public IEnumerator PostIssue(string description, string steps = null,
                                      List<ScreenshotFileReference> screenshots = null, List<LogFileReference> logFiles = null,
+                                     int releaseId = 0, string releaseLabel = "",
                                      bool autoPublish = false,
                                      Action<string> onAllMediaUploaded = null, MediaUploadType mediaUploadType = MediaUploadType.UploadInBackground, Action<string> onError = null)
         {
             if (Id != null)
             {
                 throw new Exception("Issue instance cannot be reused for posting.");
+            }
+
+            if (releaseId > 0 && !string.IsNullOrEmpty(releaseLabel))
+            {
+                throw new Exception("Cannot set both release ID and release label");
             }
 
             // Initialize state for this posting attempt
@@ -126,7 +133,7 @@ namespace BetaHub
             string updateIssueAuthTokenLocal = null;
             string error = null;
 
-            yield return PostIssueDraft(description, steps, (draftResult) =>
+            yield return PostIssueDraft(description, steps, releaseId, releaseLabel, (draftResult) =>
             {
                 issueIdLocal = draftResult.IssueId;
                 updateIssueAuthTokenLocal = draftResult.UpdateIssueAuthToken;
@@ -246,12 +253,21 @@ namespace BetaHub
 
         // posts a draft issue to BetaHub.
         // returns the issue id and the update issue auth token via callback
-        private IEnumerator PostIssueDraft(string description, string steps, Action<DraftResult> onResult)
+        private IEnumerator PostIssueDraft(string description, string steps, int releaseId, string releaseLabel, Action<DraftResult> onResult)
         {
             WWWForm form = new WWWForm();
             form.AddField("issue[description]", description);
             form.AddField("issue[unformatted_steps_to_reproduce]", steps);
             form.AddField("draft", "true"); // this enables the draft flow
+
+            if (releaseId > 0)
+            {
+                form.AddField("issue[release_id]", releaseId);
+            }
+            else if (!string.IsNullOrEmpty(releaseLabel))
+            {
+                form.AddField("issue[release_label]", releaseLabel);
+            }
 
             string url = GetPostIssueUrl();
             

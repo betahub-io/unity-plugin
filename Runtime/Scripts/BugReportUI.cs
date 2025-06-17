@@ -92,6 +92,15 @@ namespace BetaHub
         [FormerlySerializedAs("includeVideo")]
         public bool IncludeVideo = true;
 
+        [Tooltip("The release ID to associate the bug report with. If not set (0), the bug report will be " +
+            "associated with the latest release. Requires the AuthToken to have a permission of creating new releases.")]
+        public int ReleaseId = 0;
+        
+        [Tooltip("The release label to associate the bug report with. If not created yet on the backend, " +
+            "a new release will be created with this label. Requires the AuthToken to have a permission of creating new releases. " +
+            "If not set (null), the bug report will be associated with the latest release.")]
+        public string ReleaseLabel = "";
+
         public UnityEvent OnBugReportWindowShown;
         public UnityEvent OnBugReportWindowHidden;
 
@@ -396,7 +405,7 @@ namespace BetaHub
 
 
             CoroutineUtils.StartThrowingCoroutine(this,
-            issue.PostIssue(description, steps, screenshots, logFiles, false,
+            issue.PostIssue(description, steps, screenshots, logFiles, ReleaseId, ReleaseLabel, false,
                 (issueId) => // successful post
                 {
                     SubmitButton.interactable = true;
