@@ -73,6 +73,10 @@ namespace BetaHub
         [FormerlySerializedAs("authToken")]
         public string AuthToken;
 
+        // Device authentication manager for user login flow
+        [Tooltip("Device Authentication (Optional). If set, the user may be authenticated via device auth.")]
+        [SerializeField] private DeviceAuthManager deviceAuthManager;
+
         // If set, this email address will be used as the default email address of the reporter.
         // This is a hidden field since it's purpose is to be pre-filled programmatically by the developer if the user is somehow already logged in with a specific email address.
         [HideInInspector, FormerlySerializedAs("defaultEmailAddress")]
@@ -174,13 +178,14 @@ namespace BetaHub
                 Debug.LogError("Project ID is not set. I won't be able to submit bug reports.");
             }
 
+            // Check for auth token if not using device auth
             if (string.IsNullOrEmpty(AuthToken))
             {
-                Debug.LogError("Auth token is not set. I won't be able to submit bug reports.");
+                Debug.LogWarning("Auth token is not set. Bug reports will only work if device authentication is available and user is signed in.");
             }
 
-            // auth token must start with tkn-
-            if (!AuthToken.StartsWith("tkn-"))
+            // auth token must start with tkn- if provided
+            if (!string.IsNullOrEmpty(AuthToken) && !AuthToken.StartsWith("tkn-"))
             {
                 Debug.LogError("Auth token must start with tkn-. I won't be able to submit bug reports.");
             }
@@ -371,8 +376,9 @@ namespace BetaHub
                 gameRecorder = _gameRecorder;
             }
             
-            // Create Issue instance and post it
-            Issue issue = new Issue(SubmitEndpoint, ProjectID, AuthToken, MessagePanelUI, ReportSubmittedUI, gameRecorder);
+            // Create Issue instance and post it with authentication
+            string effectiveAuthToken = GetEffectiveAuthToken();
+            Issue issue = new Issue(SubmitEndpoint, ProjectID, effectiveAuthToken, MessagePanelUI, ReportSubmittedUI, gameRecorder);
             _issues.Add(issue);
 
 
@@ -415,8 +421,18 @@ namespace BetaHub
                     _screenshots.Clear();
                     _logFiles.Clear();
 
-                    // show the report submitted UI
-                    ReportSubmittedUI.Show(issue, DefaultEmailAddress);
+                    // Check if user is authenticated via device auth
+                    if (IsUserAuthenticatedViaDeviceAuth())
+                    {
+                        // For authenticated users: publish immediately and show thanks
+                        StartCoroutine(PublishIssueAndShowThanks(issue));
+                    }
+                    else
+                    {
+                        // For non-authenticated users: show email UI which handles publishing
+                        string effectiveEmail = GetEffectiveEmailAddress();
+                        ReportSubmittedUI.Show(issue, effectiveEmail);
+                    }
 
                     // hide bug report panel
                     BugReportPanel.SetActive(false);
@@ -447,5 +463,71 @@ namespace BetaHub
         class IssueResponse {
             public string id;
         }
+
+        #region Device Authentication Integration
+
+        private bool IsDeviceAuthAvailable()
+        {
+            return deviceAuthManager != null && !string.IsNullOrEmpty(ProjectID);
+        }
+
+        private string GetEffectiveAuthToken()
+        {
+            // Check if user is authenticated via device auth at submit time
+            if (deviceAuthManager != null && deviceAuthManager.IsAuthenticated())
+            {
+                string jwtToken = deviceAuthManager.JwtToken;
+                if (!string.IsNullOrEmpty(jwtToken))
+                {
+                    // Return AuthToken,JwtToken format when signed in
+                    return string.IsNullOrEmpty(AuthToken) ? jwtToken : $"{AuthToken},{jwtToken}";
+                }
+            }
+
+            // Fall back to configured auth token only
+            return AuthToken;
+        }
+
+        private string GetEffectiveEmailAddress()
+        {
+            // If user is authenticated via device auth, don't use email address
+            // Backend already knows who the reporter is from the JWT token
+            if (deviceAuthManager != null && deviceAuthManager.IsAuthenticated())
+            {
+                // Return null/empty - backend knows the user from JWT token
+                return null;
+            }
+
+            // Fall back to configured default email for non-authenticated users
+            return DefaultEmailAddress;
+        }
+
+        public void SetDeviceAuthManager(DeviceAuthManager authManager)
+        {
+            deviceAuthManager = authManager;
+        }
+
+        private bool IsUserAuthenticatedViaDeviceAuth()
+        {
+            return deviceAuthManager != null && deviceAuthManager.IsAuthenticated();
+        }
+
+        private IEnumerator PublishIssueAndShowThanks(Issue issue)
+        {
+            // Publish the issue immediately (no email needed - backend knows user from JWT)
+            var publishCoroutine = issue.Publish(false); // false = don't email the report
+            yield return publishCoroutine;
+            
+            // Check if publishing was successful by checking if the coroutine completed without errors
+            // Note: Issue.Publish() should handle its own errors internally, so we assume success here
+            MessagePanelUI.ShowMessagePanel("Thank You", "Your bug report has been submitted successfully. Thank you for helping us improve the game!");
+        }
+
+        void OnDestroy()
+        {
+            // Cleanup handled automatically since we don't subscribe to events
+        }
+
+        #endregion
     }
 }

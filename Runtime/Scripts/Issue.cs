@@ -273,7 +273,7 @@ namespace BetaHub
             
             using (UnityWebRequest www = UnityWebRequest.Post(url, form))
             {
-                www.SetRequestHeader("Authorization", "FormUser " + "anonymous");
+                www.SetRequestHeader("Authorization", "FormUser " + _createIssueAuthToken);
                 www.SetRequestHeader("BetaHub-Project-ID", _projectId);
                 www.SetRequestHeader("Accept", "application/json");
                 yield return www.SendWebRequest();
@@ -284,7 +284,12 @@ namespace BetaHub
                     // try parsing as json, the format should be {"error":"...","status":"..."}
                     try {
                         ErrorMessage errorMessageObject = JsonUtility.FromJson<ErrorMessage>(errorMessage);
-                        errorMessage = errorMessageObject.error;
+                        if (errorMessageObject != null)
+                        {
+                            errorMessage = errorMessageObject.error;
+                        } else {
+                            errorMessage = "Unknown error";
+                        }
                     }
                     catch (Exception e)
                     {
