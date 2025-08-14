@@ -72,6 +72,18 @@
 
     <p>Welcome to the BetaHub Unity Plugin! This guide will help you integrate our bug reporting tool into your Unity project, streamlining the process of collecting and managing bug reports from your game testers and players.</p>
 
+    <h2>Features</h2>
+
+    <ul>
+        <li><strong>In-game bug submission form:</strong> Streamlined form asking only for description and reproduction steps</li>
+        <li><strong>Device authentication:</strong> Optional OAuth-like sign-in flow via web browser for seamless user experience</li>
+        <li><strong>Video recording:</strong> Automatic capture of gameplay footage with bug reports</li>
+        <li><strong>Log collection:</strong> Automatic Unity log capture with support for custom logs</li>
+        <li><strong>Screenshot capture:</strong> Automatic screenshot attachment with bug submissions</li>
+        <li><strong>Working examples:</strong> Complete demo scenes and integration examples</li>
+        <li><strong>Highly customizable:</strong> Flexible configuration for different project needs</li>
+    </ul>
+
     <h2>Prerequisites</h2>
 
     <p>Before you begin, please ensure you have:</p>
@@ -157,6 +169,99 @@
     </ol>
 
     <p>You're all set! Run your game and press <code>F12</code> to open the bug report form.</p>
+
+    <h2>Device Authentication (Optional)</h2>
+
+    <div class="note">
+        <strong>Enhanced User Experience:</strong> Device authentication provides a seamless sign-in flow that eliminates the need for users to enter email addresses when submitting bug reports. Users authenticate once via web browser and stay signed in across game sessions.
+    </div>
+
+    <h3>How Device Authentication Works</h3>
+
+    <ol>
+        <li><strong>User Initiates Sign-In:</strong> User clicks the "Sign In" button in your game</li>
+        <li><strong>Browser Authentication:</strong> System opens the default web browser to BetaHub's secure authentication page</li>
+        <li><strong>User Authenticates:</strong> User signs in with their BetaHub account credentials in the browser</li>
+        <li><strong>Token Exchange:</strong> Plugin receives a secure JWT token and stores it locally</li>
+        <li><strong>Seamless Bug Reports:</strong> Authenticated users can submit bug reports without entering email addresses</li>
+    </ol>
+
+    <h3>Benefits</h3>
+
+    <ul>
+        <li><strong>No Email Required:</strong> Authenticated users skip email entry during bug submission</li>
+        <li><strong>Persistent Authentication:</strong> Users stay signed in across game sessions (24-hour token expiry)</li>
+        <li><strong>Automatic User Association:</strong> Bug reports are automatically linked to user accounts</li>
+        <li><strong>Better User Experience:</strong> Reduces friction in the bug reporting process</li>
+        <li><strong>Optional Feature:</strong> Works alongside traditional anonymous reporting</li>
+    </ul>
+
+    <h3>Setup Instructions</h3>
+
+    <ol>
+        <li>Locate the <code>DeviceAuthCanvas</code> prefab in <strong>Packages/BetaHub Bug Reporter/Runtime/Prefabs/</strong></li>
+        <li>Drag it into your scene alongside the existing <code>BugReportingFormCanvas</code></li>
+        <li>Configure the <code>DeviceAuthManager</code> component:
+            <ul>
+                <li><strong>Project ID:</strong> Same as your BugReportingFormCanvas (found in BetaHub Project Settings)</li>
+                <li><strong>Entity Kind:</strong> "game" (default) or customize as needed</li>
+                <li><strong>Entity Name:</strong> Your game's name (displayed during authentication)</li>
+                <li><strong>Poll Interval:</strong> How often to check for authentication completion (default: 3 seconds)</li>
+                <li><strong>Auth Timeout:</strong> Maximum time to wait for authentication (default: 5 minutes)</li>
+            </ul>
+        </li>
+        <li>Link the components together:
+            <ul>
+                <li>Set the <code>DeviceAuthManager</code> reference in your <code>BugReportUI</code> component</li>
+                <li>Set the <code>MessagePanelUI</code> reference in your <code>DeviceAuthUI</code> component</li>
+            </ul>
+        </li>
+    </ol>
+
+    <h3>Programmatic Integration</h3>
+
+    <p>You can integrate device authentication programmatically:</p>
+
+    <pre><code>// Get reference to the DeviceAuthManager
+DeviceAuthManager authManager = FindObjectOfType&lt;DeviceAuthManager&gt;();
+
+// Start authentication flow
+authManager.StartDeviceAuth();
+
+// Check authentication status
+if (authManager.IsAuthenticated())
+{
+    Debug.Log($"User signed in as: {authManager.UserDisplayName}");
+    string jwtToken = authManager.JwtToken;
+}
+
+// Sign out user
+authManager.SignOut();
+
+// Listen for authentication state changes
+authManager.OnAuthStateChanged += (DeviceAuthState newState) =&gt; {
+    Debug.Log($"Auth state changed to: {newState}");
+};
+
+// Handle authentication errors
+authManager.OnAuthError += (string error) =&gt; {
+    Debug.LogError($"Authentication error: {error}");
+};</code></pre>
+
+    <h3>Integration with Bug Reports</h3>
+
+    <p>When device authentication is properly set up:</p>
+
+    <ul>
+        <li>Authenticated users will see a "Thank you" message immediately after submitting bug reports</li>
+        <li>Non-authenticated users will see the traditional email entry form</li>
+        <li>Bug reports from authenticated users are automatically linked to their BetaHub accounts</li>
+        <li>The system automatically handles the authentication token in API requests</li>
+    </ul>
+
+    <div class="note">
+        <strong>Example Scene:</strong> The plugin includes <code>DeviceAuthExample.cs</code> in the Samples folder, demonstrating complete integration between device authentication and bug reporting systems.
+    </div>
 
     <h3>Configuration</h3>
 

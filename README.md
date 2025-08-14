@@ -25,6 +25,7 @@ For continued use and more extensive testing, we strongly recommend creating you
 ## Features
 
 - **In-game bug submission form**: Easily submit bugs with a form that only asks for a description and steps to reproduce. Titles, priority, and tags are handled by BetaHub's AI algorithms.
+- **Device authentication**: Optional OAuth-like authentication flow that allows users to sign in via web browser. Authenticated users can submit bug reports without providing email addresses.
 - **Video recording**: Record a video of the bug happening in-game. The video is automatically recorded and attached to the bug report.
 - **Log collection**: Collect logs from the game and attach them to the bug report. By default, Unity logs are collected, but you can also add custom logs.
 - **Screenshot of the game**: A screenshot of the game is automatically attached to the bug report when the user submits a bug.
@@ -44,6 +45,40 @@ For continued use and more extensive testing, we strongly recommend creating you
 ## Installation
 
 The installation and setup documentation is available [here](https://www.betahub.io/docs/integration-guides/).
+
+## Device Authentication (Optional)
+
+The plugin supports an optional device authentication flow that provides a seamless user experience for bug reporting.
+
+### How It Works
+
+1. **User Authentication**: Users click "Sign In" which opens a browser window for BetaHub authentication
+2. **Secure Token Storage**: JWT authentication tokens are securely stored locally and persist across game sessions (24-hour expiry)
+3. **Streamlined Bug Reports**: Authenticated users can submit bug reports without entering email addresses
+4. **Automatic User Association**: Bug reports are automatically linked to the authenticated user's BetaHub account
+
+### Setup
+
+1. Add the `DeviceAuthCanvas` prefab to your scene alongside the existing `BugReportingFormCanvas`
+2. Configure both prefabs with the same Project ID
+3. Link the `DeviceAuthManager` component to your `BugReportUI` component
+4. Optionally customize entity information (game name, type) in the `DeviceAuthManager`
+
+### Integration Example
+
+```csharp
+// Example: Programmatically trigger authentication
+DeviceAuthManager authManager = FindObjectOfType<DeviceAuthManager>();
+authManager.StartDeviceAuth(); // Opens browser for user authentication
+
+// Check authentication status
+if (authManager.IsAuthenticated())
+{
+    Debug.Log($"Signed in as: {authManager.UserDisplayName}");
+}
+```
+
+The plugin includes a complete example scene (`DeviceAuthExample.cs`) demonstrating the integration between device authentication and bug reporting.
 
 ## Support
 
