@@ -25,7 +25,6 @@ namespace BetaHub
         
         [Header("Status Messages")]
         [SerializeField] private string browserOpenMessage = "Browser opened. Please complete sign-in in your web browser and return to the game.";
-        [SerializeField] private string waitingMessage = "Waiting for authentication...";
 
         void Start()
         {
