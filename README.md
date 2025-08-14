@@ -63,3 +63,20 @@ Join our [Discord server](https://discord.gg/g2wpRtG) for support, feedback, and
 - For IL2CPP: define `ENABLE_BETAHUB_FFMPEG` and ensure the native library is present.
 - For Mono/.NET: no special action is needed.
 
+## ⚠️ Performance: Disabling Logger
+
+**If you need to disable BetaHub's logging system for performance reasons or production builds:**
+
+- Define the scripting symbol `DISABLE_BETAHUB_LOGGER` in Player Settings > Scripting Define Symbols
+- This prevents the logger from capturing Unity logs, which can cause:
+  - File I/O operations every time Unity logs a message
+  - CPU overhead from continuous disk writes
+  - File access violations when multiple Unity instances run simultaneously
+- Bug reports will still work, but won't include captured Unity logs
+- A warning will be displayed when BugReportUI starts with logging disabled
+
+**When to use:**
+- Production builds where logging overhead impacts performance
+- Multi-instance Unity scenarios (automated testing, CI/CD)
+- Projects with high-frequency logging that causes file access issues
+

@@ -122,11 +122,13 @@ namespace BetaHub
 
         private bool _uiWasVisible = false;
 
+#if !DISABLE_BETAHUB_LOGGER
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void InitializeLogger()
         {
             _logger = new Logger();
         }
+#endif
         
         void Awake()
         {
@@ -177,6 +179,10 @@ namespace BetaHub
             {
                 Debug.LogError("Project ID is not set. I won't be able to submit bug reports.");
             }
+
+#if DISABLE_BETAHUB_LOGGER
+            Debug.LogWarning("DISABLE_BETAHUB_LOGGER is enabled. Player logs will not be captured for bug reports. Remove this scripting define symbol to enable logging.");
+#endif
 
             // Check for auth token if not using device auth
             if (string.IsNullOrEmpty(AuthToken))
@@ -361,7 +367,7 @@ namespace BetaHub
                 logFiles = new List<Issue.LogFileReference>(_logFiles);
                 
                 // Add logger log file if it exists
-                if (IncludePlayerLog && !string.IsNullOrEmpty(_logger.LogPath) && File.Exists(_logger.LogPath))
+                if (IncludePlayerLog && _logger != null && !string.IsNullOrEmpty(_logger.LogPath) && File.Exists(_logger.LogPath))
                 {
                     // skip if size over 200MB
                     if (new FileInfo(_logger.LogPath).Length < 200 * 1024 * 1024)

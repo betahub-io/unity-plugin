@@ -114,6 +114,29 @@
         </ul>
     </div>
 
+    <div class="warning">
+        <h2>Performance: Disabling Logger</h2>
+        <p><strong>If you need to disable BetaHub's logging system for performance reasons or production builds:</strong></p>
+        <ul>
+            <li>Define the scripting symbol <code>DISABLE_BETAHUB_LOGGER</code> in Player Settings > Scripting Define Symbols</li>
+            <li>This prevents the logger from capturing Unity logs, which can cause:
+                <ul>
+                    <li>File I/O operations every time Unity logs a message</li>
+                    <li>CPU overhead from continuous disk writes</li>
+                    <li>File access violations when multiple Unity instances run simultaneously</li>
+                </ul>
+            </li>
+            <li>Bug reports will still work, but won't include captured Unity logs</li>
+            <li>A warning will be displayed when BugReportUI starts with logging disabled</li>
+        </ul>
+        <p><strong>When to use:</strong></p>
+        <ul>
+            <li>Production builds where logging overhead impacts performance</li>
+            <li>Multi-instance Unity scenarios (automated testing, CI/CD)</li>
+            <li>Projects with high-frequency logging that causes file access issues</li>
+        </ul>
+    </div>
+
     <h3>Quick Start</h3>
 
     <div class="note">
