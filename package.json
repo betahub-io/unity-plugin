@@ -1,6 +1,6 @@
 {
   "name": "com.betahub.bugreporter",
-  "version": "1.0.0",
+  "version": "1.3.1",
   "displayName": "BetaHub Bug Reporter",
   "description": "A tool for recording gameplay videos and submitting bug reports directly to BetaHub.",
   "unity": "2022.3",

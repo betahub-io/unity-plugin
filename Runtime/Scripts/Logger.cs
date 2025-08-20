@@ -37,9 +37,12 @@ namespace BetaHub
         {
             try
             {
-                using (StreamWriter writer = File.AppendText(_logPath))
+                using (var fileStream = new FileStream(_logPath, FileMode.Append, FileAccess.Write, FileShare.ReadWrite))
                 {
-                    writer.WriteLine(log);
+                    using (var writer = new StreamWriter(fileStream))
+                    {
+                        writer.WriteLine(log);
+                    }
                 }
             }
             catch (Exception e)
