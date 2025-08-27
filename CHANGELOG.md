@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3.2
+
+### Chnages
+- Logger: (Optimization) Keep log the file open for the duration of the application.
+
 ## 1.3.1
 
 ### Fixed

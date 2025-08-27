@@ -1,13 +1,23 @@
 ﻿using UnityEngine;
 using System;
 using System.IO;
+using System.Collections.Generic;
 
 namespace BetaHub
 {
-    public class Logger
+    public class Logger : IDisposable
     {
         private string logFileName;
         private string _logPath;
+        private FileStream fileStream;
+        private StreamWriter writer;
+        private List<string> logBuffer;
+        private readonly object lockObject = new object();
+        private float lastFlushTime;
+        private bool disposed = false;
+
+        private const int BUFFER_SIZE = 50;
+        private const float FLUSH_INTERVAL = 2f;
 
         public string LogPath => _logPath;
 
@@ -21,34 +31,118 @@ namespace BetaHub
 
             Application.logMessageReceivedThreaded += UnityLogHandler;
             _logPath = Path.Combine(Application.persistentDataPath, logFileName);
-            if (File.Exists(_logPath))
+            
+            logBuffer = new List<string>(BUFFER_SIZE);
+            lastFlushTime = Time.realtimeSinceStartup;
+            
+            InitializeFileStream();
+        }
+
+        private void InitializeFileStream()
+        {
+            try
             {
-                File.Delete(_logPath);
+                if (File.Exists(_logPath))
+                {
+                    File.Delete(_logPath);
+                }
+                
+                fileStream = new FileStream(_logPath, FileMode.Create, FileAccess.Write, FileShare.ReadWrite);
+                writer = new StreamWriter(fileStream) { AutoFlush = false };
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("Error initializing log file stream: " + e.Message);
             }
         }
 
         private void UnityLogHandler(string condition, string stackTrace, LogType type)
         {
+            if (disposed) return;
+            
             string log = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss") + " [" + type + "] " + condition + "\n" + stackTrace;
             WriteToLog(log);
         }
 
         private void WriteToLog(string log)
         {
-            try
+            if (disposed || writer == null) return;
+            
+            lock (lockObject)
             {
-                using (var fileStream = new FileStream(_logPath, FileMode.Append, FileAccess.Write, FileShare.ReadWrite))
+                try
                 {
-                    using (var writer = new StreamWriter(fileStream))
+                    logBuffer.Add(log);
+                    
+                    bool shouldFlush = logBuffer.Count >= BUFFER_SIZE || 
+                                     (Time.realtimeSinceStartup - lastFlushTime) >= FLUSH_INTERVAL;
+                    
+                    if (shouldFlush)
                     {
-                        writer.WriteLine(log);
+                        FlushBuffer();
                     }
                 }
+                catch (Exception e)
+                {
+                    Debug.LogError("Error buffering log: " + e.Message);
+                }
+            }
+        }
+
+        private void FlushBuffer()
+        {
+            if (logBuffer.Count == 0 || writer == null) return;
+            
+            try
+            {
+                foreach (string log in logBuffer)
+                {
+                    writer.WriteLine(log);
+                }
+                
+                writer.Flush();
+                fileStream.Flush();
+                logBuffer.Clear();
+                lastFlushTime = Time.realtimeSinceStartup;
             }
             catch (Exception e)
             {
-                Debug.LogError("Error writing to log file: " + e.Message);
+                Debug.LogError("Error flushing log buffer: " + e.Message);
             }
+        }
+
+        public void ForceFlush()
+        {
+            lock (lockObject)
+            {
+                FlushBuffer();
+            }
+        }
+
+        public void Dispose()
+        {
+            if (disposed) return;
+            
+            Application.logMessageReceivedThreaded -= UnityLogHandler;
+            
+            lock (lockObject)
+            {
+                FlushBuffer();
+                
+                writer?.Dispose();
+                fileStream?.Dispose();
+                
+                writer = null;
+                fileStream = null;
+                logBuffer?.Clear();
+                
+                disposed = true;
+            }
+        }
+
+        ~Logger()
+        {
+            Dispose();
         }
     }
 }
