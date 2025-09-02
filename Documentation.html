@@ -330,7 +330,12 @@ authManager.OnAuthError += (string error) =&gt; {
             </ul>
         </li>
         <li><strong>Multiple Host Support:</strong> Can ping multiple ICMP target hosts simultaneously for comprehensive network analysis</li>
-        <li><strong>Multiple Requests:</strong> Performs up to 10 ping requests per host to calculate accurate statistics</li>
+        <li><strong>Ping Collection:</strong> 
+            <ul>
+                <li><strong>OnBugReport Mode (default):</strong> Performs 10 ping requests per host (configurable 1-20) when bug report opens</li>
+                <li><strong>Continuous Mode:</strong> Stores up to 256 pings per host in rolling buffer, collected every 15 seconds in background</li>
+            </ul>
+        </li>
         <li><strong>Early Termination:</strong> If user submits the bug report before all pings complete, uses available data</li>
         <li><strong>Comprehensive Statistics:</strong> Calculates minimum, maximum, and average latency from successful requests, plus packet loss statistics</li>
         <li><strong>Results Format:</strong> Includes detailed data like <code>"min/avg/max = 45ms/67ms/89ms (8/10 requests), Lost: 2/10 (20.0%)"</code> in bug reports</li>
