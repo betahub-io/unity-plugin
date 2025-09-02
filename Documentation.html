@@ -263,6 +263,131 @@ authManager.OnAuthError += (string error) =&gt; {
         <strong>Example Scene:</strong> The plugin includes <code>DeviceAuthExample.cs</code> in the Samples folder, demonstrating complete integration between device authentication and bug reporting systems.
     </div>
 
+    <h2>Optional Components</h2>
+
+    <p>The plugin includes two optional components that can enhance bug reports with additional diagnostic information. These components are <strong>not attached to the prefabs by default</strong> and must be manually added to provide enhanced debugging capabilities.</p>
+
+    <h3>GeolocationProvider</h3>
+
+    <div class="note">
+        <strong>Purpose:</strong> Automatically collects the user's country and ISP information based on their IP address to help identify location-specific issues and provide geographic context for bug reports.
+    </div>
+
+    <h4>How It Works</h4>
+
+    <ol>
+        <li><strong>Automatic Detection:</strong> Uses BetaHub's ping endpoint to detect the user's country and ISP via IP geolocation</li>
+        <li><strong>Header Parsing:</strong> Extracts geolocation information from response headers:
+            <ul>
+                <li>Country data from headers like <code>X-Viewer-Country</code>, <code>CF-IPCountry</code></li>
+                <li>ASN (Autonomous System Number) data from <code>X-Viewer-ASN</code> header</li>
+            </ul>
+        </li>
+        <li><strong>ISP Resolution:</strong> ASN data is automatically resolved to ISP/company names on the BetaHub dashboard for easier analysis</li>
+        <li><strong>Bug Report Integration:</strong> Country and ISP data are automatically included in bug reports as custom fields</li>
+    </ol>
+
+    <h4>Setup Instructions</h4>
+
+    <ol>
+        <li>In your scene, select the GameObject containing your <code>BugReportUI</code> component</li>
+        <li>Click <strong>Add Component</strong> and search for <code>GeolocationProvider</code>, or drag the script from the project window</li>
+        <li>Configure the provider in the inspector:
+            <ul>
+                <li><strong>Enable Geolocation:</strong> Toggle to enable/disable country code collection</li>
+                <li><strong>Enable ASN Collection:</strong> Toggle to enable/disable ISP/ASN data collection</li>
+                <li><strong>Geolocation Endpoint:</strong> API endpoint for geolocation (default: <code>https://ping.betahub.io/ping.txt</code>)</li>
+                <li><strong>Timeout Seconds:</strong> Request timeout (default: 5 seconds)</li>
+            </ul>
+        </li>
+        <li>The component will automatically link itself to the <code>BugReportUI</code> on the same GameObject</li>
+    </ol>
+
+    <div class="note">
+        <strong>Automatic Setup:</strong> When <code>GeolocationProvider</code> is attached to the same GameObject as <code>BugReportUI</code>, it will automatically configure itself and display a success message in the console. If placed on a different GameObject, you'll see a warning message with setup instructions.
+    </div>
+
+    <h3>LatencyProvider</h3>
+
+    <div class="note">
+        <strong>Purpose:</strong> Measures network latency to help diagnose network-related issues and provide connection quality context for bug reports.
+    </div>
+
+    <h4>How It Works</h4>
+
+    <ol>
+        <li><strong>Ping Methods:</strong> Supports two measurement methods:
+            <ul>
+                <li><strong>ICMP Ping:</strong> Uses Unity's built-in Ping class for traditional network ping (default)</li>
+                <li><strong>HTTP Ping:</strong> Uses UnityWebRequest for HTTP-based latency measurement</li>
+                <li><strong>Automatic Fallback:</strong> Automatically switches from ICMP to HTTP if ICMP fails consistently (after 3 consecutive failures per host)</li>
+            </ul>
+        </li>
+        <li><strong>Collection Modes:</strong> Two modes for data collection:
+            <ul>
+                <li><strong>OnBugReport:</strong> Collects pings only when bug report window opens (default)</li>
+                <li><strong>Continuous:</strong> Continuously collects pings in the background at regular intervals</li>
+            </ul>
+        </li>
+        <li><strong>Multiple Host Support:</strong> Can ping multiple ICMP target hosts simultaneously for comprehensive network analysis</li>
+        <li><strong>Multiple Requests:</strong> Performs up to 10 ping requests per host to calculate accurate statistics</li>
+        <li><strong>Early Termination:</strong> If user submits the bug report before all pings complete, uses available data</li>
+        <li><strong>Comprehensive Statistics:</strong> Calculates minimum, maximum, and average latency from successful requests, plus packet loss statistics</li>
+        <li><strong>Results Format:</strong> Includes detailed data like <code>"min/avg/max = 45ms/67ms/89ms (8/10 requests), Lost: 2/10 (20.0%)"</code> in bug reports</li>
+    </ol>
+
+    <h4>Setup Instructions</h4>
+
+    <ol>
+        <li>In your scene, select the GameObject containing your <code>BugReportUI</code> component</li>
+        <li>Click <strong>Add Component</strong> and search for <code>LatencyProvider</code>, or drag the script from the project window</li>
+        <li>Configure the provider in the inspector:
+            <ul>
+                <li><strong>Enable Latency:</strong> Toggle to enable/disable latency measurement</li>
+                <li><strong>Collection Mode:</strong> Choose between OnBugReport (default) or Continuous collection</li>
+                <li><strong>Ping Method:</strong> Select ICMP (default) or HTTP ping method</li>
+                <li><strong>ICMP Target Hosts:</strong> List of hosts for ICMP ping (default: ping.betahub.io)</li>
+                <li><strong>HTTP Endpoint:</strong> API endpoint for HTTP latency testing (default: <code>https://ping.betahub.io/ping.txt</code>)</li>
+                <li><strong>Min Ping Requests:</strong> Minimum number of ping requests per host (default: 10, range: 1-20)</li>
+                <li><strong>Timeout Seconds:</strong> Request timeout per ping (default: 5 seconds)</li>
+                <li><strong>Delay Between Requests:</strong> Delay between consecutive pings (default: 0.1 seconds)</li>
+                <li><strong>Ping Interval:</strong> Interval between background pings in continuous mode (default: 15 seconds)</li>
+            </ul>
+        </li>
+        <li>The component will automatically link itself to the <code>BugReportUI</code> on the same GameObject</li>
+    </ol>
+
+    <div class="warning">
+        <strong>Performance Considerations:</strong> Latency testing performs network requests while the bug report UI is open. The default settings (10 requests with 0.1s delays) complete in approximately 1-2 seconds under normal conditions. If users frequently submit reports very quickly, consider reducing <code>Max Ping Requests</code> or increasing <code>Delay Between Requests</code> to balance accuracy with responsiveness.
+    </div>
+
+    <h4>Troubleshooting</h4>
+
+    <ul>
+        <li><strong>"No latency data available":</strong> All ping requests failed. Check network connectivity and endpoint accessibility.</li>
+        <li><strong>"No country information found":</strong> Geolocation service didn't return expected headers. This may indicate network issues or endpoint changes.</li>
+        <li><strong>Warning messages in console:</strong> If components are not on the same GameObject as <code>BugReportUI</code>, you'll see warnings with setup instructions.</li>
+    </ul>
+
+    <h4>Data Integration</h4>
+
+    <p>When both components are enabled, bug reports will include custom fields like:</p>
+
+    <pre><code>Custom Fields:
+country=US
+asn=Cloudflare, Inc.
+latency=ping.betahub.io: min/avg/max = 45ms/67ms/89ms (10/10 requests)</code></pre>
+
+    <p>This data appears in the BetaHub dashboard and can be used for:</p>
+
+    <ul>
+        <li><strong>Geographic Analysis:</strong> Identifying region-specific issues and user distribution</li>
+        <li><strong>ISP Analysis:</strong> Understanding which internet service providers may be experiencing issues</li>
+        <li><strong>Network Diagnosis:</strong> Correlating bugs with connection quality and packet loss rates</li>
+        <li><strong>Performance Optimization:</strong> Understanding user network conditions across different providers</li>
+        <li><strong>Support Prioritization:</strong> Triaging issues based on user location, ISP, and connectivity quality</li>
+    </ul>
+
     <h3>Configuration</h3>
 
     <p>Adjust these settings in the BugReportingFormCanvas inspector:</p>

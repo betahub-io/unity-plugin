@@ -29,6 +29,7 @@ For continued use and more extensive testing, we strongly recommend creating you
 - **Video recording**: Record a video of the bug happening in-game. The video is automatically recorded and attached to the bug report.
 - **Log collection**: Collect logs from the game and attach them to the bug report. By default, Unity logs are collected, but you can also add custom logs.
 - **Screenshot of the game**: A screenshot of the game is automatically attached to the bug report when the user submits a bug.
+- **Geolocation and latency data**: Optional components for collecting user's country information and network latency measurements to help with debugging location-specific and network-related issues.
 - **Working Example Scene**: The plugin comes with a working example scene that demonstrates how to use the plugin, serving as a good starting point for your implementation.
 - **Customizable**: Customize the bug submission form to ask for more information or to change the look and feel of the form.
 
@@ -45,6 +46,8 @@ For continued use and more extensive testing, we strongly recommend creating you
 ## Installation
 
 The installation and setup documentation is available [here](https://www.betahub.io/docs/integration-guides/).
+
+For detailed information about optional components like geolocation and latency collection, see the included [Documentation.html](Documentation.html) file.
 
 ## Device Authentication (Optional)
 

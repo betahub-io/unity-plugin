@@ -111,7 +111,8 @@ namespace BetaHub
                                      List<ScreenshotFileReference> screenshots = null, List<LogFileReference> logFiles = null,
                                      int releaseId = 0, string releaseLabel = "",
                                      bool autoPublish = false,
-                                     Action<string> onAllMediaUploaded = null, MediaUploadType mediaUploadType = MediaUploadType.UploadInBackground, Action<string> onError = null)
+                                     Action<string> onAllMediaUploaded = null, MediaUploadType mediaUploadType = MediaUploadType.UploadInBackground, Action<string> onError = null,
+                                     Dictionary<string, string> customFields = null)
         {
             if (Id != null)
             {
@@ -133,7 +134,7 @@ namespace BetaHub
             string updateIssueAuthTokenLocal = null;
             string error = null;
 
-            yield return PostIssueDraft(description, steps, releaseId, releaseLabel, (draftResult) =>
+            yield return PostIssueDraft(description, steps, releaseId, releaseLabel, customFields, (draftResult) =>
             {
                 issueIdLocal = draftResult.IssueId;
                 updateIssueAuthTokenLocal = draftResult.UpdateIssueAuthToken;
@@ -253,7 +254,7 @@ namespace BetaHub
 
         // posts a draft issue to BetaHub.
         // returns the issue id and the update issue auth token via callback
-        private IEnumerator PostIssueDraft(string description, string steps, int releaseId, string releaseLabel, Action<DraftResult> onResult)
+        private IEnumerator PostIssueDraft(string description, string steps, int releaseId, string releaseLabel, Dictionary<string, string> customFields, Action<DraftResult> onResult)
         {
             WWWForm form = new WWWForm();
             form.AddField("issue[description]", description);
@@ -267,6 +268,14 @@ namespace BetaHub
             else if (!string.IsNullOrEmpty(releaseLabel))
             {
                 form.AddField("issue[release_label]", releaseLabel);
+            }
+
+            if (customFields != null && customFields.Count > 0)
+            {
+                foreach (var kvp in customFields)
+                {
+                    form.AddField($"issue[custom_fields][{kvp.Key}]", kvp.Value);
+                }
             }
 
             string url = GetPostIssueUrl();

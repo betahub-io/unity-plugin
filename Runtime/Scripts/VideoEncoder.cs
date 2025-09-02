@@ -394,9 +394,7 @@ namespace BetaHub
                     }
                     catch (System.Exception ex)
                     {
-                        #if BETAHUB_DEBUG
                         UnityEngine.Debug.LogError($"Unexpected error deleting old segment file {file.Name}: {ex.Message}");
-                        #endif
                         break; // Don't retry for unexpected errors
                     }
                 }
@@ -672,9 +670,7 @@ namespace BetaHub
             }
             catch (System.Exception ex)
             {
-                #if BETAHUB_DEBUG
                 UnityEngine.Debug.LogWarning($"Could not clean up instance directory {outputDir}: {ex.Message}");
-                #endif
             }
         }
     }

@@ -25,6 +25,7 @@ namespace BetaHub
         WaitForUpload
     }
 
+    [RequireComponent(typeof(CustomFieldValidator))]
     public class BugReportUI : MonoBehaviour
     {
         public const string DEMO_PROJECT_ID = "pr-5287510306";
@@ -76,6 +77,17 @@ namespace BetaHub
         // Device authentication manager for user login flow
         [Tooltip("Device Authentication (Optional). If set, the user may be authenticated via device auth.")]
         [SerializeField] private DeviceAuthManager deviceAuthManager;
+
+        // Geolocation provider for collecting location data
+        [Tooltip("Geolocation Provider (Optional). If set, location data will be included in bug reports.")]
+        [SerializeField] private GeolocationProvider geolocationProvider;
+
+        // Latency provider for collecting network latency data
+        [Tooltip("Latency Provider (Optional). If set, network latency data will be included in bug reports.")]
+        [SerializeField] private LatencyProvider latencyProvider;
+
+        // Custom field validator for validating provider requirements
+        private CustomFieldValidator customFieldValidator;
 
         // If set, this email address will be used as the default email address of the reporter.
         // This is a hidden field since it's purpose is to be pre-filled programmatically by the developer if the user is somehow already logged in with a specific email address.
@@ -168,6 +180,9 @@ namespace BetaHub
         {
             _gameRecorder = GetComponent<GameRecorder>();
             
+            // Get the required CustomFieldValidator component (automatically added by RequireComponent)
+            customFieldValidator = GetComponent<CustomFieldValidator>();
+            
             BugReportPanel.SetActive(false);
             SubmitButton.onClick.AddListener(SubmitBugReport);
             CloseButton.onClick.AddListener(() =>
@@ -218,6 +233,9 @@ namespace BetaHub
                 }
             }
 
+            // Validate custom fields for providers
+            ValidateProviderCustomFields();
+
             DontDestroyOnLoad(gameObject);
         }
 
@@ -240,6 +258,13 @@ namespace BetaHub
                 if (!_uiWasVisible)
                 {
                     OnBugReportWindowShown?.Invoke();
+                    
+                    // Start latency testing when bug report window is shown
+                    if (latencyProvider != null && latencyProvider.EnableLatency)
+                    {
+                        latencyProvider.StartLatencyTest();
+                    }
+                    
                     ModifyCursorState();
                 }
                 _uiWasVisible = true;
@@ -348,6 +373,11 @@ namespace BetaHub
 
         void SubmitBugReport()
         {
+            StartCoroutine(SubmitBugReportCoroutine());
+        }
+
+        private IEnumerator SubmitBugReportCoroutine()
+        {
             string description = DescriptionField.text;
             string steps = StepsField.text;
 
@@ -380,6 +410,76 @@ namespace BetaHub
             if (IncludeVideo && IncludeVideoToggle.isOn)
             {
                 gameRecorder = _gameRecorder;
+            }
+            
+            // Get geolocation and latency data if providers are available
+            var customFieldsData = new System.Collections.Generic.Dictionary<string, string>();
+            
+            // Get geolocation and ASN data
+            if (geolocationProvider != null && (geolocationProvider.EnableGeolocation || geolocationProvider.EnableAsnCollection))
+            {
+                bool locationReceived = false;
+                string locationError = null;
+                
+                yield return geolocationProvider.GetLocationDataAsync(
+                    (locationData) => {
+                        if (locationData != null)
+                        {
+                            if (geolocationProvider.EnableGeolocation && !string.IsNullOrEmpty(locationData.country))
+                            {
+                                customFieldsData["country"] = locationData.country;
+                                Debug.Log("BugReportUI: Including location data in bug report: " + locationData.country);
+                            }
+                            
+                            if (geolocationProvider.EnableAsnCollection && !string.IsNullOrEmpty(locationData.asn))
+                            {
+                                customFieldsData["asn"] = locationData.asn;
+                                Debug.Log("BugReportUI: Including ASN data in bug report: " + locationData.asn);
+                            }
+                        }
+                        locationReceived = true;
+                    },
+                    (error) => {
+                        locationError = error;
+                        locationReceived = true;
+                        Debug.LogWarning("BugReportUI: Failed to get location/ASN data: " + error);
+                    }
+                );
+                
+                // Wait for location request to complete (success or failure)
+                while (!locationReceived)
+                {
+                    yield return null;
+                }
+            }
+            
+            // Get latency data (stop any ongoing test and get current results)
+            if (latencyProvider != null && latencyProvider.EnableLatency)
+            {
+                // Stop the latency test and get whatever results we have
+                latencyProvider.StopLatencyTest();
+                var latencyData = latencyProvider.GetCurrentLatencyData();
+                
+                if (latencyData != null && latencyData.HasSuccessfulResults())
+                {
+                    customFieldsData["latency"] = latencyData.GetFormattedLatency();
+                    Debug.Log("BugReportUI: Including latency data in bug report: " + latencyData.GetFormattedLatency());
+                }
+                else
+                {
+                    Debug.LogWarning("BugReportUI: No latency data available for bug report.");
+                }
+            }
+            
+            // Log custom fields if any
+            if (customFieldsData.Count > 0)
+            {
+                var fieldsList = new System.Collections.Generic.List<string>();
+                foreach (var kvp in customFieldsData)
+                {
+                    fieldsList.Add($"{kvp.Key}={kvp.Value}");
+                }
+                Debug.Log("BugReportUI: Final custom fields: " + string.Join(", ", fieldsList.ToArray()));
             }
             
             // Create Issue instance and post it with authentication
@@ -447,7 +547,8 @@ namespace BetaHub
                 (error) =>
                 {
                     onIssueError(new ErrorMessage { error = error });
-                }
+                },
+                customFieldsData.Count > 0 ? customFieldsData : null
             ),
             (ex) => // done
             {
@@ -513,6 +614,16 @@ namespace BetaHub
             deviceAuthManager = authManager;
         }
 
+        public void SetGeolocationProvider(GeolocationProvider provider)
+        {
+            geolocationProvider = provider;
+        }
+
+        public void SetLatencyProvider(LatencyProvider provider)
+        {
+            latencyProvider = provider;
+        }
+
         private bool IsUserAuthenticatedViaDeviceAuth()
         {
             return deviceAuthManager != null && deviceAuthManager.IsAuthenticated();
@@ -532,6 +643,42 @@ namespace BetaHub
         void OnDestroy()
         {
             // Cleanup handled automatically since we don't subscribe to events
+        }
+
+        private void ValidateProviderCustomFields()
+        {
+            // Skip validation if we don't have the necessary credentials
+            if (string.IsNullOrEmpty(SubmitEndpoint) || string.IsNullOrEmpty(ProjectID))
+            {
+                Debug.LogWarning("BugReportUI: Cannot validate custom fields - missing endpoint or project ID");
+                return;
+            }
+
+            string effectiveAuthToken = GetEffectiveAuthToken();
+            if (string.IsNullOrEmpty(effectiveAuthToken))
+            {
+                Debug.LogWarning("BugReportUI: Cannot validate custom fields - no auth token available");
+                return;
+            }
+
+            // Collect required fields from all attached providers
+            var requiredFields = new List<CustomFieldRequirement>();
+
+            if (geolocationProvider != null && geolocationProvider.RequiredCustomFields != null)
+            {
+                requiredFields.AddRange(geolocationProvider.RequiredCustomFields);
+            }
+
+            if (latencyProvider != null && latencyProvider.RequiredCustomFields != null)
+            {
+                requiredFields.AddRange(latencyProvider.RequiredCustomFields);
+            }
+
+            // Run validation if we have any required fields
+            if (requiredFields.Count > 0 && customFieldValidator != null)
+            {
+                customFieldValidator.ValidateCustomFields(SubmitEndpoint, ProjectID, effectiveAuthToken, requiredFields);
+            }
         }
 
         #endregion

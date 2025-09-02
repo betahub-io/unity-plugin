@@ -91,10 +91,12 @@ namespace BetaHub
 
         private void FlushBuffer()
         {
-            if (logBuffer.Count == 0 || writer == null) return;
+            if (disposed || logBuffer.Count == 0 || writer == null) return;
             
             try
             {
+                if (fileStream?.CanWrite != true) return;
+                
                 foreach (string log in logBuffer)
                 {
                     writer.WriteLine(log);
@@ -104,6 +106,9 @@ namespace BetaHub
                 fileStream.Flush();
                 logBuffer.Clear();
                 lastFlushTime = Time.realtimeSinceStartup;
+            }
+            catch (ObjectDisposedException)
+            {
             }
             catch (Exception e)
             {
@@ -142,7 +147,16 @@ namespace BetaHub
 
         ~Logger()
         {
-            Dispose();
+            try
+            {
+                Dispose();
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+            catch (Exception)
+            {
+            }
         }
     }
 }

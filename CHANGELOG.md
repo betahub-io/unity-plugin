@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.4.0
+
+### Added
+- Added support for geolocation and latency data collection.
+
+### Fixed
+- Logger: Fixed disposing of the logger when the application is closed.
+- VideoEncoder: Fix compilation warnings.
+
 ## 1.3.2
 
 ### Chnages
