@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.4.1
+
+### Fixed
+- Logger: Fixed disposing of the logger error.
+
 ## 1.4.0
 
 ### Added

@@ -13,11 +13,11 @@ namespace BetaHub
         private StreamWriter writer;
         private List<string> logBuffer;
         private readonly object lockObject = new object();
-        private float lastFlushTime;
+        private DateTime lastFlushTime;
         private bool disposed = false;
 
         private const int BUFFER_SIZE = 50;
-        private const float FLUSH_INTERVAL = 2f;
+        private static readonly TimeSpan FLUSH_INTERVAL = TimeSpan.FromSeconds(2);
 
         public string LogPath => _logPath;
 
@@ -33,7 +33,7 @@ namespace BetaHub
             _logPath = Path.Combine(Application.persistentDataPath, logFileName);
             
             logBuffer = new List<string>(BUFFER_SIZE);
-            lastFlushTime = Time.realtimeSinceStartup;
+            lastFlushTime = DateTime.UtcNow;
             
             InitializeFileStream();
         }
@@ -75,7 +75,7 @@ namespace BetaHub
                     logBuffer.Add(log);
                     
                     bool shouldFlush = logBuffer.Count >= BUFFER_SIZE || 
-                                     (Time.realtimeSinceStartup - lastFlushTime) >= FLUSH_INTERVAL;
+                                     (DateTime.UtcNow - lastFlushTime) >= FLUSH_INTERVAL;
                     
                     if (shouldFlush)
                     {
@@ -105,7 +105,7 @@ namespace BetaHub
                 writer.Flush();
                 fileStream.Flush();
                 logBuffer.Clear();
-                lastFlushTime = Time.realtimeSinceStartup;
+                lastFlushTime = DateTime.UtcNow;
             }
             catch (ObjectDisposedException)
             {
