@@ -545,6 +545,11 @@ namespace BetaHub
             }
         }
 
+        public static bool IsFFmpegAvailable()
+        {
+            return GetFfmpegPath() != null;
+        }
+
         private static string GetFfmpegPath()
         {
             string path = null;

@@ -76,6 +76,12 @@ namespace BetaHub
             return;
 #endif
 
+            // Check if FFmpeg is available before initializing video recording components
+            if (!VideoEncoder.IsFFmpegAvailable())
+            {
+                return;
+            }
+
             // Adjust the game resolution to be divisible by 4
             _gameWidth  = Screen.width  - (Screen.width  % 4);
             _gameHeight = Screen.height - (Screen.height % 4);
@@ -178,6 +184,11 @@ namespace BetaHub
             return; // no log here as it would spam the log file
 #endif
 
+            if (_videoEncoder == null)
+            {
+                return;
+            }
+
             if (IsPaused)
             {
                 IsPaused = false; // this will unpause
@@ -200,6 +211,11 @@ namespace BetaHub
             return;
 #endif
 
+            if (_videoEncoder == null)
+            {
+                return;
+            }
+
             if (IsRecording)
             {
                 IsPaused = true;
@@ -215,6 +231,11 @@ namespace BetaHub
 #if ENABLE_IL2CPP && !ENABLE_BETAHUB_FFMPEG
             return null;
 #endif
+
+            if (_videoEncoder == null)
+            {
+                return null;
+            }
 
             IsRecording = false;
             return _videoEncoder.StopEncoding();
@@ -285,7 +306,7 @@ namespace BetaHub
                 return;
             }
 
-            if (!IsRecording) return; // Recording might have stopped while waiting for readback
+            if (!IsRecording || _videoEncoder == null) return; // Recording might have stopped while waiting for readback
 
             // Get the raw data from GPU using safe copy to avoid allocation
             var rawData = request.GetData<byte>();

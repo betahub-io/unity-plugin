@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.4.2
+
+### Fixed
+- VideoRecording: If ffmpeg is not available, the video recording will not be initialized.
+
 ## 1.4.1
 
 ### Fixed
