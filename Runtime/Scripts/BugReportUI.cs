@@ -124,6 +124,8 @@ namespace BetaHub
         private List<Issue.LogFileReference> _logFiles = new List<Issue.LogFileReference>();
 
         private static Logger _logger;
+        
+        public static Logger Logger => _logger;
         private bool _cursorStateChanged;
         private CursorLockMode _previousCursorLockMode;
 
@@ -402,7 +404,7 @@ namespace BetaHub
                     // skip if size over 200MB
                     if (new FileInfo(_logger.LogPath).Length < 200 * 1024 * 1024)
                     {
-                        logFiles.Add(new Issue.LogFileReference { path = _logger.LogPath, removeAfterUpload = false });
+                        logFiles.Add(new Issue.LogFileReference { logger = _logger, removeAfterUpload = false });
                     }
                 }
             }
@@ -643,6 +645,26 @@ namespace BetaHub
         void OnDestroy()
         {
             // Cleanup handled automatically since we don't subscribe to events
+        }
+
+        public static void PauseLogger()
+        {
+#if !DISABLE_BETAHUB_LOGGER
+            if (_logger != null)
+            {
+                _logger.PauseLogging();
+            }
+#endif
+        }
+
+        public static void ResumeLogger()
+        {
+#if !DISABLE_BETAHUB_LOGGER
+            if (_logger != null)
+            {
+                _logger.ResumeLogging();
+            }
+#endif
         }
 
         private void ValidateProviderCustomFields()

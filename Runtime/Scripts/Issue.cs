@@ -46,6 +46,7 @@ namespace BetaHub
         {
             public string path;
             public bool removeAfterUpload;
+            public Logger logger; // Optional: if set, use logger.ReadLogFileBytes() instead of path
         }
 
         public struct ScreenshotFileReference
@@ -214,9 +215,25 @@ namespace BetaHub
         // Helper method called after media upload completes
         private IEnumerator MarkMediaCompleteAndTryPublish()
         {
-            lock (this)
+            bool lockTaken = false;
+            try
             {
-                _mediaUploadComplete = true;
+                System.Threading.Monitor.TryEnter(this, 1000, ref lockTaken); // 1 second timeout
+                if (lockTaken)
+                {
+                    _mediaUploadComplete = true;
+                }
+                else
+                {
+                    Debug.LogWarning("Failed to acquire lock for MarkMediaCompleteAndTryPublish within timeout");
+                }
+            }
+            finally
+            {
+                if (lockTaken)
+                {
+                    System.Threading.Monitor.Exit(this);
+                }
             }
             yield return CheckAndPublishIfReady();
         }
@@ -224,9 +241,25 @@ namespace BetaHub
         // Helper method called by the public Publish() method
         private IEnumerator RequestPublishAndTryPublish()
         {
-            lock (this)
+            bool lockTaken = false;
+            try
             {
-                _publishRequested = true;
+                System.Threading.Monitor.TryEnter(this, 1000, ref lockTaken); // 1 second timeout
+                if (lockTaken)
+                {
+                    _publishRequested = true;
+                }
+                else
+                {
+                    Debug.LogWarning("Failed to acquire lock for RequestPublishAndTryPublish within timeout");
+                }
+            }
+            finally
+            {
+                if (lockTaken)
+                {
+                    System.Threading.Monitor.Exit(this);
+                }
             }
             yield return CheckAndPublishIfReady();
         }
@@ -235,13 +268,29 @@ namespace BetaHub
         private IEnumerator CheckAndPublishIfReady()
         {
             bool shouldPublish = false;
-            lock (this)
+            bool lockTaken = false;
+            try
             {
-                // Check if publish is requested, media is done, not already published, and we have the necessary ID/token
-                if (_publishRequested && _mediaUploadComplete && !_isPublished && !string.IsNullOrEmpty(Id) && !string.IsNullOrEmpty(_updateIssueAuthToken))
+                System.Threading.Monitor.TryEnter(this, 1000, ref lockTaken); // 1 second timeout
+                if (lockTaken)
                 {
-                    shouldPublish = true;
-                    _isPublished = true; // Prevent duplicate publish attempts
+                    // Check if publish is requested, media is done, not already published, and we have the necessary ID/token
+                    if (_publishRequested && _mediaUploadComplete && !_isPublished && !string.IsNullOrEmpty(Id) && !string.IsNullOrEmpty(_updateIssueAuthToken))
+                    {
+                        shouldPublish = true;
+                        _isPublished = true; // Prevent duplicate publish attempts
+                    }
+                }
+                else
+                {
+                    Debug.LogWarning("Failed to acquire lock for CheckAndPublishIfReady within timeout");
+                }
+            }
+            finally
+            {
+                if (lockTaken)
+                {
+                    System.Threading.Monitor.Exit(this);
                 }
             }
 
@@ -381,8 +430,25 @@ namespace BetaHub
         
         private IEnumerator PostLogFile(LogFileReference logFile)
         {
-            if (File.Exists(logFile.path))
+            if (logFile.logger != null)
             {
+                // Use logger's safe read method to avoid sharing violations
+                Debug.Log("Reading BetaHub log file safely using Logger instance");
+                byte[] fileData = logFile.logger.ReadLogFileBytes();
+
+                if (fileData != null)
+                {
+                    string fileName = Path.GetFileName(logFile.logger.LogPath) ?? "BH_Player.log";
+                    yield return UploadStringAsFile("log_files", "log_file[file]", fileData, fileName, "text/plain");
+                }
+                else
+                {
+                    Debug.LogError("Failed to read log file data from Logger instance");
+                }
+            }
+            else if (File.Exists(logFile.path))
+            {
+                // Original file path logic
                 yield return UploadFile("log_files", "log_file[file]", logFile.path, "text/plain");
 
                 if (logFile.removeAfterUpload)
@@ -409,9 +475,66 @@ namespace BetaHub
         
         private IEnumerator UploadFile(string endpoint, string fieldName, string filePath, string contentType)
         {
+            bool isLogFile = Path.GetExtension(filePath).Equals(".log", StringComparison.OrdinalIgnoreCase);
+            byte[] fileData;
+            
+            if (isLogFile)
+            {
+                if (BugReportUI.Logger != null && filePath == BugReportUI.Logger.LogPath)
+                {
+                    Debug.Log("Reading log file safely using Logger instance");
+                    fileData = BugReportUI.Logger.ReadLogFileBytes();
+                    if (fileData == null)
+                    {
+                        Debug.LogError("Failed to read log file data from Logger instance");
+                        yield break;
+                    }
+                }
+                else
+                {
+                    BugReportUI.PauseLogger();
+                    
+                    try
+                    {
+                        fileData = File.ReadAllBytes(filePath);
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogError($"Error reading file {filePath}: {ex.Message}");
+                        BugReportUI.ResumeLogger();
+                        yield break;
+                    }
+                    
+                    BugReportUI.ResumeLogger();
+                }
+            }
+            else
+            {
+                // For non-log files, read normally
+                try
+                {
+                    fileData = File.ReadAllBytes(filePath);
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogError($"Error reading file {filePath}: {ex.Message}");
+                    yield break;
+                }
+            }
+            
+            yield return UploadStringAsFile(endpoint, fieldName, fileData, Path.GetFileName(filePath), contentType);
+        }
+
+        private IEnumerator UploadStringAsFile(string endpoint, string fieldName, byte[] fileData, string fileName, string contentType)
+        {
+            if (fileData == null)
+            {
+                Debug.LogError($"Cannot upload {fileName}: file data is null");
+                yield break;
+            }
+
             WWWForm form = new WWWForm();
-            byte[] fileData = File.ReadAllBytes(filePath);
-            form.AddBinaryData(fieldName, fileData, Path.GetFileName(filePath), contentType);
+            form.AddBinaryData(fieldName, fileData, fileName, contentType);
 
             string url = $"{_betahubEndpoint}projects/{_projectId}/issues/g-{Id}/{endpoint}";
             using (UnityWebRequest www = UnityWebRequest.Post(url, form))
@@ -424,11 +547,11 @@ namespace BetaHub
 
                 if (www.result != UnityWebRequest.Result.Success)
                 {
-                    Debug.LogError($"Error uploading {Path.GetFileName(filePath)}: {www.error}");
+                    Debug.LogError($"Error uploading {fileName}: {www.error}");
                 }
                 else
                 {
-                    Debug.Log($"{Path.GetFileName(filePath)} uploaded successfully!");
+                    Debug.Log($"{fileName} uploaded successfully!");
                 }
             }
         }
