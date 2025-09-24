@@ -402,7 +402,7 @@ namespace BetaHub
                     // skip if size over 200MB
                     if (new FileInfo(_logger.LogPath).Length < 200 * 1024 * 1024)
                     {
-                        logFiles.Add(new Issue.LogFileReference { path = _logger.LogPath, removeAfterUpload = false });
+                        logFiles.Add(new Issue.LogFileReference { logger = _logger, removeAfterUpload = false });
                     }
                 }
             }

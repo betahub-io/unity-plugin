@@ -46,6 +46,7 @@ namespace BetaHub
         {
             public string path;
             public bool removeAfterUpload;
+            public Logger logger; // Optional: if set, use logger.ReadLogFileBytes() instead of path
         }
 
         public struct ScreenshotFileReference
@@ -381,8 +382,25 @@ namespace BetaHub
         
         private IEnumerator PostLogFile(LogFileReference logFile)
         {
-            if (File.Exists(logFile.path))
+            if (logFile.logger != null)
             {
+                // Use logger's safe read method to avoid sharing violations
+                Debug.Log("Reading BetaHub log file safely using Logger instance");
+                byte[] fileData = logFile.logger.ReadLogFileBytes();
+
+                if (fileData != null)
+                {
+                    string fileName = Path.GetFileName(logFile.logger.LogPath) ?? "BH_Player.log";
+                    yield return UploadStringAsFile("log_files", "log_file[file]", fileData, fileName, "text/plain");
+                }
+                else
+                {
+                    Debug.LogError("Failed to read log file data from Logger instance");
+                }
+            }
+            else if (File.Exists(logFile.path))
+            {
+                // Original file path logic
                 yield return UploadFile("log_files", "log_file[file]", logFile.path, "text/plain");
 
                 if (logFile.removeAfterUpload)
@@ -455,6 +473,37 @@ namespace BetaHub
                 else
                 {
                     Debug.Log($"{Path.GetFileName(filePath)} uploaded successfully!");
+                }
+            }
+        }
+
+        private IEnumerator UploadStringAsFile(string endpoint, string fieldName, byte[] fileData, string fileName, string contentType)
+        {
+            if (fileData == null)
+            {
+                Debug.LogError($"Cannot upload {fileName}: file data is null");
+                yield break;
+            }
+
+            WWWForm form = new WWWForm();
+            form.AddBinaryData(fieldName, fileData, fileName, contentType);
+
+            string url = $"{_betahubEndpoint}projects/{_projectId}/issues/g-{Id}/{endpoint}";
+            using (UnityWebRequest www = UnityWebRequest.Post(url, form))
+            {
+                www.SetRequestHeader("Authorization", "Bearer " + _updateIssueAuthToken);
+                www.SetRequestHeader("BetaHub-Project-ID", _projectId);
+                www.SetRequestHeader("Accept", "application/json");
+
+                yield return www.SendWebRequest();
+
+                if (www.result != UnityWebRequest.Result.Success)
+                {
+                    Debug.LogError($"Error uploading {fileName}: {www.error}");
+                }
+                else
+                {
+                    Debug.Log($"{fileName} uploaded successfully!");
                 }
             }
         }

@@ -156,6 +156,63 @@ namespace BetaHub
             }
         }
 
+        /// <summary>
+        /// Safely reads the entire log file by temporarily closing the file stream.
+        /// This prevents file sharing violations when other parts of the application need to read the log.
+        /// </summary>
+        /// <returns>The complete log file content as a byte array, or null if an error occurs</returns>
+        public byte[] ReadLogFileBytes()
+        {
+            if (disposed || string.IsNullOrEmpty(_logPath))
+            {
+                Debug.LogWarning("Cannot read log file: Logger is disposed or log path is not set");
+                return null;
+            }
+
+            lock (lockObject)
+            {
+                try
+                {
+                    // First, flush any buffered data
+                    FlushBuffer();
+
+                    // Temporarily close the file streams
+                    writer?.Dispose();
+                    fileStream?.Dispose();
+                    writer = null;
+                    fileStream = null;
+
+                    // Now we can safely read the file since we've closed our handle
+                    byte[] fileData = null;
+                    if (File.Exists(_logPath))
+                    {
+                        fileData = File.ReadAllBytes(_logPath);
+                    }
+
+                    // Reopen the file streams to continue logging
+                    InitializeFileStream();
+
+                    return fileData;
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError("Error reading log file: " + e.Message);
+
+                    // Ensure we reopen the file streams even if reading failed
+                    try
+                    {
+                        InitializeFileStream();
+                    }
+                    catch (Exception reopenEx)
+                    {
+                        Debug.LogError("Error reopening log file after failed read: " + reopenEx.Message);
+                    }
+
+                    return null;
+                }
+            }
+        }
+
         public void Dispose()
         {
             if (disposed) return;
