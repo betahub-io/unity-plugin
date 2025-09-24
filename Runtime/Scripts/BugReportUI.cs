@@ -645,6 +645,26 @@ namespace BetaHub
             // Cleanup handled automatically since we don't subscribe to events
         }
 
+        public static void PauseLogger()
+        {
+#if !DISABLE_BETAHUB_LOGGER
+            if (_logger != null)
+            {
+                _logger.PauseLogging();
+            }
+#endif
+        }
+
+        public static void ResumeLogger()
+        {
+#if !DISABLE_BETAHUB_LOGGER
+            if (_logger != null)
+            {
+                _logger.ResumeLogging();
+            }
+#endif
+        }
+
         private void ValidateProviderCustomFields()
         {
             // Skip validation if we don't have the necessary credentials

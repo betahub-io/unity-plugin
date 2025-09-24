@@ -124,6 +124,38 @@ namespace BetaHub
             }
         }
 
+        public void PauseLogging()
+        {
+            lock (lockObject)
+            {
+                FlushBuffer();
+                writer?.Dispose();
+                fileStream?.Dispose();
+                writer = null;
+                fileStream = null;
+            }
+        }
+
+        public void ResumeLogging()
+        {
+            lock (lockObject)
+            {
+                if (writer == null && fileStream == null)
+                {
+                    try
+                    {
+                        // Append to existing file instead of recreating it
+                        fileStream = new FileStream(_logPath, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
+                        writer = new StreamWriter(fileStream) { AutoFlush = false };
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.LogError("Error resuming log file stream: " + e.Message);
+                    }
+                }
+            }
+        }
+
         public void Dispose()
         {
             if (disposed) return;

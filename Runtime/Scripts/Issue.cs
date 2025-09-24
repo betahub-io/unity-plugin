@@ -409,8 +409,34 @@ namespace BetaHub
         
         private IEnumerator UploadFile(string endpoint, string fieldName, string filePath, string contentType)
         {
+            bool isLogFile = Path.GetExtension(filePath).Equals(".log", StringComparison.OrdinalIgnoreCase);
+            if (isLogFile)
+            {
+                BugReportUI.PauseLogger();
+                yield return new WaitForSeconds(0.1f);
+            }
+            
+            byte[] fileData;
+            try
+            {
+                fileData = File.ReadAllBytes(filePath);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Error reading file {filePath}: {ex.Message}");
+                if (isLogFile)
+                {
+                    BugReportUI.ResumeLogger();
+                }
+                yield break;
+            }
+            
+            if (isLogFile)
+            {
+                BugReportUI.ResumeLogger();
+            }
+            
             WWWForm form = new WWWForm();
-            byte[] fileData = File.ReadAllBytes(filePath);
             form.AddBinaryData(fieldName, fileData, Path.GetFileName(filePath), contentType);
 
             string url = $"{_betahubEndpoint}projects/{_projectId}/issues/g-{Id}/{endpoint}";
