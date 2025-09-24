@@ -428,53 +428,53 @@ namespace BetaHub
         private IEnumerator UploadFile(string endpoint, string fieldName, string filePath, string contentType)
         {
             bool isLogFile = Path.GetExtension(filePath).Equals(".log", StringComparison.OrdinalIgnoreCase);
-            if (isLogFile)
-            {
-                BugReportUI.PauseLogger();
-                yield return new WaitForSeconds(0.1f);
-            }
-            
             byte[] fileData;
-            try
-            {
-                fileData = File.ReadAllBytes(filePath);
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"Error reading file {filePath}: {ex.Message}");
-                if (isLogFile)
-                {
-                    BugReportUI.ResumeLogger();
-                }
-                yield break;
-            }
             
             if (isLogFile)
             {
-                BugReportUI.ResumeLogger();
-            }
-            
-            WWWForm form = new WWWForm();
-            form.AddBinaryData(fieldName, fileData, Path.GetFileName(filePath), contentType);
-
-            string url = $"{_betahubEndpoint}projects/{_projectId}/issues/g-{Id}/{endpoint}";
-            using (UnityWebRequest www = UnityWebRequest.Post(url, form))
-            {
-                www.SetRequestHeader("Authorization", "Bearer " + _updateIssueAuthToken);
-                www.SetRequestHeader("BetaHub-Project-ID", _projectId);
-                www.SetRequestHeader("Accept", "application/json");
-
-                yield return www.SendWebRequest();
-
-                if (www.result != UnityWebRequest.Result.Success)
+                if (BugReportUI.Logger != null && filePath == BugReportUI.Logger.LogPath)
                 {
-                    Debug.LogError($"Error uploading {Path.GetFileName(filePath)}: {www.error}");
+                    Debug.Log("Reading log file safely using Logger instance");
+                    fileData = BugReportUI.Logger.ReadLogFileBytes();
+                    if (fileData == null)
+                    {
+                        Debug.LogError("Failed to read log file data from Logger instance");
+                        yield break;
+                    }
                 }
                 else
                 {
-                    Debug.Log($"{Path.GetFileName(filePath)} uploaded successfully!");
+                    BugReportUI.PauseLogger();
+                    
+                    try
+                    {
+                        fileData = File.ReadAllBytes(filePath);
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogError($"Error reading file {filePath}: {ex.Message}");
+                        BugReportUI.ResumeLogger();
+                        yield break;
+                    }
+                    
+                    BugReportUI.ResumeLogger();
                 }
             }
+            else
+            {
+                // For non-log files, read normally
+                try
+                {
+                    fileData = File.ReadAllBytes(filePath);
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogError($"Error reading file {filePath}: {ex.Message}");
+                    yield break;
+                }
+            }
+            
+            yield return UploadStringAsFile(endpoint, fieldName, fileData, Path.GetFileName(filePath), contentType);
         }
 
         private IEnumerator UploadStringAsFile(string endpoint, string fieldName, byte[] fileData, string fileName, string contentType)

@@ -124,6 +124,8 @@ namespace BetaHub
         private List<Issue.LogFileReference> _logFiles = new List<Issue.LogFileReference>();
 
         private static Logger _logger;
+        
+        public static Logger Logger => _logger;
         private bool _cursorStateChanged;
         private CursorLockMode _previousCursorLockMode;
 
