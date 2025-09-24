@@ -215,9 +215,25 @@ namespace BetaHub
         // Helper method called after media upload completes
         private IEnumerator MarkMediaCompleteAndTryPublish()
         {
-            lock (this)
+            bool lockTaken = false;
+            try
             {
-                _mediaUploadComplete = true;
+                System.Threading.Monitor.TryEnter(this, 1000, ref lockTaken); // 1 second timeout
+                if (lockTaken)
+                {
+                    _mediaUploadComplete = true;
+                }
+                else
+                {
+                    Debug.LogWarning("Failed to acquire lock for MarkMediaCompleteAndTryPublish within timeout");
+                }
+            }
+            finally
+            {
+                if (lockTaken)
+                {
+                    System.Threading.Monitor.Exit(this);
+                }
             }
             yield return CheckAndPublishIfReady();
         }
@@ -225,9 +241,25 @@ namespace BetaHub
         // Helper method called by the public Publish() method
         private IEnumerator RequestPublishAndTryPublish()
         {
-            lock (this)
+            bool lockTaken = false;
+            try
             {
-                _publishRequested = true;
+                System.Threading.Monitor.TryEnter(this, 1000, ref lockTaken); // 1 second timeout
+                if (lockTaken)
+                {
+                    _publishRequested = true;
+                }
+                else
+                {
+                    Debug.LogWarning("Failed to acquire lock for RequestPublishAndTryPublish within timeout");
+                }
+            }
+            finally
+            {
+                if (lockTaken)
+                {
+                    System.Threading.Monitor.Exit(this);
+                }
             }
             yield return CheckAndPublishIfReady();
         }
@@ -236,13 +268,29 @@ namespace BetaHub
         private IEnumerator CheckAndPublishIfReady()
         {
             bool shouldPublish = false;
-            lock (this)
+            bool lockTaken = false;
+            try
             {
-                // Check if publish is requested, media is done, not already published, and we have the necessary ID/token
-                if (_publishRequested && _mediaUploadComplete && !_isPublished && !string.IsNullOrEmpty(Id) && !string.IsNullOrEmpty(_updateIssueAuthToken))
+                System.Threading.Monitor.TryEnter(this, 1000, ref lockTaken); // 1 second timeout
+                if (lockTaken)
                 {
-                    shouldPublish = true;
-                    _isPublished = true; // Prevent duplicate publish attempts
+                    // Check if publish is requested, media is done, not already published, and we have the necessary ID/token
+                    if (_publishRequested && _mediaUploadComplete && !_isPublished && !string.IsNullOrEmpty(Id) && !string.IsNullOrEmpty(_updateIssueAuthToken))
+                    {
+                        shouldPublish = true;
+                        _isPublished = true; // Prevent duplicate publish attempts
+                    }
+                }
+                else
+                {
+                    Debug.LogWarning("Failed to acquire lock for CheckAndPublishIfReady within timeout");
+                }
+            }
+            finally
+            {
+                if (lockTaken)
+                {
+                    System.Threading.Monitor.Exit(this);
                 }
             }
 

@@ -68,23 +68,40 @@ namespace BetaHub
         {
             if (disposed || writer == null) return;
             
-            lock (lockObject)
+            bool lockTaken = false;
+            try
             {
-                try
+                System.Threading.Monitor.TryEnter(lockObject, 500, ref lockTaken); // 500ms timeout
+                if (lockTaken)
                 {
-                    logBuffer.Add(log);
-                    
-                    bool shouldFlush = logBuffer.Count >= BUFFER_SIZE || 
-                                     (DateTime.UtcNow - lastFlushTime) >= FLUSH_INTERVAL;
-                    
-                    if (shouldFlush)
+                    try
                     {
-                        FlushBuffer();
+                        logBuffer.Add(log);
+                        
+                        bool shouldFlush = logBuffer.Count >= BUFFER_SIZE || 
+                                         (DateTime.UtcNow - lastFlushTime) >= FLUSH_INTERVAL;
+                        
+                        if (shouldFlush)
+                        {
+                            FlushBuffer();
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.LogError("Error buffering log: " + e.Message);
                     }
                 }
-                catch (Exception e)
+                else
                 {
-                    Debug.LogError("Error buffering log: " + e.Message);
+                    // If we can't acquire the lock, skip this log entry to prevent deadlock
+                    Debug.LogWarning("Failed to acquire lock for WriteToLog within timeout, skipping log entry");
+                }
+            }
+            finally
+            {
+                if (lockTaken)
+                {
+                    System.Threading.Monitor.Exit(lockObject);
                 }
             }
         }
@@ -118,40 +135,88 @@ namespace BetaHub
 
         public void ForceFlush()
         {
-            lock (lockObject)
+            bool lockTaken = false;
+            try
             {
-                FlushBuffer();
+                System.Threading.Monitor.TryEnter(lockObject, 1000, ref lockTaken); // 1 second timeout
+                if (lockTaken)
+                {
+                    FlushBuffer();
+                }
+                else
+                {
+                    Debug.LogWarning("Failed to acquire lock for ForceFlush within timeout");
+                }
+            }
+            finally
+            {
+                if (lockTaken)
+                {
+                    System.Threading.Monitor.Exit(lockObject);
+                }
             }
         }
 
         public void PauseLogging()
         {
-            lock (lockObject)
+            bool lockTaken = false;
+            try
             {
-                FlushBuffer();
-                writer?.Dispose();
-                fileStream?.Dispose();
-                writer = null;
-                fileStream = null;
+                System.Threading.Monitor.TryEnter(lockObject, 1000, ref lockTaken); // 1 second timeout
+                if (lockTaken)
+                {
+                    FlushBuffer();
+                    writer?.Dispose();
+                    fileStream?.Dispose();
+                    writer = null;
+                    fileStream = null;
+                }
+                else
+                {
+                    Debug.LogWarning("Failed to acquire lock for PauseLogging within timeout");
+                }
+            }
+            finally
+            {
+                if (lockTaken)
+                {
+                    System.Threading.Monitor.Exit(lockObject);
+                }
             }
         }
 
         public void ResumeLogging()
         {
-            lock (lockObject)
+            bool lockTaken = false;
+            try
             {
-                if (writer == null && fileStream == null)
+                System.Threading.Monitor.TryEnter(lockObject, 1000, ref lockTaken); // 1 second timeout
+                if (lockTaken)
                 {
-                    try
+                    if (writer == null && fileStream == null)
                     {
-                        // Append to existing file instead of recreating it
-                        fileStream = new FileStream(_logPath, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
-                        writer = new StreamWriter(fileStream) { AutoFlush = false };
+                        try
+                        {
+                            // Append to existing file instead of recreating it
+                            fileStream = new FileStream(_logPath, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
+                            writer = new StreamWriter(fileStream) { AutoFlush = false };
+                        }
+                        catch (Exception e)
+                        {
+                            Debug.LogError("Error resuming log file stream: " + e.Message);
+                        }
                     }
-                    catch (Exception e)
-                    {
-                        Debug.LogError("Error resuming log file stream: " + e.Message);
-                    }
+                }
+                else
+                {
+                    Debug.LogWarning("Failed to acquire lock for ResumeLogging within timeout");
+                }
+            }
+            finally
+            {
+                if (lockTaken)
+                {
+                    System.Threading.Monitor.Exit(lockObject);
                 }
             }
         }
@@ -206,18 +271,41 @@ namespace BetaHub
             
             Application.logMessageReceivedThreaded -= UnityLogHandler;
             
-            lock (lockObject)
+            bool lockTaken = false;
+            try
             {
-                FlushBuffer();
-                
-                writer?.Dispose();
-                fileStream?.Dispose();
-                
-                writer = null;
-                fileStream = null;
-                logBuffer?.Clear();
-                
-                disposed = true;
+                System.Threading.Monitor.TryEnter(lockObject, 2000, ref lockTaken); // 2 second timeout for disposal
+                if (lockTaken)
+                {
+                    FlushBuffer();
+                    
+                    writer?.Dispose();
+                    fileStream?.Dispose();
+                    
+                    writer = null;
+                    fileStream = null;
+                    logBuffer?.Clear();
+                    
+                    disposed = true;
+                }
+                else
+                {
+                    Debug.LogWarning("Failed to acquire lock for Dispose within timeout, forcing disposal");
+                    // Force disposal even without lock to prevent resource leaks
+                    writer?.Dispose();
+                    fileStream?.Dispose();
+                    writer = null;
+                    fileStream = null;
+                    logBuffer?.Clear();
+                    disposed = true;
+                }
+            }
+            finally
+            {
+                if (lockTaken)
+                {
+                    System.Threading.Monitor.Exit(lockObject);
+                }
             }
         }
 
