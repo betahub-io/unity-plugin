@@ -39,6 +39,7 @@ Thumbs.db
 # =============== #
 .vs/
 .vscode/
+.claude/
 
 # =============== #
 # Rider           #

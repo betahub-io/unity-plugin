@@ -546,10 +546,6 @@ namespace BetaHub
                     BugReportPanel.SetActive(false);
                 },
                 MediaUploadType,
-                (error) =>
-                {
-                    onIssueError(new ErrorMessage { error = error });
-                },
                 customFieldsData.Count > 0 ? customFieldsData : null
             ),
             (ex) => // done
