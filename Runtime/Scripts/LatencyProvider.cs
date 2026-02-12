@@ -270,6 +270,7 @@ namespace BetaHub
             _isTestingInProgress = false;
         }
         
+#if !UNITY_WEBGL
         private IEnumerator PerformICMPPing(string host, int requestNumber)
         {
             Ping ping = new Ping(host);
@@ -301,7 +302,8 @@ namespace BetaHub
             
             ping.DestroyPing();
         }
-        
+#endif
+
         private IEnumerator PerformHttpPing(int requestNumber)
         {
             string host = HttpEndpoint;
@@ -380,6 +382,7 @@ namespace BetaHub
                 }
                 
                 // Use the appropriate ping method
+#if !UNITY_WEBGL
                 if (currentMethod == PingMethod.ICMP)
                 {
                     // Ping all ICMP hosts in parallel
@@ -392,6 +395,7 @@ namespace BetaHub
                     }
                 }
                 else
+#endif
                 {
                     // Ping HTTP endpoint
                     pingCoroutines.Add(StartCoroutine(PerformHttpPing(i + 1)));
@@ -497,6 +501,14 @@ namespace BetaHub
         
         void Start()
         {
+#if UNITY_WEBGL
+            if (pingMethod == PingMethod.ICMP)
+            {
+                Debug.LogWarning("LatencyProvider: ICMP ping is not supported on WebGL. Falling back to HTTP mode.");
+                pingMethod = PingMethod.HTTP;
+            }
+#endif
+
             // Try to auto-attach to BugReportUI on the same GameObject
             var bugReportUI = GetComponent<BugReportUI>();
             if (bugReportUI != null)
@@ -578,6 +590,7 @@ namespace BetaHub
         {
             List<Coroutine> pingCoroutines = new List<Coroutine>();
             
+#if !UNITY_WEBGL
             if (pingMethod == PingMethod.ICMP && IcmpTargetHosts != null && IcmpTargetHosts.Count > 0)
             {
                 foreach (string host in IcmpTargetHosts)
@@ -589,6 +602,7 @@ namespace BetaHub
                 }
             }
             else
+#endif
             {
                 pingCoroutines.Add(StartCoroutine(PerformBackgroundHttpPing()));
             }
@@ -599,6 +613,7 @@ namespace BetaHub
             }
         }
         
+#if !UNITY_WEBGL
         private IEnumerator PerformBackgroundICMPPing(string host)
         {
             if (!_hostPingBuffers.ContainsKey(host))
@@ -639,7 +654,8 @@ namespace BetaHub
             
             ping.DestroyPing();
         }
-        
+#endif
+
         private IEnumerator PerformBackgroundHttpPing()
         {
             string host = HttpEndpoint;
@@ -712,11 +728,13 @@ namespace BetaHub
                     
                     for (int i = 0; i < missingPings; i++)
                     {
+#if !UNITY_WEBGL
                         if (pingMethod == PingMethod.ICMP)
                         {
                             yield return StartCoroutine(PerformBackgroundICMPPing(host));
                         }
                         else
+#endif
                         {
                             yield return StartCoroutine(PerformBackgroundHttpPing());
                         }

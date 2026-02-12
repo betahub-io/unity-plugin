@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.4.3
+
+### Fixed
+- LatencyProvider: ICMP ping is not available on WebGL; the component now automatically falls back to HTTP mode with a warning.
+
 ## 1.4.2
 
 ### Fixed
