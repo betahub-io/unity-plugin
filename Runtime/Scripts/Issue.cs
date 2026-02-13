@@ -7,6 +7,7 @@ namespace BetaHub
     using UnityEngine;
     using UnityEngine.Networking;
 
+
     // Represents an issue (persistent or not on BetaHub)
     public class Issue
     {
@@ -40,7 +41,20 @@ namespace BetaHub
         private ReportSubmittedUI _reportSubmittedUI;
 
         private bool _emailMyReport = false;
-        
+
+        // Contextual diagnostics service for consistent error handling and logging
+        private IContextualDiagnostics _diagnostics;
+
+        private void InitializeDiagnostics()
+        {
+            string issueContext = string.IsNullOrEmpty(Id) ? "Draft" : Id;
+            _diagnostics = BetaHubDiagnostics.ForContext($"Issue({issueContext})");
+            if (_diagnostics == null)
+            {
+                Debug.LogWarning("Failed to initialize diagnostics");
+            }
+        }
+
         // Reference structs moved to be nested inside Issue class
         public struct LogFileReference
         {
@@ -77,23 +91,26 @@ namespace BetaHub
 
             if (!authToken.StartsWith("tkn-"))
             {
-                throw new Exception("Auth token must start with tkn-");
+                throw new ArgumentException("Auth token must start with tkn-", nameof(authToken));
             }
 
             if (string.IsNullOrEmpty(projectId))
             {
-                throw new Exception("Project ID is required");
+                throw new ArgumentException("Project ID is required", nameof(projectId));
             }
 
             if (messagePanelUI == null)
             {
-                throw new Exception("Message panel UI is required");
+                throw new ArgumentNullException(nameof(messagePanelUI), "Message panel UI is required");
             }
 
             if (reportSubmittedUI == null)
             {
-                throw new Exception("Report submitted UI is required");
+                throw new ArgumentNullException(nameof(reportSubmittedUI), "Report submitted UI is required");
             }
+
+            // Initialize diagnostics for this issue instance
+            InitializeDiagnostics();
         }
 
         // Posts an issue to BetaHub.
@@ -112,17 +129,27 @@ namespace BetaHub
                                      List<ScreenshotFileReference> screenshots = null, List<LogFileReference> logFiles = null,
                                      int releaseId = 0, string releaseLabel = "",
                                      bool autoPublish = false,
-                                     Action<string> onAllMediaUploaded = null, MediaUploadType mediaUploadType = MediaUploadType.UploadInBackground, Action<string> onError = null,
+                                     Action<string> onAllMediaUploaded = null, MediaUploadType mediaUploadType = MediaUploadType.UploadInBackground,
                                      Dictionary<string, string> customFields = null)
+        {
+            yield return PostIssueInternal(description, steps, screenshots, logFiles, releaseId, releaseLabel, autoPublish, onAllMediaUploaded, mediaUploadType, customFields);
+        }
+
+        private IEnumerator PostIssueInternal(string description, string steps,
+                                             List<ScreenshotFileReference> screenshots, List<LogFileReference> logFiles,
+                                             int releaseId, string releaseLabel,
+                                             bool autoPublish,
+                                             Action<string> onAllMediaUploaded, MediaUploadType mediaUploadType,
+                                             Dictionary<string, string> customFields)
         {
             if (Id != null)
             {
-                throw new Exception("Issue instance cannot be reused for posting.");
+                throw new InvalidOperationException("Issue instance cannot be reused for posting.");
             }
 
             if (releaseId > 0 && !string.IsNullOrEmpty(releaseLabel))
             {
-                throw new Exception("Cannot set both release ID and release label");
+                throw new ArgumentException("Cannot set both release ID and release label");
             }
 
             // Initialize state for this posting attempt
@@ -130,30 +157,17 @@ namespace BetaHub
             _mediaUploadComplete = false;
             _isPublished = false;
 
-            string issueIdLocal = null; // Use local variables for draft result callback
-            string issueUrlLocal = null;
-            string updateIssueAuthTokenLocal = null;
-            string error = null;
-
-            yield return PostIssueDraft(description, steps, releaseId, releaseLabel, customFields, (draftResult) =>
-            {
-                issueIdLocal = draftResult.IssueId;
-                updateIssueAuthTokenLocal = draftResult.UpdateIssueAuthToken;
-                error = draftResult.Error;
-                issueUrlLocal = draftResult.Url;
-            });
-
-            if (error != null)
-            {
-                Debug.LogError("Error posting issue: " + error);
-                onError?.Invoke(error);
-                yield break;
-            }
+            yield return PostIssueDraft(description, steps, releaseId, releaseLabel, customFields);
 
             // Draft created successfully, store ID and token in member variables
-            this.Id = issueIdLocal;
-            this.Url = issueUrlLocal;
-            this._updateIssueAuthToken = updateIssueAuthTokenLocal;
+            this.Id = _lastDraftResult.IssueId;
+            this.Url = _lastDraftResult.Url;
+            this._updateIssueAuthToken = _lastDraftResult.UpdateIssueAuthToken;
+
+            // Update diagnostics with the new issue ID
+            InitializeDiagnostics();
+
+            _diagnostics?.LogSuccess("PostIssueDraft", $"Created draft issue with ID {this.Id}");
 
             if (mediaUploadType == MediaUploadType.UploadInBackground)
             {
@@ -169,19 +183,26 @@ namespace BetaHub
 
             // Mark media as complete and attempt to publish if requested
             yield return MarkMediaCompleteAndTryPublish();
+
+            _diagnostics?.LogSuccess("PostIssue", "Issue posting flow completed successfully");
         }
 
         public IEnumerator SubmitEmail(string email)
         {
+            yield return SubmitEmailInternal(email);
+        }
+
+        private IEnumerator SubmitEmailInternal(string email)
+        {
             if (string.IsNullOrEmpty(email))
             {
-                throw new Exception("Email is required");
+                throw new ArgumentException("Email is required", nameof(email));
             }
 
             // issue must be persistent
             if (string.IsNullOrEmpty(Id))
             {
-                throw new Exception("Issue must be persistent before submitting email");
+                throw new InvalidOperationException("Issue must be persistent before submitting email");
             }
 
             WWWForm form = new WWWForm();
@@ -195,9 +216,11 @@ namespace BetaHub
 
                 if (www.result != UnityWebRequest.Result.Success)
                 {
-                    Debug.LogError("Error submitting email: " + www.error);
+                    throw new InvalidOperationException($"Error submitting email (HTTP {www.responseCode}): {www.error}");
                 }
             }
+
+            _diagnostics?.LogSuccess("SubmitEmail", $"Email {email} submitted successfully");
         }
 
 
@@ -206,10 +229,17 @@ namespace BetaHub
         // Otherwise, it sets a flag ensuring publication occurs once media upload finishes.
         public IEnumerator Publish(bool emailMyReport)
         {
+            yield return PublishInternal(emailMyReport);
+        }
+
+        private IEnumerator PublishInternal(bool emailMyReport)
+        {
             _emailMyReport = emailMyReport;
-            
+
             // Request publishing and attempt to publish if conditions are met
             yield return RequestPublishAndTryPublish();
+
+            _diagnostics?.LogSuccess("Publish", "Publish request completed successfully");
         }
 
         // Helper method called after media upload completes
@@ -225,7 +255,7 @@ namespace BetaHub
                 }
                 else
                 {
-                    Debug.LogWarning("Failed to acquire lock for MarkMediaCompleteAndTryPublish within timeout");
+                    throw new TimeoutException("Failed to acquire lock for MarkMediaCompleteAndTryPublish within timeout");
                 }
             }
             finally
@@ -251,7 +281,7 @@ namespace BetaHub
                 }
                 else
                 {
-                    Debug.LogWarning("Failed to acquire lock for RequestPublishAndTryPublish within timeout");
+                    throw new TimeoutException("Failed to acquire lock for RequestPublishAndTryPublish within timeout");
                 }
             }
             finally
@@ -283,7 +313,7 @@ namespace BetaHub
                 }
                 else
                 {
-                    Debug.LogWarning("Failed to acquire lock for CheckAndPublishIfReady within timeout");
+                    throw new TimeoutException("Failed to acquire lock for CheckAndPublishIfReady within timeout");
                 }
             }
             finally
@@ -297,13 +327,16 @@ namespace BetaHub
             if (shouldPublish)
             {
                 yield return PublishNow();
+                _diagnostics?.LogSuccess("PublishNow", "Issue published successfully");
             }
             // else: Conditions not met yet, publishing will be checked again later if needed.
         }
 
         // posts a draft issue to BetaHub.
-        // returns the issue id and the update issue auth token via callback
-        private IEnumerator PostIssueDraft(string description, string steps, int releaseId, string releaseLabel, Dictionary<string, string> customFields, Action<DraftResult> onResult)
+        // stores the draft result in _lastDraftResult field
+        // throws exceptions on failure
+        private DraftResult _lastDraftResult;
+        private IEnumerator PostIssueDraft(string description, string steps, int releaseId, string releaseLabel, Dictionary<string, string> customFields)
         {
             WWWForm form = new WWWForm();
             form.AddField("issue[description]", description);
@@ -328,7 +361,7 @@ namespace BetaHub
             }
 
             string url = GetPostIssueUrl();
-            
+
             using (UnityWebRequest www = UnityWebRequest.Post(url, form))
             {
                 www.SetRequestHeader("Authorization", "FormUser " + _createIssueAuthToken);
@@ -340,12 +373,15 @@ namespace BetaHub
                 {
                     string errorMessage = www.downloadHandler.text;
                     // try parsing as json, the format should be {"error":"...","status":"..."}
-                    try {
+                    try
+                    {
                         ErrorMessage errorMessageObject = JsonUtility.FromJson<ErrorMessage>(errorMessage);
                         if (errorMessageObject != null)
                         {
                             errorMessage = errorMessageObject.error;
-                        } else {
+                        }
+                        else
+                        {
                             errorMessage = "Unknown error";
                         }
                     }
@@ -354,56 +390,53 @@ namespace BetaHub
                         Debug.LogError("Error parsing error message: " + e);
                     }
 
-                    Debug.LogError("Response code: " + www.responseCode);
-                    onResult?.Invoke(new DraftResult { IssueId = null, UpdateIssueAuthToken = null, Url = null, Error = errorMessage });
-                    yield break;
+                    throw new InvalidOperationException($"Failed to create issue draft (HTTP {www.responseCode}): {errorMessage}");
                 }
 
                 string response = www.downloadHandler.text;
                 IssueResponse issueResponse = JsonUtility.FromJson<IssueResponse>(response);
-                onResult?.Invoke(new DraftResult { IssueId = issueResponse.id, UpdateIssueAuthToken = issueResponse.token, Url = issueResponse.url, Error = null });
+                _lastDraftResult = new DraftResult { IssueId = issueResponse.id, UpdateIssueAuthToken = issueResponse.token, Url = issueResponse.url };
             }
         }
 
         private IEnumerator PostAllMedia(List<ScreenshotFileReference> screenshots, List<LogFileReference> logFiles, GameRecorder gameRecorder)
         {
-            if (screenshots != null)
+            int totalFiles = (screenshots?.Count ?? 0) + (logFiles?.Count ?? 0) + (gameRecorder != null ? 1 : 0);
+            int uploadedFiles = 0;
+
+            _diagnostics?.LogInfo("PostAllMedia", $"Starting upload of {totalFiles} media files");
+
+            if (screenshots != null && screenshots.Count > 0)
             {
-                Debug.Log("Posting " + screenshots.Count + " screenshots");
-                
-                foreach (var screenshot in screenshots)
+                _diagnostics?.LogProgress("PostAllMedia", $"Uploading {screenshots.Count} screenshots");
+
+                for (int i = 0; i < screenshots.Count; i++)
                 {
-                    yield return PostScreenshot(screenshot);
+                    var screenshot = screenshots[i];
+                    yield return TryPostScreenshot(screenshot, ++uploadedFiles, totalFiles);
                 }
             }
-            else
+
+            if (logFiles != null && logFiles.Count > 0)
             {
-                Debug.Log("No screenshots to post");
-            }
-            
-            if (logFiles != null)
-            {
-                Debug.Log("Posting " + logFiles.Count + " log files");
-                foreach (var logFile in logFiles)
+                _diagnostics?.LogProgress("PostAllMedia", $"Uploading {logFiles.Count} log files");
+
+                for (int i = 0; i < logFiles.Count; i++)
                 {
-                    yield return PostLogFile(logFile);
+                    var logFile = logFiles[i];
+                    yield return TryPostLogFile(logFile, ++uploadedFiles, totalFiles);
                 }
-            }
-            else
-            {
-                Debug.Log("No log files to post");
             }
 
             if (gameRecorder != null)
             {
-                Debug.Log("Posting video");
-                yield return PostVideo(gameRecorder);
+                _diagnostics?.LogProgress("PostAllMedia", "Uploading video");
+                yield return TryPostVideo(gameRecorder, ++uploadedFiles, totalFiles);
             }
-            else
-            {
-                Debug.Log("No video to post");
-            }
+
+            _diagnostics?.LogSuccess("PostAllMedia", $"All {totalFiles} media files uploaded successfully");
         }
+
 
         private string GetPostIssueUrl()
         {
@@ -414,41 +447,114 @@ namespace BetaHub
         {
             return _betahubEndpoint + "projects/" + _projectId + "/issues/g-" + Id + "/set_reporter_email";
         }
-        
-        private IEnumerator PostScreenshot(ScreenshotFileReference screenshot)
-        {
-            if (File.Exists(screenshot.path))
-            {
-                yield return UploadFile("screenshots", "screenshot[image]", screenshot.path, "image/png");
 
-                if (screenshot.removeAfterUpload)
+        // Wrapper methods to handle try-catch with yield returns
+        private IEnumerator TryPostScreenshot(ScreenshotFileReference screenshot, int currentFile, int totalFiles)
+        {
+            IEnumerator coroutine = PostScreenshot(screenshot, currentFile, totalFiles);
+            bool hasMore = true;
+            
+            while (hasMore)
+            {
+                try
                 {
-                    File.Delete(screenshot.path);
+                    hasMore = coroutine.MoveNext();
+                    if (!hasMore)
+                        break;
                 }
+                catch (Exception ex)
+                {
+                    _diagnostics?.LogError("PostAllMedia", $"Failed to upload screenshot", ex);
+                    yield break; // Exit the coroutine on error
+                }
+                
+                yield return coroutine.Current;
             }
         }
-        
-        private IEnumerator PostLogFile(LogFileReference logFile)
+
+        private IEnumerator TryPostLogFile(LogFileReference logFile, int currentFile, int totalFiles)
         {
+            IEnumerator coroutine = PostLogFile(logFile, currentFile, totalFiles);
+            bool hasMore = true;
+            
+            while (hasMore)
+            {
+                try
+                {
+                    hasMore = coroutine.MoveNext();
+                    if (!hasMore)
+                        break;
+                }
+                catch (Exception ex)
+                {
+                    _diagnostics?.LogError("PostAllMedia", $"Failed to upload log file", ex);
+                    yield break; // Exit the coroutine on error
+                }
+                
+                yield return coroutine.Current;
+            }
+        }
+
+        private IEnumerator TryPostVideo(GameRecorder gameRecorder, int currentFile, int totalFiles)
+        {
+            IEnumerator coroutine = PostVideo(gameRecorder, currentFile, totalFiles);
+            bool hasMore = true;
+            
+            while (hasMore)
+            {
+                try
+                {
+                    hasMore = coroutine.MoveNext();
+                    if (!hasMore)
+                        break;
+                }
+                catch (Exception ex)
+                {
+                    _diagnostics?.LogError("PostAllMedia", $"Failed to upload video", ex);
+                    yield break; // Exit the coroutine on error
+                }
+                
+                yield return coroutine.Current;
+            }
+        }
+
+        private IEnumerator PostScreenshot(ScreenshotFileReference screenshot, int currentFile, int totalFiles)
+        {
+            if (!File.Exists(screenshot.path))
+            {
+                throw new FileNotFoundException($"Screenshot file not found: {screenshot.path}");
+            }
+
+            yield return UploadFile("screenshots", "screenshot[image]", screenshot.path, "image/png");
+
+            if (screenshot.removeAfterUpload)
+            {
+                File.Delete(screenshot.path);
+            }
+
+            _diagnostics?.LogProgress("PostScreenshot", $"Screenshot {Path.GetFileName(screenshot.path)} uploaded ({currentFile}/{totalFiles})");
+        }
+
+        private IEnumerator PostLogFile(LogFileReference logFile, int currentFile, int totalFiles)
+        {
+            string fileName;
+
             if (logFile.logger != null)
             {
-                // Use logger's safe read method to avoid sharing violations
-                Debug.Log("Reading BetaHub log file safely using Logger instance");
                 byte[] fileData = logFile.logger.ReadLogFileBytes();
 
-                if (fileData != null)
+                if (fileData == null)
                 {
-                    string fileName = Path.GetFileName(logFile.logger.LogPath) ?? "BH_Player.log";
-                    yield return UploadStringAsFile("log_files", "log_file[file]", fileData, fileName, "text/plain");
+                    throw new InvalidOperationException("Failed to read log file data from Logger instance");
                 }
-                else
-                {
-                    Debug.LogError("Failed to read log file data from Logger instance");
-                }
+
+                fileName = Path.GetFileName(logFile.logger.LogPath) ?? "BH_Player.log";
+                yield return UploadStringAsFile("log_files", "log_file[file]", fileData, fileName, "text/plain");
             }
             else if (File.Exists(logFile.path))
             {
                 // Original file path logic
+                fileName = Path.GetFileName(logFile.path);
                 yield return UploadFile("log_files", "log_file[file]", logFile.path, "text/plain");
 
                 if (logFile.removeAfterUpload)
@@ -456,55 +562,64 @@ namespace BetaHub
                     File.Delete(logFile.path);
                 }
             }
-        }
-        
-        private IEnumerator PostVideo(GameRecorder gameRecorder)
-        {
-            if (gameRecorder != null)
+            else
             {
-                string videoPath = gameRecorder.StopRecordingAndSaveLastMinute();
-                if (!string.IsNullOrEmpty(videoPath) && File.Exists(videoPath))
-                {
-                    yield return UploadFile("video_clips", "video_clip[video]", videoPath, "video/mp4");
-
-                    // Delete the video file after uploading
-                    File.Delete(videoPath);
-                }
+                throw new FileNotFoundException($"Log file not found: {logFile.path}");
             }
+
+            _diagnostics?.LogProgress("PostLogFile", $"Log file {fileName} uploaded ({currentFile}/{totalFiles})");
         }
-        
+
+        private IEnumerator PostVideo(GameRecorder gameRecorder, int currentFile, int totalFiles)
+        {
+            string videoPath = gameRecorder.StopRecordingAndSaveLastMinute();
+            if (string.IsNullOrEmpty(videoPath))
+            {
+                throw new InvalidOperationException("GameRecorder failed to produce video file");
+            }
+
+            if (!File.Exists(videoPath))
+            {
+                throw new FileNotFoundException($"Video file not found: {videoPath}");
+            }
+
+            yield return UploadFile("video_clips", "video_clip[video]", videoPath, "video/mp4");
+
+            // Delete the video file after uploading
+            File.Delete(videoPath);
+
+            _diagnostics?.LogProgress("PostVideo", $"Video uploaded ({currentFile}/{totalFiles})");
+        }
+
         private IEnumerator UploadFile(string endpoint, string fieldName, string filePath, string contentType)
         {
             bool isLogFile = Path.GetExtension(filePath).Equals(".log", StringComparison.OrdinalIgnoreCase);
             byte[] fileData;
-            
+
             if (isLogFile)
             {
                 if (BugReportUI.Logger != null && filePath == BugReportUI.Logger.LogPath)
                 {
-                    Debug.Log("Reading log file safely using Logger instance");
                     fileData = BugReportUI.Logger.ReadLogFileBytes();
                     if (fileData == null)
                     {
-                        Debug.LogError("Failed to read log file data from Logger instance");
-                        yield break;
+                        throw new InvalidOperationException("Failed to read log file data from Logger instance");
                     }
                 }
                 else
                 {
                     BugReportUI.PauseLogger();
-                    
+
                     try
                     {
                         fileData = File.ReadAllBytes(filePath);
                     }
                     catch (Exception ex)
                     {
-                        Debug.LogError($"Error reading file {filePath}: {ex.Message}");
                         BugReportUI.ResumeLogger();
-                        yield break;
+                        throw new InvalidOperationException($"Error reading file {filePath}: {ex.Message}", ex);
                     }
-                    
+
                     BugReportUI.ResumeLogger();
                 }
             }
@@ -517,11 +632,10 @@ namespace BetaHub
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogError($"Error reading file {filePath}: {ex.Message}");
-                    yield break;
+                    throw new InvalidOperationException($"Error reading file {filePath}: {ex.Message}", ex);
                 }
             }
-            
+
             yield return UploadStringAsFile(endpoint, fieldName, fileData, Path.GetFileName(filePath), contentType);
         }
 
@@ -529,8 +643,7 @@ namespace BetaHub
         {
             if (fileData == null)
             {
-                Debug.LogError($"Cannot upload {fileName}: file data is null");
-                yield break;
+                throw new ArgumentNullException(nameof(fileData), $"Cannot upload {fileName}: file data is null");
             }
 
             WWWForm form = new WWWForm();
@@ -547,12 +660,9 @@ namespace BetaHub
 
                 if (www.result != UnityWebRequest.Result.Success)
                 {
-                    Debug.LogError($"Error uploading {fileName}: {www.error}");
+                    throw new InvalidOperationException($"Error uploading {fileName} (HTTP {www.responseCode}): {www.error}");
                 }
-                else
-                {
-                    Debug.Log($"{fileName} uploaded successfully!");
-                }
+                // Success logging handled by calling method
             }
         }
 
@@ -561,8 +671,7 @@ namespace BetaHub
             // Ensure we have valid parameters before proceeding
             if (string.IsNullOrEmpty(Id) || string.IsNullOrEmpty(_updateIssueAuthToken))
             {
-                Debug.LogError("Cannot publish issue: Missing Issue ID or Update Token.");
-                yield break;
+                throw new InvalidOperationException("Cannot publish issue: Missing Issue ID or Update Token.");
             }
 
             WWWForm form = new WWWForm();
@@ -579,38 +688,34 @@ namespace BetaHub
 
                 if (www.result != UnityWebRequest.Result.Success)
                 {
-                    Debug.LogError("Error publishing issue: " + www.error);
+                    throw new InvalidOperationException($"Error publishing issue (HTTP {www.responseCode}): {www.error}");
                 }
-                else
+                // Success logging handled by calling method
+                if (_projectId == BugReportUI.DEMO_PROJECT_ID)
                 {
-                    Debug.Log("Issue published successfully!");
-
-                    if (_projectId == BugReportUI.DEMO_PROJECT_ID)
-                    {
-                        Debug.Log("Demo project published issue: " + Url);
-                    }
+                    _diagnostics?.LogInfo("PublishNow", "Demo project published issue: " + Url);
                 }
             }
         }
-        
-        
-        private class ErrorMessage 
+
+
+        private class ErrorMessage
         {
             public string error;
             public string status;
         }
 
-        private class IssueResponse 
+        private class IssueResponse
         {
             public string id;
             public string token;
             public string url;
         }
 
-        private struct DraftResult {
+        private struct DraftResult
+        {
             public string IssueId;
             public string UpdateIssueAuthToken;
-            public string Error;
             public string Url;
         }
     }
