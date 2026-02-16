@@ -500,11 +500,11 @@ namespace BetaHub
                 string fileName = $"recording-segment-{i}.{segment.FileExtension}";
                 var extraFields = new Dictionary<string, string>
                 {
-                    { "video_clip[position]", i.ToString() },
-                    { "video_clip[merge_group]", mergeGroup },
-                    { "video_clip[merge_total]", segments.Count.ToString() },
+                    { "video_segment[position]", i.ToString() },
+                    { "video_segment[merge_group]", mergeGroup },
+                    { "video_segment[merge_total]", segments.Count.ToString() },
                 };
-                yield return UploadStringAsFile("video_clips", "video_clip[video]", segment.Data, fileName, segment.ContentType, extraFields);
+                yield return UploadStringAsFile("video_segments", "video_segment[video]", segment.Data, fileName, segment.ContentType, extraFields);
             }
         }
 #else
