@@ -502,6 +502,7 @@ namespace BetaHub
                 {
                     { "video_clip[position]", i.ToString() },
                     { "video_clip[merge_group]", mergeGroup },
+                    { "video_clip[merge_total]", segments.Count.ToString() },
                 };
                 yield return UploadStringAsFile("video_clips", "video_clip[video]", segment.Data, fileName, segment.ContentType, extraFields);
             }
