@@ -397,7 +397,11 @@ namespace BetaHub
             if (gameRecorder != null)
             {
                 Debug.Log("Posting video");
+#if UNITY_WEBGL && !UNITY_EDITOR
+                yield return PostVideoSegments(gameRecorder);
+#else
                 yield return PostVideo(gameRecorder);
+#endif
             }
             else
             {
@@ -458,6 +462,51 @@ namespace BetaHub
             }
         }
         
+#if UNITY_WEBGL && !UNITY_EDITOR
+        private IEnumerator PostVideoSegments(GameRecorder gameRecorder)
+        {
+            if (gameRecorder == null) yield break;
+
+            // Stop recording — this sets IsRecording=false and triggers async finalization in JS
+            gameRecorder.StopRecordingAndSaveLastMinute();
+
+            // Wait for JS-side async finalization to complete (encoder flush, muxer finalize)
+            // BetaHubRecorder_IsRecording() returns 0 once the JS side is fully done
+            float timeout = 5f;
+            float elapsed = 0f;
+            while (WebGLRecorderBridge.BetaHubRecorder_IsRecording() != 0 && elapsed < timeout)
+            {
+                yield return null;
+                elapsed += Time.unscaledDeltaTime;
+            }
+
+            if (elapsed >= timeout)
+            {
+                Debug.LogWarning("Timed out waiting for WebGL recording to finalize");
+            }
+
+            var segments = WebGLRecorderBridge.CollectSegments();
+            if (segments == null || segments.Count == 0)
+            {
+                Debug.Log("No video segments to upload");
+                yield break;
+            }
+
+            Debug.Log($"Uploading {segments.Count} video segments");
+            string mergeGroup = System.Guid.NewGuid().ToString();
+            for (int i = 0; i < segments.Count; i++)
+            {
+                var segment = segments[i];
+                string fileName = $"recording-segment-{i}.{segment.FileExtension}";
+                var extraFields = new Dictionary<string, string>
+                {
+                    { "video_clip[position]", i.ToString() },
+                    { "video_clip[merge_group]", mergeGroup },
+                };
+                yield return UploadStringAsFile("video_clips", "video_clip[video]", segment.Data, fileName, segment.ContentType, extraFields);
+            }
+        }
+#else
         private IEnumerator PostVideo(GameRecorder gameRecorder)
         {
             if (gameRecorder != null)
@@ -472,6 +521,7 @@ namespace BetaHub
                 }
             }
         }
+#endif
         
         private IEnumerator UploadFile(string endpoint, string fieldName, string filePath, string contentType)
         {
@@ -525,7 +575,7 @@ namespace BetaHub
             yield return UploadStringAsFile(endpoint, fieldName, fileData, Path.GetFileName(filePath), contentType);
         }
 
-        private IEnumerator UploadStringAsFile(string endpoint, string fieldName, byte[] fileData, string fileName, string contentType)
+        private IEnumerator UploadStringAsFile(string endpoint, string fieldName, byte[] fileData, string fileName, string contentType, Dictionary<string, string> extraFields = null)
         {
             if (fileData == null)
             {
@@ -535,6 +585,14 @@ namespace BetaHub
 
             WWWForm form = new WWWForm();
             form.AddBinaryData(fieldName, fileData, fileName, contentType);
+
+            if (extraFields != null)
+            {
+                foreach (var kvp in extraFields)
+                {
+                    form.AddField(kvp.Key, kvp.Value);
+                }
+            }
 
             string url = $"{_betahubEndpoint}projects/{_projectId}/issues/g-{Id}/{endpoint}";
             using (UnityWebRequest www = UnityWebRequest.Post(url, form))
