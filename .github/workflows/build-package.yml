@@ -1,0 +1,66 @@
+name: Build Package
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        run: |
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            VERSION="${{ github.ref_name }}"
+            VERSION="${VERSION#v}"
+          else
+            VERSION=$(jq -r .version package.json)
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Build zip
+        run: |
+          DEST="staging/Assets/BetaHub Bug Reporter"
+          mkdir -p "$DEST"
+
+          # Copy core directories with their metas
+          for dir in Runtime Editor Plugins; do
+            cp -r "$dir" "$DEST/"
+            cp "$dir.meta" "$DEST/"
+          done
+
+          # Copy Samples (from Samples~ without the tilde)
+          mkdir -p "$DEST/Samples"
+          cp -r "Samples~/ExampleScene" "$DEST/Samples/"
+          cp "Samples~/ExampleScene.meta" "$DEST/Samples/"
+
+          # Copy root files with their metas
+          for file in package.json LICENSE.txt README.md Documentation.html CHANGELOG.md; do
+            cp "$file" "$DEST/"
+            cp "$file.meta" "$DEST/"
+          done
+
+          # Clean up unwanted files
+          find staging -name '.DS_Store' -delete
+
+          # Create zip
+          cd staging
+          zip -r "../BetaHubBugReporter-${{ steps.version.outputs.version }}.zip" .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BetaHubBugReporter-${{ steps.version.outputs.version }}
+          path: BetaHubBugReporter-${{ steps.version.outputs.version }}.zip
+
+      - name: Create release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: BetaHubBugReporter-${{ steps.version.outputs.version }}.zip
