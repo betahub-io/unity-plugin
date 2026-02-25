@@ -75,6 +75,30 @@ When building with IL2CPP scripting backend:
 
 The plugin comes pre-configured with demo project credentials (`DEMO_PROJECT_ID = "pr-5287510306"`) for immediate testing. Reports submitted to the demo project are only visible to the submitter via email links.
 
+## Build Verification
+
+There is a test Unity project at `/Users/piotrkorzuszek/Projects/betahub/betahub-unity-plugin-workspace-2022/BetaHub Unity Plugin` that consumes this plugin. It has a `BuildScript.cs` in its `Assets/` folder (not in this repo — it lives in the workspace project) that can run WebGL builds from the command line. Use this as the primary feedback loop to verify code compiles:
+
+```bash
+/Applications/Unity/Hub/Editor/2022.3.62f3/Unity.app/Contents/MacOS/Unity \
+  -batchmode -nographics -quit \
+  -projectPath "/Users/piotrkorzuszek/Projects/betahub/betahub-unity-plugin-workspace-2022/BetaHub Unity Plugin" \
+  -buildTarget WebGL \
+  -executeMethod BuildScript.BuildWebGL \
+  -logFile /tmp/unity_webgl_build.log 2>&1; echo "EXIT CODE: $?"
+```
+
+To check for compile errors: `grep -i "error CS" /tmp/unity_webgl_build.log | sort -u`
+
+For non-WebGL compilation check (no full build, just opens the project and compiles scripts):
+```bash
+/Applications/Unity/Hub/Editor/2022.3.62f3/Unity.app/Contents/MacOS/Unity \
+  -batchmode -nographics -quit \
+  -projectPath "/Users/piotrkorzuszek/Projects/betahub/betahub-unity-plugin-workspace-2022/BetaHub Unity Plugin" \
+  -buildTarget Android \
+  -logFile /tmp/unity_android_compile.log 2>&1; echo "EXIT CODE: $?"
+```
+
 ## Development Notes
 
 - Do not generate meta files, let Unity do this
