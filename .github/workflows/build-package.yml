@@ -38,7 +38,8 @@ jobs:
           # Copy Samples (from Samples~ without the tilde)
           mkdir -p "$DEST/Samples"
           cp -r "Samples~/ExampleScene" "$DEST/Samples/"
-          cp "Samples~/ExampleScene.meta" "$DEST/Samples/"
+          # Folder meta may not exist; Unity regenerates it on import
+          cp "Samples~/ExampleScene.meta" "$DEST/Samples/" 2>/dev/null || true
 
           # Copy root files with their metas
           for file in package.json LICENSE.txt README.md Documentation.html CHANGELOG.md; do
