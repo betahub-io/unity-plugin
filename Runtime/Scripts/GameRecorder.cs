@@ -1,9 +1,12 @@
 using UnityEngine;
 using System.Collections;
+using System.Collections.Generic;
 using System.IO;
 using UnityEngine.Serialization;
+#if !UNITY_WEBGL || UNITY_EDITOR
 using Unity.Collections;
 using UnityEngine.Rendering;
+#endif
 
 namespace BetaHub
 {
@@ -36,6 +39,7 @@ namespace BetaHub
         [HideInInspector]
         public RenderTexture CaptureRenderTexture;
 
+#if !UNITY_WEBGL || UNITY_EDITOR
         // Optimized: Use RenderTextures for efficient GPU-based capture
         private RenderTexture _captureRT;
         private RenderTexture _fullScreenRT; // For capturing full screen when downscaling
@@ -44,16 +48,32 @@ namespace BetaHub
         // GC Optimization: Reusable buffers to avoid allocations in capture loop
         private byte[] _frameDataBuffer; // Reusable buffer for frame data from GPU
         private byte[] _rgbaDataBuffer; // Reusable buffer for RGBA texture data
+#endif
 
         public bool IsRecording { get; private set; }
-#if ENABLE_IL2CPP && !ENABLE_BETAHUB_FFMPEG
+#if UNITY_WEBGL && !UNITY_EDITOR
+        private bool _webglInitialized;
+        private bool _webglPaused;
+        public bool IsPaused
+        {
+            get { return _webglPaused; }
+            set
+            {
+                _webglPaused = value;
+                WebGLRecorderBridge.BetaHubRecorder_SetPaused(value ? 1 : 0);
+            }
+        }
+#elif ENABLE_IL2CPP && !ENABLE_BETAHUB_FFMPEG
         public bool IsPaused { get; set; }
 #else
         public bool IsPaused { get { return _videoEncoder?.IsPaused ?? false; } set { if (_videoEncoder != null) _videoEncoder.IsPaused = value; } }
 #endif
 
+#if !UNITY_WEBGL || UNITY_EDITOR
         private VideoEncoder _videoEncoder;
+#endif
 
+#if !UNITY_WEBGL || UNITY_EDITOR
         private int _gameWidth;
         private int _gameHeight;
         private int _outputWidth;
@@ -61,6 +81,7 @@ namespace BetaHub
 
         private float _captureInterval;
         private float _nextCaptureTime;
+#endif
 
         public bool DebugMode = false;
 
@@ -69,13 +90,20 @@ namespace BetaHub
 
         void Start()
         {
-#if ENABLE_IL2CPP && !ENABLE_BETAHUB_FFMPEG
+#if UNITY_WEBGL && !UNITY_EDITOR
+            int result = WebGLRecorderBridge.BetaHubRecorder_Init();
+            _webglInitialized = (result != 0);
+            if (!_webglInitialized)
+            {
+                Debug.LogWarning("WebGL video recording initialization failed. Recording will be unavailable.");
+            }
+            IsRecording = false;
+#elif ENABLE_IL2CPP && !ENABLE_BETAHUB_FFMPEG
             Debug.LogWarning("Video recording is disabled in IL2CPP builds without ENABLE_BETAHUB_FFMPEG. " +
                             "Please enable ENABLE_BETAHUB_FFMPEG in your scripting define symbols " +
                             "or disable video recording features in your game.");
             return;
-#endif
-
+#else
             // Check if FFmpeg is available before initializing video recording components
             if (!VideoEncoder.IsFFmpegAvailable())
             {
@@ -126,12 +154,12 @@ namespace BetaHub
 
             // Initialize RGB conversion buffer
             _rgbConversionBuffer = new byte[_outputWidth * _outputHeight * 3]; // RGB24 format
-            
+
             // GC Optimization: Initialize reusable buffers and textures
             int expectedFrameSize = _outputWidth * _outputHeight * 4; // RGBA32 format
             _frameDataBuffer = new byte[expectedFrameSize];
             _rgbaDataBuffer = new byte[expectedFrameSize];
-            
+
             IsRecording = false;
 
             string outputDirectory = Path.Combine(Application.persistentDataPath, "BH_Recording");
@@ -145,10 +173,12 @@ namespace BetaHub
 
             _captureInterval = 1.0f / FrameRate;
             _nextCaptureTime = Time.unscaledTime;
+#endif
         }
 
         void OnDestroy()
         {
+#if !UNITY_WEBGL || UNITY_EDITOR
             // Optimized: Proper cleanup of RenderTextures
             if (_captureRT != null)
             {
@@ -167,6 +197,7 @@ namespace BetaHub
             {
                 _videoEncoder.Dispose();
             }
+#endif
         }
 
         void Update()
@@ -180,10 +211,25 @@ namespace BetaHub
 
         public void StartRecording()
         {
-#if ENABLE_IL2CPP && !ENABLE_BETAHUB_FFMPEG
-            return; // no log here as it would spam the log file
-#endif
+#if UNITY_WEBGL && !UNITY_EDITOR
+            if (!_webglInitialized) return;
 
+            if (IsPaused)
+            {
+                IsPaused = false;
+            }
+            else if (!IsRecording)
+            {
+                WebGLRecorderBridge.BetaHubRecorder_StartRecording();
+                IsRecording = true;
+            }
+            else
+            {
+                Debug.LogWarning("Cannot start recording when already recording.");
+            }
+#elif ENABLE_IL2CPP && !ENABLE_BETAHUB_FFMPEG
+            return; // no log here as it would spam the log file
+#else
             if (_videoEncoder == null)
             {
                 return;
@@ -203,14 +249,23 @@ namespace BetaHub
             {
                 Debug.LogWarning("Cannot start recording when already recording.");
             }
+#endif
         }
 
         public void PauseRecording()
         {
-#if ENABLE_IL2CPP && !ENABLE_BETAHUB_FFMPEG
+#if UNITY_WEBGL && !UNITY_EDITOR
+            if (IsRecording)
+            {
+                IsPaused = true;
+            }
+            else
+            {
+                Debug.LogWarning("Cannot pause recording when not recording.");
+            }
+#elif ENABLE_IL2CPP && !ENABLE_BETAHUB_FFMPEG
             return;
-#endif
-
+#else
             if (_videoEncoder == null)
             {
                 return;
@@ -224,14 +279,20 @@ namespace BetaHub
             {
                 Debug.LogWarning("Cannot pause recording when not recording.");
             }
+#endif
         }
 
         public string StopRecordingAndSaveLastMinute()
         {
-#if ENABLE_IL2CPP && !ENABLE_BETAHUB_FFMPEG
+#if UNITY_WEBGL && !UNITY_EDITOR
+            // On WebGL, video is handled as segments, not a file path.
+            // Segments are collected via WebGLRecorderBridge.CollectSegments() in Issue.PostVideoSegments().
+            IsRecording = false;
+            WebGLRecorderBridge.BetaHubRecorder_StopRecording();
             return null;
-#endif
-
+#elif ENABLE_IL2CPP && !ENABLE_BETAHUB_FFMPEG
+            return null;
+#else
             if (_videoEncoder == null)
             {
                 return null;
@@ -239,8 +300,10 @@ namespace BetaHub
 
             IsRecording = false;
             return _videoEncoder.StopEncoding();
+#endif
         }
 
+#if !UNITY_WEBGL || UNITY_EDITOR
         private IEnumerator CaptureFrames()
         {
             #if BETAHUB_DEBUG
@@ -423,5 +486,6 @@ namespace BetaHub
             source.CopyTo(target);
 
         }
+#endif
     }
 }
