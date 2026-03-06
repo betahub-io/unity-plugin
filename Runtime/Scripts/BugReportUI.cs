@@ -123,6 +123,10 @@ namespace BetaHub
         private List<Issue.ScreenshotFileReference> _screenshots = new List<Issue.ScreenshotFileReference>();
         private List<Issue.LogFileReference> _logFiles = new List<Issue.LogFileReference>();
 
+        // User-defined custom fields: static values and dynamic providers
+        private readonly Dictionary<string, string> _userCustomFields = new Dictionary<string, string>();
+        private readonly Dictionary<string, Func<string>> _userCustomFieldProviders = new Dictionary<string, Func<string>>();
+
         private static Logger _logger;
         
         public static Logger Logger => _logger;
@@ -414,8 +418,8 @@ namespace BetaHub
                 gameRecorder = _gameRecorder;
             }
             
-            // Get geolocation and latency data if providers are available
-            var customFieldsData = new System.Collections.Generic.Dictionary<string, string>();
+            // Collect custom fields: user static fields, then user providers, then built-in providers (last wins)
+            var customFieldsData = CollectUserCustomFields();
             
             // Get geolocation and ASN data
             if (geolocationProvider != null && (geolocationProvider.EnableGeolocation || geolocationProvider.EnableAsnCollection))
@@ -667,6 +671,105 @@ namespace BetaHub
 #endif
         }
 
+        #endregion
+
+        #region Custom Fields API
+
+        /// <summary>
+        /// Sets a custom field value that will be included in every bug report submission.
+        /// The field must exist in your BetaHub project's custom fields configuration
+        /// and be marked as tester_settable.
+        /// </summary>
+        /// <param name="name">The custom field identifier as configured in BetaHub.</param>
+        /// <param name="value">The value to set for this field.</param>
+        public void SetCustomField(string name, string value)
+        {
+            if (string.IsNullOrEmpty(name))
+            {
+                Debug.LogWarning("BugReportUI: Cannot set custom field with null or empty name");
+                return;
+            }
+            if (value == null)
+            {
+                Debug.LogWarning($"BugReportUI: Cannot set custom field '{name}' to null value. Use RemoveCustomField() to remove a field.");
+                return;
+            }
+            _userCustomFields[name] = value;
+        }
+
+        /// <summary>
+        /// Removes a previously set static custom field value.
+        /// </summary>
+        /// <param name="name">The custom field identifier to remove.</param>
+        public void RemoveCustomField(string name)
+        {
+            if (string.IsNullOrEmpty(name))
+                return;
+            _userCustomFields.Remove(name);
+        }
+
+        /// <summary>
+        /// Registers a dynamic custom field provider. The valueGetter function is called
+        /// at submission time to get the current value. If a static field with the same name
+        /// exists, the provider's value takes precedence.
+        /// </summary>
+        /// <param name="name">The custom field identifier as configured in BetaHub.</param>
+        /// <param name="valueGetter">A function that returns the current value for this field.</param>
+        public void RegisterCustomFieldProvider(string name, Func<string> valueGetter)
+        {
+            if (string.IsNullOrEmpty(name))
+            {
+                Debug.LogWarning("BugReportUI: Cannot register custom field provider with null or empty name");
+                return;
+            }
+            if (valueGetter == null)
+            {
+                Debug.LogWarning("BugReportUI: Cannot register custom field provider with null valueGetter");
+                return;
+            }
+            _userCustomFieldProviders[name] = valueGetter;
+        }
+
+        /// <summary>
+        /// Removes a previously registered custom field provider.
+        /// </summary>
+        /// <param name="name">The custom field identifier to unregister.</param>
+        public void UnregisterCustomFieldProvider(string name)
+        {
+            if (string.IsNullOrEmpty(name))
+                return;
+            _userCustomFieldProviders.Remove(name);
+        }
+
+        /// <summary>
+        /// Collects all user-defined custom fields (static values and dynamic providers).
+        /// Provider values take precedence over static values for the same field name.
+        /// </summary>
+        private Dictionary<string, string> CollectUserCustomFields()
+        {
+            var result = new Dictionary<string, string>(_userCustomFields);
+
+            foreach (var kvp in _userCustomFieldProviders)
+            {
+                try
+                {
+                    string value = kvp.Value();
+                    if (value != null)
+                    {
+                        result[kvp.Key] = value;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning($"BugReportUI: Custom field provider '{kvp.Key}' threw an exception: {ex.Message}");
+                }
+            }
+
+            return result;
+        }
+
+        #endregion
+
         private void ValidateProviderCustomFields()
         {
             // Skip validation if we don't have the necessary credentials
@@ -702,7 +805,5 @@ namespace BetaHub
                 customFieldValidator.ValidateCustomFields(SubmitEndpoint, ProjectID, effectiveAuthToken, requiredFields);
             }
         }
-
-        #endregion
     }
 }
