@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.5.1
+
+### Fixed
+- WebGL Video Recording: Fix crash on Safari/WebKit browsers caused by unsupported MediaRecorder mimeType. Added proper fallback chain (webm/vp9 -> webm/vp8 -> webm -> mp4).
+
 ## 1.4.3
 
 ### Fixed

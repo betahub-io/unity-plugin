@@ -198,9 +198,23 @@ var BetaHubRecorderLib = {
 
         // ---- MediaRecorder: start a new segment recorder ----
         startMediaRecorderSegment: function() {
-            var mimeType = 'video/webm; codecs=vp9';
-            if (!MediaRecorder.isTypeSupported(mimeType)) {
-                mimeType = 'video/webm; codecs=vp8';
+            var candidates = [
+                'video/webm; codecs=vp9',
+                'video/webm; codecs=vp8',
+                'video/webm',
+                'video/mp4',
+            ];
+            var mimeType = '';
+            for (var i = 0; i < candidates.length; i++) {
+                if (MediaRecorder.isTypeSupported(candidates[i])) {
+                    mimeType = candidates[i];
+                    break;
+                }
+            }
+            if (!mimeType) {
+                console.error('[BetaHubRecorder] No supported MediaRecorder mimeType found');
+                BetaHubRecorder.isRecording = false;
+                return;
             }
 
             BetaHubRecorder.mrRecorder = new MediaRecorder(BetaHubRecorder.mrStream, {
