@@ -91,7 +91,9 @@ namespace BetaHub
         void Start()
         {
 #if UNITY_WEBGL && !UNITY_EDITOR
-            int result = WebGLRecorderBridge.BetaHubRecorder_Init();
+            int maxW = DownscaleVideo ? MaxVideoWidth : 0;
+            int maxH = DownscaleVideo ? MaxVideoHeight : 0;
+            int result = WebGLRecorderBridge.BetaHubRecorder_Init(FrameRate, maxW, maxH);
             _webglInitialized = (result != 0);
             if (!_webglInitialized)
             {

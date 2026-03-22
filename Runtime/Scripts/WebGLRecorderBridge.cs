@@ -17,7 +17,7 @@ namespace BetaHub
     public static class WebGLRecorderBridge
     {
         [DllImport("__Internal")]
-        public static extern int BetaHubRecorder_Init();
+        public static extern int BetaHubRecorder_Init(int targetFps, int maxWidth, int maxHeight);
 
         [DllImport("__Internal")]
         public static extern void BetaHubRecorder_StartRecording();

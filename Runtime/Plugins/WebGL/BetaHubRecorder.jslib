@@ -15,6 +15,8 @@ var BetaHubRecorderLib = {
         MAX_SEGMENTS: 6,
         SEGMENT_DURATION_MS: 10000,
         TARGET_FPS: 30,
+        MAX_WIDTH: 0,   // 0 = no limit
+        MAX_HEIGHT: 0,  // 0 = no limit
 
         // mp4-muxer references (set during Init)
         Muxer: null,
@@ -31,6 +33,10 @@ var BetaHubRecorderLib = {
         mrRecorder: null,
         mrStream: null,
         mrRotationTimer: null,
+        mrProxyCanvas: null,
+        mrProxyCtx: null,
+        mrProxyVideo: null,
+        mrBlitTimer: null,
         _finalSegmentPending: false,
 
         // ---- Helper: detect best recording method ----
@@ -267,7 +273,61 @@ var BetaHubRecorderLib = {
 
         // ---- MediaRecorder: start recording ----
         startMediaRecorder: function() {
-            BetaHubRecorder.mrStream = BetaHubRecorder.canvas.captureStream(BetaHubRecorder.TARGET_FPS);
+            var sourceCanvas = BetaHubRecorder.canvas;
+            var w = sourceCanvas.width;
+            var h = sourceCanvas.height;
+            var needsDownscale = BetaHubRecorder.MAX_WIDTH > 0 && BetaHubRecorder.MAX_HEIGHT > 0
+                && (w > BetaHubRecorder.MAX_WIDTH || h > BetaHubRecorder.MAX_HEIGHT);
+
+            if (needsDownscale) {
+                // Calculate target dimensions preserving aspect ratio
+                var aspect = w / h;
+                var tw, th;
+                if (w / BetaHubRecorder.MAX_WIDTH > h / BetaHubRecorder.MAX_HEIGHT) {
+                    tw = BetaHubRecorder.MAX_WIDTH;
+                    th = Math.round(tw / aspect);
+                } else {
+                    th = BetaHubRecorder.MAX_HEIGHT;
+                    tw = Math.round(th * aspect);
+                }
+                // Ensure even dimensions
+                tw = tw - (tw % 2);
+                th = th - (th % 2);
+
+                // Pipeline: game canvas -> captureStream -> video element -> drawImage -> proxy canvas -> captureStream
+                // This avoids the WebGL preserveDrawingBuffer issue by reading from a video element
+                var sourceStream = sourceCanvas.captureStream(BetaHubRecorder.TARGET_FPS);
+                var video = document.createElement('video');
+                video.srcObject = sourceStream;
+                video.muted = true;
+                video.playsInline = true;
+                video.play();
+                BetaHubRecorder.mrProxyVideo = video;
+
+                var proxy = document.createElement('canvas');
+                proxy.width = tw;
+                proxy.height = th;
+                proxy.style.position = 'absolute';
+                proxy.style.left = '-9999px';
+                proxy.style.top = '-9999px';
+                document.body.appendChild(proxy);
+                BetaHubRecorder.mrProxyCanvas = proxy;
+                BetaHubRecorder.mrProxyCtx = proxy.getContext('2d');
+
+                // Blit from video to proxy canvas at target FPS
+                var blitInterval = 1000 / BetaHubRecorder.TARGET_FPS;
+                BetaHubRecorder.mrBlitTimer = setInterval(function() {
+                    if (!BetaHubRecorder.isPaused) {
+                        BetaHubRecorder.mrProxyCtx.drawImage(video, 0, 0, tw, th);
+                    }
+                }, blitInterval);
+
+                BetaHubRecorder.mrStream = proxy.captureStream(BetaHubRecorder.TARGET_FPS);
+                console.log('[BetaHubRecorder] MediaRecorder downscaling ' + w + 'x' + h + ' -> ' + tw + 'x' + th);
+            } else {
+                BetaHubRecorder.mrStream = sourceCanvas.captureStream(BetaHubRecorder.TARGET_FPS);
+            }
+
             BetaHubRecorder.stopRequested = false;
 
             BetaHubRecorder.startMediaRecorderSegment();
@@ -305,13 +365,26 @@ var BetaHubRecorderLib = {
                 BetaHubRecorder.mrStream.getTracks().forEach(function(t) { t.stop(); });
                 BetaHubRecorder.mrStream = null;
             }
+            if (BetaHubRecorder.mrBlitTimer) {
+                clearInterval(BetaHubRecorder.mrBlitTimer);
+                BetaHubRecorder.mrBlitTimer = null;
+            }
+            if (BetaHubRecorder.mrProxyVideo) {
+                BetaHubRecorder.mrProxyVideo.srcObject = null;
+                BetaHubRecorder.mrProxyVideo = null;
+            }
+            if (BetaHubRecorder.mrProxyCanvas && BetaHubRecorder.mrProxyCanvas.parentNode) {
+                BetaHubRecorder.mrProxyCanvas.parentNode.removeChild(BetaHubRecorder.mrProxyCanvas);
+            }
+            BetaHubRecorder.mrProxyCanvas = null;
+            BetaHubRecorder.mrProxyCtx = null;
         },
     },
 
     // ==================== Exported functions ====================
 
     BetaHubRecorder_Init__deps: ['$BetaHubRecorder'],
-    BetaHubRecorder_Init: function() {
+    BetaHubRecorder_Init: function(targetFps, maxWidth, maxHeight) {
         if (BetaHubRecorder.initialized) return 1;
 
         // ---- Load mp4-muxer inline (MIT license, https://github.com/Vanilagy/mp4-muxer) ----
@@ -331,6 +404,11 @@ var BetaHubRecorderLib = {
             return 0;
         }
 
+        // Apply config from C#
+        if (targetFps > 0) BetaHubRecorder.TARGET_FPS = targetFps;
+        if (maxWidth > 0) BetaHubRecorder.MAX_WIDTH = maxWidth;
+        if (maxHeight > 0) BetaHubRecorder.MAX_HEIGHT = maxHeight;
+
         // Detect recording method
         BetaHubRecorder.method = BetaHubRecorder.detectMethod();
         if (!BetaHubRecorder.method) {
@@ -339,7 +417,7 @@ var BetaHubRecorderLib = {
         }
 
         BetaHubRecorder.initialized = true;
-        console.log('[BetaHubRecorder] Initialized. Method: ' + BetaHubRecorder.method + ', Canvas: ' + BetaHubRecorder.canvas.width + 'x' + BetaHubRecorder.canvas.height);
+        console.log('[BetaHubRecorder] Initialized. Method: ' + BetaHubRecorder.method + ', Canvas: ' + BetaHubRecorder.canvas.width + 'x' + BetaHubRecorder.canvas.height + ', FPS: ' + BetaHubRecorder.TARGET_FPS + ', MaxRes: ' + (BetaHubRecorder.MAX_WIDTH > 0 ? BetaHubRecorder.MAX_WIDTH + 'x' + BetaHubRecorder.MAX_HEIGHT : 'unlimited'));
         return 1;
     },
 
