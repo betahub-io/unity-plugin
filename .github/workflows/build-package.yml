@@ -54,14 +54,54 @@ jobs:
           cd staging
           zip -r "../BetaHubBugReporter-${{ steps.version.outputs.version }}.zip" .
 
-      - name: Upload artifact
+      - name: Build unitypackage
+        run: |
+          PKGDIR=$(mktemp -d)
+          cd staging
+
+          find . -name '*.meta' -print0 | while IFS= read -r -d '' meta; do
+            guid=$(grep '^guid:' "$meta" | awk '{print $2}' | tr -d '\r')
+            if [ -z "$guid" ]; then
+              echo "WARNING: No GUID in $meta, skipping"
+              continue
+            fi
+
+            mkdir -p "$PKGDIR/$guid"
+
+            # Remove leading ./
+            meta_rel="${meta#./}"
+            # Asset path is the meta path without .meta suffix
+            asset_rel="${meta_rel%.meta}"
+
+            printf '%s' "$asset_rel" > "$PKGDIR/$guid/pathname"
+            cp "$meta" "$PKGDIR/$guid/asset.meta"
+
+            # Only copy asset content for files, not directories
+            if [ -f "$asset_rel" ]; then
+              cp "$asset_rel" "$PKGDIR/$guid/asset"
+            fi
+          done
+
+          cd "$PKGDIR"
+          tar czf "$GITHUB_WORKSPACE/BetaHubBugReporter-${{ steps.version.outputs.version }}.unitypackage" .
+          rm -rf "$PKGDIR"
+
+      - name: Upload zip artifact
         uses: actions/upload-artifact@v4
         with:
           name: BetaHubBugReporter-${{ steps.version.outputs.version }}
           path: BetaHubBugReporter-${{ steps.version.outputs.version }}.zip
 
+      - name: Upload unitypackage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BetaHubBugReporter-${{ steps.version.outputs.version }}-unitypackage
+          path: BetaHubBugReporter-${{ steps.version.outputs.version }}.unitypackage
+
       - name: Create release
         if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v2
         with:
-          files: BetaHubBugReporter-${{ steps.version.outputs.version }}.zip
+          files: |
+            BetaHubBugReporter-${{ steps.version.outputs.version }}.zip
+            BetaHubBugReporter-${{ steps.version.outputs.version }}.unitypackage
