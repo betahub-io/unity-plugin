@@ -87,6 +87,27 @@ The plugin includes a complete example scene (`DeviceAuthExample.cs`) demonstrat
 
 Join our [Discord server](https://discord.gg/g2wpRtG) for support, feedback, and feature requests.
 
+## Programmatic Attachments
+
+You can programmatically attach additional files to bug reports using the following methods on `BugReportUI`:
+
+```csharp
+BugReportUI bugReportUI = FindObjectOfType<BugReportUI>();
+
+// Attach a screenshot (subject to the Include Screenshot toggle)
+bugReportUI.AddScreenshot("/path/to/screenshot.png", removeAfterUpload: true);
+
+// Attach a log file (subject to the Include Player Log toggle)
+bugReportUI.AddLogFile("/path/to/custom.log", removeAfterUpload: true);
+
+// Attach a video file (always uploaded, not subject to the Include Video toggle)
+bugReportUI.AddVideo("/path/to/video.mp4", removeAfterUpload: true);
+```
+
+- `removeAfterUpload`: if `true`, the file will be deleted from disk after successful upload.
+- Screenshots and log files are conditionally included based on their respective UI toggles. Developer-added videos are always uploaded regardless of the toggle state.
+- The backend allows a maximum of 3 video clips per issue (including the automatically recorded video).
+
 ## ⚠️ IL2CPP Support and FFmpeg Video Recording
 
 **If you are building your Unity project with IL2CPP as the scripting backend, special handling is required for video recording to work:**

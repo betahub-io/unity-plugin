@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.6.0
+
+### Added
+- AddVideo API: Developers can now programmatically attach custom video files to bug reports via `BugReportUI.AddVideo()`. Developer-added videos are always uploaded regardless of the Include Video toggle state.
+
 ## 1.5.1
 
 ### Fixed

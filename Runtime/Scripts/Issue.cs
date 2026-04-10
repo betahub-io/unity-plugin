@@ -55,6 +55,12 @@ namespace BetaHub
             public bool removeAfterUpload;
         }
 
+        public struct VideoFileReference
+        {
+            public string path;
+            public bool removeAfterUpload;
+        }
+
         public Issue(string betahubEndpoint, string projectId,
                     string authToken,
                     MessagePanelUI messagePanelUI, ReportSubmittedUI reportSubmittedUI, GameRecorder gameRecorder)
@@ -113,7 +119,8 @@ namespace BetaHub
                                      int releaseId = 0, string releaseLabel = "",
                                      bool autoPublish = false,
                                      Action<string> onAllMediaUploaded = null, MediaUploadType mediaUploadType = MediaUploadType.UploadInBackground, Action<string> onError = null,
-                                     Dictionary<string, string> customFields = null)
+                                     Dictionary<string, string> customFields = null,
+                                     List<VideoFileReference> videos = null)
         {
             if (Id != null)
             {
@@ -160,7 +167,7 @@ namespace BetaHub
                 onAllMediaUploaded?.Invoke(this.Id); // Notify caller with the persistent ID
             }
 
-            yield return PostAllMedia(screenshots, logFiles, _gameRecorder);
+            yield return PostAllMedia(screenshots, logFiles, _gameRecorder, videos);
 
             if (mediaUploadType == MediaUploadType.WaitForUpload)
             {
@@ -365,12 +372,12 @@ namespace BetaHub
             }
         }
 
-        private IEnumerator PostAllMedia(List<ScreenshotFileReference> screenshots, List<LogFileReference> logFiles, GameRecorder gameRecorder)
+        private IEnumerator PostAllMedia(List<ScreenshotFileReference> screenshots, List<LogFileReference> logFiles, GameRecorder gameRecorder, List<VideoFileReference> videos = null)
         {
             if (screenshots != null)
             {
                 Debug.Log("Posting " + screenshots.Count + " screenshots");
-                
+
                 foreach (var screenshot in screenshots)
                 {
                     yield return PostScreenshot(screenshot);
@@ -380,7 +387,7 @@ namespace BetaHub
             {
                 Debug.Log("No screenshots to post");
             }
-            
+
             if (logFiles != null)
             {
                 Debug.Log("Posting " + logFiles.Count + " log files");
@@ -406,6 +413,15 @@ namespace BetaHub
             else
             {
                 Debug.Log("No video to post");
+            }
+
+            if (videos != null && videos.Count > 0)
+            {
+                Debug.Log("Posting " + videos.Count + " additional video files");
+                foreach (var video in videos)
+                {
+                    yield return PostVideoFile(video);
+                }
             }
         }
 
@@ -523,6 +539,19 @@ namespace BetaHub
             }
         }
 #endif
+
+        private IEnumerator PostVideoFile(VideoFileReference video)
+        {
+            if (File.Exists(video.path))
+            {
+                yield return UploadFile("video_clips", "video_clip[video]", video.path, "video/mp4");
+
+                if (video.removeAfterUpload)
+                {
+                    File.Delete(video.path);
+                }
+            }
+        }
         
         private IEnumerator UploadFile(string endpoint, string fieldName, string filePath, string contentType)
         {

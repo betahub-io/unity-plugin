@@ -122,6 +122,7 @@ namespace BetaHub
 
         private List<Issue.ScreenshotFileReference> _screenshots = new List<Issue.ScreenshotFileReference>();
         private List<Issue.LogFileReference> _logFiles = new List<Issue.LogFileReference>();
+        private List<Issue.VideoFileReference> _videos = new List<Issue.VideoFileReference>();
 
         // User-defined custom fields: static values and dynamic providers
         private readonly Dictionary<string, string> _userCustomFields = new Dictionary<string, string>();
@@ -377,6 +378,13 @@ namespace BetaHub
             _logFiles.Add(new Issue.LogFileReference { path = path, removeAfterUpload = removeAfterUpload });
         }
 
+        // Adds a video file to be uploaded with the next bug report.
+        // The video is always uploaded regardless of the Include Video toggle state.
+        public void AddVideo(string path, bool removeAfterUpload)
+        {
+            _videos.Add(new Issue.VideoFileReference { path = path, removeAfterUpload = removeAfterUpload });
+        }
+
         void SubmitBugReport()
         {
             StartCoroutine(SubmitBugReportCoroutine());
@@ -522,6 +530,9 @@ namespace BetaHub
             };
 
 
+            // Developer-added videos are always included, regardless of toggle state
+            List<Issue.VideoFileReference> videos = _videos.Count > 0 ? new List<Issue.VideoFileReference>(_videos) : null;
+
             CoroutineUtils.StartThrowingCoroutine(this,
             issue.PostIssue(description, steps, screenshots, logFiles, ReleaseId, ReleaseLabel, false,
                 (issueId) => // successful post
@@ -532,6 +543,7 @@ namespace BetaHub
                     // Clear lists after successful upload
                     _screenshots.Clear();
                     _logFiles.Clear();
+                    _videos.Clear();
 
                     // Check if user is authenticated via device auth
                     if (IsUserAuthenticatedViaDeviceAuth())
@@ -554,7 +566,8 @@ namespace BetaHub
                 {
                     onIssueError(new ErrorMessage { error = error });
                 },
-                customFieldsData.Count > 0 ? customFieldsData : null
+                customFieldsData.Count > 0 ? customFieldsData : null,
+                videos
             ),
             (ex) => // done
             {
