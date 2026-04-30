@@ -35,6 +35,10 @@ namespace BetaHub
         [Tooltip("If enabled, mirrors the video vertically (flips it upside down).")]
         public bool MirrorVertically = false;
 
+        [Header("Audio Recording")]
+        [Tooltip("Audio capture source. 'None' disables audio. 'UnityAudioListener' captures Unity's audio output. 'Wwise' captures Wwise audio output (requires BETAHUB_WWISE scripting define).")]
+        public AudioCaptureMode AudioCapture = AudioCaptureMode.None;
+
         // set this to a render texture to capture a specific render texture instead of the screen
         [HideInInspector]
         public RenderTexture CaptureRenderTexture;
@@ -71,6 +75,7 @@ namespace BetaHub
 
 #if !UNITY_WEBGL || UNITY_EDITOR
         private VideoEncoder _videoEncoder;
+        private IAudioCaptureBackend _audioCapture;
 #endif
 
 #if !UNITY_WEBGL || UNITY_EDITOR
@@ -171,6 +176,9 @@ namespace BetaHub
             // Initialize the video encoder with the output resolution
             _videoEncoder = new VideoEncoder(_outputWidth, _outputHeight, FrameRate, RecordingDuration, outputDirectory, MirrorVertically);
 
+            // Initialize audio capture backend
+            InitializeAudioCapture();
+
             _captureInterval = 1.0f / FrameRate;
             _nextCaptureTime = Time.unscaledTime;
 #endif
@@ -179,6 +187,12 @@ namespace BetaHub
         void OnDestroy()
         {
 #if !UNITY_WEBGL || UNITY_EDITOR
+            if (_audioCapture != null && _audioCapture.IsCapturing)
+            {
+                _audioCapture.StopCapture();
+            }
+            _audioCapture = null;
+
             // Optimized: Proper cleanup of RenderTextures
             if (_captureRT != null)
             {
@@ -242,6 +256,10 @@ namespace BetaHub
             else if (!IsRecording)
             {
                 _videoEncoder.StartEncoding();
+                if (_audioCapture != null)
+                {
+                    _audioCapture.StartCapture(_videoEncoder.OutputDirectory);
+                }
                 IsRecording = true;
                 StartCoroutine(CaptureFrames());
             }
@@ -299,11 +317,68 @@ namespace BetaHub
             }
 
             IsRecording = false;
-            return _videoEncoder.StopEncoding();
+
+            // Stop video first so segments are finalized
+            _videoEncoder.FinalizeRecording();
+
+            // Measure the gap between video stop and audio stop.
+            // Audio keeps capturing during this gap, creating a tail
+            // that must be compensated for during the merge.
+            var stopwatch = new System.Diagnostics.Stopwatch();
+            stopwatch.Start();
+
+            string audioFilePath = null;
+            if (_audioCapture != null && _audioCapture.IsCapturing)
+            {
+                audioFilePath = _audioCapture.StopCapture();
+            }
+
+            stopwatch.Stop();
+            float audioTailSeconds = (float)stopwatch.Elapsed.TotalSeconds;
+
+            return _videoEncoder.MergeAndFinish(audioFilePath, audioTailSeconds);
 #endif
         }
 
 #if !UNITY_WEBGL || UNITY_EDITOR
+        private void InitializeAudioCapture()
+        {
+            if (AudioCapture == AudioCaptureMode.None)
+                return;
+
+            if (AudioCapture == AudioCaptureMode.UnityAudioListener)
+            {
+                var listener = FindObjectOfType<AudioListener>();
+                if (listener != null)
+                {
+                    var capture = listener.gameObject.GetComponent<UnityAudioCapture>();
+                    if (capture == null)
+                    {
+                        capture = listener.gameObject.AddComponent<UnityAudioCapture>();
+                    }
+                    capture.Initialize(RecordingDuration);
+                    _audioCapture = capture;
+                }
+                else
+                {
+                    UnityEngine.Debug.LogWarning("BetaHub: No AudioListener found in scene. Unity audio capture disabled.");
+                }
+            }
+            else if (AudioCapture == AudioCaptureMode.Wwise)
+            {
+#if BETAHUB_WWISE
+                var wwiseCapture = new WwiseAudioCapture();
+                if (wwiseCapture.Initialize())
+                {
+                    _audioCapture = wwiseCapture;
+                }
+#else
+                UnityEngine.Debug.LogWarning("BetaHub: Wwise audio capture requires the BETAHUB_WWISE scripting define symbol. " +
+                    "Add it in Player Settings > Scripting Define Symbols.");
+#endif
+            }
+        }
+
         private IEnumerator CaptureFrames()
         {
             #if BETAHUB_DEBUG
