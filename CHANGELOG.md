@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.7.0
+
+### Added
+- Client event telemetry: The plugin now reports upload lifecycle events (started, completed, failed, recording errors) to the backend for improved diagnostics.
+
 ## 1.6.0
 
 ### Added
