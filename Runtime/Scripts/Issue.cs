@@ -374,6 +374,8 @@ namespace BetaHub
 
         private IEnumerator PostAllMedia(List<ScreenshotFileReference> screenshots, List<LogFileReference> logFiles, GameRecorder gameRecorder, List<VideoFileReference> videos = null)
         {
+            PostClientEvent("info", "upload_started", "Media upload started");
+
             if (screenshots != null)
             {
                 Debug.Log("Posting " + screenshots.Count + " screenshots");
@@ -423,6 +425,8 @@ namespace BetaHub
                     yield return PostVideoFile(video);
                 }
             }
+
+            PostClientEvent("success", "upload_completed", "Media upload completed");
         }
 
         private string GetPostIssueUrl()
@@ -499,12 +503,14 @@ namespace BetaHub
             if (elapsed >= timeout)
             {
                 Debug.LogWarning("Timed out waiting for WebGL recording to finalize");
+                PostClientEvent("warning", "recording_error", "Timed out waiting for WebGL recording to finalize");
             }
 
             var segments = WebGLRecorderBridge.CollectSegments();
             if (segments == null || segments.Count == 0)
             {
                 Debug.Log("No video segments to upload");
+                PostClientEvent("warning", "recording_error", "No video segments available after recording");
                 yield break;
             }
 
@@ -535,6 +541,10 @@ namespace BetaHub
 
                     // Delete the video file after uploading
                     File.Delete(videoPath);
+                }
+                else
+                {
+                    PostClientEvent("warning", "recording_error", "Video recording produced no output file");
                 }
             }
         }
@@ -567,6 +577,7 @@ namespace BetaHub
                     if (fileData == null)
                     {
                         Debug.LogError("Failed to read log file data from Logger instance");
+                        PostClientEvent("error", "upload_failed", "Failed to read log file from Logger instance");
                         yield break;
                     }
                 }
@@ -581,6 +592,7 @@ namespace BetaHub
                     catch (Exception ex)
                     {
                         Debug.LogError($"Error reading file {filePath}: {ex.Message}");
+                        PostClientEvent("error", "upload_failed", $"Failed to read log file {Path.GetFileName(filePath)}: {ex.Message}");
                         BugReportUI.ResumeLogger();
                         yield break;
                     }
@@ -598,6 +610,7 @@ namespace BetaHub
                 catch (Exception ex)
                 {
                     Debug.LogError($"Error reading file {filePath}: {ex.Message}");
+                    PostClientEvent("error", "upload_failed", $"Failed to read file {Path.GetFileName(filePath)}: {ex.Message}");
                     yield break;
                 }
             }
@@ -636,6 +649,7 @@ namespace BetaHub
                 if (www.result != UnityWebRequest.Result.Success)
                 {
                     Debug.LogError($"Error uploading {fileName}: {www.error}");
+                    PostClientEvent("error", "upload_failed", $"Failed to upload {fileName}: {www.error}");
                 }
                 else
                 {
@@ -700,6 +714,25 @@ namespace BetaHub
             public string UpdateIssueAuthToken;
             public string Error;
             public string Url;
+        }
+
+        private void PostClientEvent(string level, string eventType, string message)
+        {
+            if (string.IsNullOrEmpty(Id)) return;
+
+            WWWForm form = new WWWForm();
+            form.AddField("client_event[level]", level);
+            form.AddField("client_event[event_type]", eventType);
+            form.AddField("client_event[message]", message);
+
+            string url = $"{_betahubEndpoint}projects/{_projectId}/issues/g-{Id}/client_events";
+            UnityWebRequest www = UnityWebRequest.Post(url, form);
+            www.SetRequestHeader("Authorization", "FormUser " + _createIssueAuthToken);
+            www.SetRequestHeader("BetaHub-Project-ID", _projectId);
+            www.SetRequestHeader("Accept", "application/json");
+
+            var op = www.SendWebRequest();
+            op.completed += _ => { www.Dispose(); };
         }
     }
 }
