@@ -197,6 +197,8 @@ namespace BetaHub
                 long framesWritten = 0;
                 double firstFrameTime = -1;
                 double lastFrameTime = 0;
+                double totalPausedTime = 0;
+                double pauseStartTime = -1;
                 Stopwatch stopwatch = new Stopwatch();
                 stopwatch.Start();
                 float nextFrameTime = 0f;
@@ -214,6 +216,12 @@ namespace BetaHub
                         {
                             if (lastFrame != null && !IsPaused)
                             {
+                                if (pauseStartTime >= 0)
+                                {
+                                    totalPausedTime += stopwatch.Elapsed.TotalSeconds - pauseStartTime;
+                                    pauseStartTime = -1;
+                                }
+
                                 int result = ffmpegProcess.WriteStdin(lastFrame);
                                 if (result < 0)
                                 {
@@ -226,6 +234,10 @@ namespace BetaHub
                                     if (firstFrameTime < 0) firstFrameTime = now;
                                     lastFrameTime = now;
                                 }
+                            }
+                            else if (IsPaused && pauseStartTime < 0)
+                            {
+                                pauseStartTime = stopwatch.Elapsed.TotalSeconds;
                             }
                         }
                         catch (System.Exception e)
@@ -248,7 +260,7 @@ namespace BetaHub
 
                 stopwatch.Stop();
                 _totalFramesWritten = framesWritten;
-                _wallClockDuration = firstFrameTime >= 0 ? (lastFrameTime - firstFrameTime) : 0;
+                _wallClockDuration = firstFrameTime >= 0 ? (lastFrameTime - firstFrameTime - totalPausedTime) : 0;
 
                 _stopRequest = false; // reset the flag
 
