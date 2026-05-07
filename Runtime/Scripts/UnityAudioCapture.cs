@@ -9,6 +9,7 @@ namespace BetaHub
         private CircularAudioBuffer _buffer;
         private string _outputDirectory;
         private int _durationSeconds;
+        private volatile bool _paused;
 
         public bool IsCapturing { get; private set; }
 
@@ -24,6 +25,7 @@ namespace BetaHub
             int channels = GetChannelCount(AudioSettings.speakerMode);
 
             _buffer = new CircularAudioBuffer(sampleRate, channels, _durationSeconds);
+            _paused = false;
             IsCapturing = true;
         }
 
@@ -43,9 +45,19 @@ namespace BetaHub
             return wavPath;
         }
 
+        public void PauseCapture()
+        {
+            _paused = true;
+        }
+
+        public void ResumeCapture()
+        {
+            _paused = false;
+        }
+
         void OnAudioFilterRead(float[] data, int channels)
         {
-            if (IsCapturing && _buffer != null)
+            if (IsCapturing && !_paused && _buffer != null)
             {
                 _buffer.Write(data, data.Length);
             }

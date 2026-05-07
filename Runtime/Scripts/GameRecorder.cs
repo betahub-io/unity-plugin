@@ -252,6 +252,10 @@ namespace BetaHub
             if (IsPaused)
             {
                 IsPaused = false; // this will unpause
+                if (_audioCapture != null)
+                {
+                    _audioCapture.ResumeCapture();
+                }
             }
             else if (!IsRecording)
             {
@@ -292,6 +296,10 @@ namespace BetaHub
             if (IsRecording)
             {
                 IsPaused = true;
+                if (_audioCapture != null)
+                {
+                    _audioCapture.PauseCapture();
+                }
             }
             else
             {
