@@ -2132,6 +2132,7 @@ GameObject:
   - component: {fileID: 3630024247677609241}
   - component: {fileID: 7122726013767127902}
   - component: {fileID: 6576611976568681268}
+  - component: {fileID: 7253450976317061318}
   m_Layer: 5
   m_Name: BugReportingFormCanvas
   m_TagString: Untagged
@@ -2251,10 +2252,31 @@ MonoBehaviour:
   SubmitEndpoint: https://app.betahub.io
   ProjectID: pr-5287510306
   AuthToken: tkn-15e6fbc1470613d5cfd2199edbde52157379b8c6dcd365441eabf8fea62d76a7
+  deviceAuthManager: {fileID: 0}
+  geolocationProvider: {fileID: 0}
+  latencyProvider: {fileID: 0}
   DefaultEmailAddress: 
-  ShortcutKey: 293
+  ShortcutAction:
+    m_Name: BugReportShortcut
+    m_Type: 0
+    m_ExpectedControlType: 
+    m_Id: 07c22c39-4d24-40cd-959d-e264aa8f895d
+    m_Processors: 
+    m_Interactions: 
+    m_SingletonActionBindings:
+    - m_Name: 
+      m_Id: a55a2f5d-224d-4897-826c-e3c3f8944562
+      m_Path: <Keyboard>/f12
+      m_Interactions: 
+      m_Processors: 
+      m_Groups: 
+      m_Action: BugReportShortcut
+      m_Flags: 0
+    m_Flags: 0
   IncludePlayerLog: 1
   IncludeVideo: 1
+  ReleaseId: 0
+  ReleaseLabel: 
   OnBugReportWindowShown:
     m_PersistentCalls:
       m_Calls: []
@@ -2292,6 +2314,11 @@ MonoBehaviour:
   DownscaleVideo: 1
   MaxVideoHeight: 768
   MaxVideoWidth: 1280
+  RenderFPSOverlay: 1
+  RenderCursor: 0
+  MirrorVertically: 0
+  AudioCapture: 1
+  CaptureRenderTexture: {fileID: 0}
   DebugMode: 0
 --- !u!114 &7122726013767127902
 MonoBehaviour:
@@ -2328,6 +2355,19 @@ MonoBehaviour:
   m_InputActionsPerSecond: 10
   m_RepeatDelay: 0.5
   m_ForceModuleActive: 0
+--- !u!114 &7253450976317061318
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3630024247677609232}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5d6a9c54d6bfc4c33a5a56b11dd0143e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  TimeoutSeconds: 5
 --- !u!1 &3630024247696638876
 GameObject:
   m_ObjectHideFlags: 0

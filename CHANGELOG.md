@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.8.0
+
+### Added
+- Audio recording: Bug reports now include audio alongside video. Supports Unity's built-in audio (via AudioListener) and Wwise (requires `BETAHUB_WWISE` scripting define). Audio capture is enabled by default using Unity AudioListener.
+- Audio pause/resume: Audio recording automatically pauses when the bug report UI is shown and resumes when dismissed, keeping audio in sync with video.
+
+### Improved
+- HTTP error logging now includes the server response body for easier debugging.
+
 ## 1.7.0
 
 ### Added

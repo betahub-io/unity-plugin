@@ -37,7 +37,7 @@ namespace BetaHub
 
         [Header("Audio Recording")]
         [Tooltip("Audio capture source. 'None' disables audio. 'UnityAudioListener' captures Unity's audio output. 'Wwise' captures Wwise audio output (requires BETAHUB_WWISE scripting define).")]
-        public AudioCaptureMode AudioCapture = AudioCaptureMode.None;
+        public AudioCaptureMode AudioCapture = AudioCaptureMode.UnityAudioListener;
 
         // set this to a render texture to capture a specific render texture instead of the screen
         [HideInInspector]

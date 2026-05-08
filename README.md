@@ -27,6 +27,7 @@ For continued use and more extensive testing, we strongly recommend creating you
 - **In-game bug submission form**: Easily submit bugs with a form that only asks for a description and steps to reproduce. Titles, priority, and tags are handled by BetaHub's AI algorithms.
 - **Device authentication**: Optional OAuth-like authentication flow that allows users to sign in via web browser. Authenticated users can submit bug reports without providing email addresses.
 - **Video recording**: Record a video of the bug happening in-game. The video is automatically recorded and attached to the bug report.
+- **Audio recording**: Record in-game audio alongside video. Supports Unity's built-in audio system and Wwise. Audio is automatically synced with video and pauses/resumes with the bug report UI.
 - **Log collection**: Collect logs from the game and attach them to the bug report. By default, Unity logs are collected, but you can also add custom logs.
 - **Screenshot of the game**: A screenshot of the game is automatically attached to the bug report when the user submits a bug.
 - **Geolocation and latency data**: Optional components for collecting user's country information and network latency measurements to help with debugging location-specific and network-related issues.
@@ -107,6 +108,17 @@ bugReportUI.AddVideo("/path/to/video.mp4", removeAfterUpload: true);
 - `removeAfterUpload`: if `true`, the file will be deleted from disk after successful upload.
 - Screenshots and log files are conditionally included based on their respective UI toggles. Developer-added videos are always uploaded regardless of the toggle state.
 - The backend allows a maximum of 3 video clips per issue (including the automatically recorded video).
+
+## Audio Recording
+
+Audio recording is enabled by default using Unity's AudioListener. The plugin supports two audio capture backends:
+
+- **Unity AudioListener** (default): Captures all audio output from Unity's audio system. No additional setup required.
+- **Wwise**: Captures audio from the Wwise sound engine. Requires the `BETAHUB_WWISE` scripting define symbol in Player Settings > Scripting Define Symbols.
+
+You can change the audio capture mode in the **GameRecorder** component's inspector under "Audio Recording". Set it to `None` to disable audio recording entirely.
+
+Audio recording automatically pauses when the bug report form is visible and resumes when it is dismissed, ensuring audio stays in sync with video.
 
 ## ⚠️ IL2CPP Support and FFmpeg Video Recording
 
