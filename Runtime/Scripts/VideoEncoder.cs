@@ -55,6 +55,10 @@ namespace BetaHub
         private volatile bool _stopRequest = false;
         private volatile bool _stopRequestHandled = false;
 
+        // Drift measurement: tracks actual frames written and wall-clock duration
+        private long _totalFramesWritten;
+        private double _wallClockDuration;
+
         public VideoEncoder(int width, int height, int frameRate, int recordingDurationSeconds, string baseOutputDir = "Recording", bool mirrorVertically = false)
         {
             this.width = width;
@@ -190,6 +194,11 @@ namespace BetaHub
         {
             try
             {
+                long framesWritten = 0;
+                double firstFrameTime = -1;
+                double lastFrameTime = 0;
+                double totalPausedTime = 0;
+                double pauseStartTime = -1;
                 Stopwatch stopwatch = new Stopwatch();
                 stopwatch.Start();
                 float nextFrameTime = 0f;
@@ -207,11 +216,28 @@ namespace BetaHub
                         {
                             if (lastFrame != null && !IsPaused)
                             {
+                                if (pauseStartTime >= 0)
+                                {
+                                    totalPausedTime += stopwatch.Elapsed.TotalSeconds - pauseStartTime;
+                                    pauseStartTime = -1;
+                                }
+
                                 int result = ffmpegProcess.WriteStdin(lastFrame);
                                 if (result < 0)
                                 {
                                     UnityEngine.Debug.LogError("Error writing frame data to FFmpeg");
                                 }
+                                else
+                                {
+                                    framesWritten++;
+                                    double now = stopwatch.Elapsed.TotalSeconds;
+                                    if (firstFrameTime < 0) firstFrameTime = now;
+                                    lastFrameTime = now;
+                                }
+                            }
+                            else if (IsPaused && pauseStartTime < 0)
+                            {
+                                pauseStartTime = stopwatch.Elapsed.TotalSeconds;
                             }
                         }
                         catch (System.Exception e)
@@ -231,6 +257,10 @@ namespace BetaHub
                     // Sleep for a short time to avoid busy-waiting
                     System.Threading.Thread.Sleep(1);
                 }
+
+                stopwatch.Stop();
+                _totalFramesWritten = framesWritten;
+                _wallClockDuration = firstFrameTime >= 0 ? (lastFrameTime - firstFrameTime - totalPausedTime) : 0;
 
                 _stopRequest = false; // reset the flag
 
@@ -254,15 +284,23 @@ namespace BetaHub
             }
         }
 
-        public string StopEncoding()
+        public string OutputDirectory => outputDir;
+
+        public string StopEncoding(string audioFilePath = null)
+        {
+            FinalizeRecording();
+            return MergeAndFinish(audioFilePath);
+        }
+
+        public void FinalizeRecording()
         {
             SendStopRequestAndWait();
+        }
 
-            string mergedFilePath = MergeSegments();
-
-            // Clean up old segments
+        public string MergeAndFinish(string audioFilePath = null, float audioTailSeconds = 0f)
+        {
+            string mergedFilePath = MergeSegments(audioFilePath, audioTailSeconds);
             CleanupSegments();
-
             return mergedFilePath;
         }
 
@@ -289,14 +327,14 @@ namespace BetaHub
             }
         }
 
-        private string MergeSegments()
+        private string MergeSegments(string audioFilePath = null, float audioTailSeconds = 0f)
         {
             string ffmpegPath = GetFfmpegPath();
             if (ffmpegPath == null)
             {
                 return null;
             }
-            
+
             var directoryInfo = new DirectoryInfo(outputDir);
             var files = directoryInfo.GetFiles("segment_*.mp4")
                                      .OrderBy(f => f.Name)
@@ -305,41 +343,150 @@ namespace BetaHub
 
             string mergedFilePath = Path.Join(outputDir, $"Gameplay_{System.DateTime.Now:yyyyMMdd_HHmmss}.mp4");
 
-            // Use FFmpeg to concatenate the segments into one file
             string concatFilePath = Path.Combine(outputDir, "concat.txt");
             File.WriteAllLines(concatFilePath, files.Select(f => $"file '{f.FullName.Replace("'", @"'\''")}'")); // Properly escape single quotes
 
+            bool hasAudio = audioFilePath != null && File.Exists(audioFilePath);
+
             #if ENABLE_IL2CPP && ENABLE_BETAHUB_FFMPEG
-            var mergeProcess = new NativeProcessWrapper();
+            IProcessWrapper CreateProcessWrapper() => new NativeProcessWrapper();
             #elif !ENABLE_IL2CPP
-            var mergeProcess = new DotNetProcessWrapper();
+            IProcessWrapper CreateProcessWrapper() => new DotNetProcessWrapper();
             #else
             return null;
             #endif
 
             #if !ENABLE_IL2CPP || ENABLE_BETAHUB_FFMPEG
-            string[] mergeArguments = new string[]
+            if (!hasAudio)
             {
-                "-f", "concat",
-                "-safe", "0",
-                "-i", concatFilePath,
-                "-c", "copy",
-                mergedFilePath
-            };
-            
-            mergeProcess.Start(ffmpegPath, mergeArguments);
-            mergeProcess.WaitForExit();
+                var mergeProcess = CreateProcessWrapper();
+                mergeProcess.Start(ffmpegPath, new[] {
+                    "-f", "concat", "-safe", "0", "-i", concatFilePath,
+                    "-c", "copy", mergedFilePath
+                });
+                mergeProcess.WaitForExit();
 
-            if (mergeProcess.ExitCode != 0)
+                if (mergeProcess.ExitCode != 0)
+                {
+                    UnityEngine.Debug.LogError("Error during merging segments.");
+                    UnityEngine.Debug.LogError(string.Join("\n", mergeProcess.ReadStderr()));
+                }
+            }
+            else
             {
-                UnityEngine.Debug.LogError("Error during merging segments.");
-                UnityEngine.Debug.LogError(string.Join("\n", mergeProcess.ReadStderr())); // Log collected stderr messages
+                // Two-pass approach for precise audio-video sync:
+                // 1. Concatenate video segments
+                // 2. Probe exact video duration
+                // 3. Mux with audio trimmed to match
+
+                string tempVideoPath = Path.Combine(outputDir, "temp_concat.mp4");
+
+                var concatProcess = CreateProcessWrapper();
+                concatProcess.Start(ffmpegPath, new[] {
+                    "-f", "concat", "-safe", "0", "-i", concatFilePath,
+                    "-c", "copy", tempVideoPath
+                });
+                concatProcess.WaitForExit();
+
+                if (concatProcess.ExitCode != 0)
+                {
+                    UnityEngine.Debug.LogError("Error during concatenating segments.");
+                    UnityEngine.Debug.LogError(string.Join("\n", concatProcess.ReadStderr()));
+                    File.Delete(concatFilePath);
+                    return null;
+                }
+
+                float videoDuration = ProbeMediaDuration(ffmpegPath, tempVideoPath);
+                if (videoDuration <= 0)
+                {
+                    videoDuration = files.Length * segmentLength;
+                    UnityEngine.Debug.LogWarning($"Could not probe video duration, using estimate: {videoDuration}s");
+                }
+
+                // Compensate for the audio tail: audio kept recording for audioTailSeconds
+                // after video stopped. We skip that tail so both streams end at the same point.
+                float sseofValue = videoDuration + audioTailSeconds;
+
+                // Drift correction: video frames are paced by a software Stopwatch,
+                // but audio runs on the hardware clock. Compute the ratio to stretch
+                // audio to match the video's actual playback speed.
+                double videoNominalDuration = (double)_totalFramesWritten / frameRate;
+                double atempo = 1.0;
+                if (videoNominalDuration > 0 && _wallClockDuration > 0)
+                {
+                    atempo = _wallClockDuration / videoNominalDuration;
+                    atempo = System.Math.Max(0.5, System.Math.Min(2.0, atempo));
+                }
+
+                #if BETAHUB_DEBUG
+                UnityEngine.Debug.Log($"Video duration: {videoDuration:F2}s, audio tail: {audioTailSeconds:F3}s, sseof: {sseofValue:F2}s");
+                UnityEngine.Debug.Log($"Drift correction: {_totalFramesWritten} frames in {_wallClockDuration:F2}s wall-clock, nominal {videoNominalDuration:F2}s, atempo: {atempo:F6}");
+                #endif
+
+                var muxArgs = new List<string> {
+                    "-i", tempVideoPath,
+                    "-sseof", $"-{sseofValue:F2}",
+                    "-i", audioFilePath,
+                    "-c:v", "copy", "-c:a", "aac", "-b:a", "128k"
+                };
+
+                if (System.Math.Abs(atempo - 1.0) > 0.0001)
+                {
+                    muxArgs.AddRange(new[] { "-af", $"atempo={atempo:F6}" });
+                }
+
+                muxArgs.Add("-shortest");
+                muxArgs.Add(mergedFilePath);
+
+                var muxProcess = CreateProcessWrapper();
+                muxProcess.Start(ffmpegPath, muxArgs.ToArray());
+                muxProcess.WaitForExit();
+
+                if (muxProcess.ExitCode != 0)
+                {
+                    UnityEngine.Debug.LogError("Error during audio-video muxing.");
+                    UnityEngine.Debug.LogError(string.Join("\n", muxProcess.ReadStderr()));
+                }
+
+                try { File.Delete(tempVideoPath); } catch (System.Exception) { }
+                try { File.Delete(audioFilePath); } catch (System.Exception) { }
             }
 
-            File.Delete(concatFilePath); // Clean up the concat file
+            File.Delete(concatFilePath);
             #endif
 
             return mergedFilePath;
+        }
+
+        private float ProbeMediaDuration(string ffmpegPath, string filePath)
+        {
+            #if ENABLE_IL2CPP && ENABLE_BETAHUB_FFMPEG
+            var process = new NativeProcessWrapper();
+            #elif !ENABLE_IL2CPP
+            var process = new DotNetProcessWrapper();
+            #else
+            return 0;
+            #endif
+
+            #if !ENABLE_IL2CPP || ENABLE_BETAHUB_FFMPEG
+            process.Start(ffmpegPath, new[] { "-i", filePath });
+            process.WaitForExit();
+
+            string stderr = string.Join("\n", process.ReadStderr());
+            var match = System.Text.RegularExpressions.Regex.Match(stderr,
+                @"Duration:\s*(\d+):(\d+):(\d+)\.(\d+)");
+
+            if (match.Success)
+            {
+                int hours = int.Parse(match.Groups[1].Value);
+                int minutes = int.Parse(match.Groups[2].Value);
+                int seconds = int.Parse(match.Groups[3].Value);
+                int centiseconds = int.Parse(match.Groups[4].Value);
+                return hours * 3600f + minutes * 60f + seconds + centiseconds / 100f;
+            }
+            #endif
+
+            return 0;
         }
 
         private void RemoveAllSegments()

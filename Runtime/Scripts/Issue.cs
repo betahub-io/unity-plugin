@@ -202,7 +202,7 @@ namespace BetaHub
 
                 if (www.result != UnityWebRequest.Result.Success)
                 {
-                    Debug.LogError("Error submitting email: " + www.error);
+                    Debug.LogError("Error submitting email: " + www.error + "\nResponse body: " + www.downloadHandler?.text);
                 }
             }
         }
@@ -648,7 +648,7 @@ namespace BetaHub
 
                 if (www.result != UnityWebRequest.Result.Success)
                 {
-                    Debug.LogError($"Error uploading {fileName}: {www.error}");
+                    Debug.LogError($"Error uploading {fileName}: {www.error}\nResponse body: {www.downloadHandler?.text}");
                     PostClientEvent("error", "upload_failed", $"Failed to upload {fileName}: {www.error}");
                 }
                 else
@@ -681,7 +681,7 @@ namespace BetaHub
 
                 if (www.result != UnityWebRequest.Result.Success)
                 {
-                    Debug.LogError("Error publishing issue: " + www.error);
+                    Debug.LogError("Error publishing issue: " + www.error + "\nResponse body: " + www.downloadHandler?.text);
                 }
                 else
                 {
