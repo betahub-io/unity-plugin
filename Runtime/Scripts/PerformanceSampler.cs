@@ -5,6 +5,7 @@ using System.IO;
 using System.Text;
 using System;
 using System.Diagnostics;
+using System.Globalization;
 
 namespace BetaHub
 {
@@ -101,7 +102,11 @@ namespace BetaHub
 
             foreach (var sample in samples)
             {
-                sb.AppendLine($"{sample.timestamp}, {sample.totalAllocatedMemory}, {sample.totalReservedMemory}, {sample.totalUnusedReservedMemory}, {sample.monoHeapSize}, {sample.monoUsedSize}, {sample.allocatedMemoryForGraphicsDriver}, {sample.frameTime}, {sample.cpuUsage}");
+                sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
+                    "{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}",
+                    sample.timestamp, sample.totalAllocatedMemory, sample.totalReservedMemory,
+                    sample.totalUnusedReservedMemory, sample.monoHeapSize, sample.monoUsedSize,
+                    sample.allocatedMemoryForGraphicsDriver, sample.frameTime, sample.cpuUsage));
             }
 
             File.WriteAllText(filePath, sb.ToString());

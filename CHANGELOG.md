@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.8.1
+
+### Fixed
+- VideoEncoder: Fix audio-video muxing failure on non-English OS locales (e.g. French) caused by locale-sensitive decimal separator in FFmpeg arguments.
+
 ## 1.8.0
 
 ### Added

@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using System.Threading.Tasks;
 using System; // Added for Guid
+using System.Globalization;
 
 namespace BetaHub
 {
@@ -425,14 +426,14 @@ namespace BetaHub
 
                 var muxArgs = new List<string> {
                     "-i", tempVideoPath,
-                    "-sseof", $"-{sseofValue:F2}",
+                    "-sseof", "-" + sseofValue.ToString("F2", CultureInfo.InvariantCulture),
                     "-i", audioFilePath,
                     "-c:v", "copy", "-c:a", "aac", "-b:a", "128k"
                 };
 
                 if (System.Math.Abs(atempo - 1.0) > 0.0001)
                 {
-                    muxArgs.AddRange(new[] { "-af", $"atempo={atempo:F6}" });
+                    muxArgs.AddRange(new[] { "-af", "atempo=" + atempo.ToString("F6", CultureInfo.InvariantCulture) });
                 }
 
                 muxArgs.Add("-shortest");
