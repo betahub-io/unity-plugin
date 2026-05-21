@@ -173,6 +173,8 @@ namespace BetaHub
                 outputDirectory = "BH_Recording";
             }
 
+            VideoEncoder.CleanupStaleRecordingDirectories(outputDirectory);
+
             // Initialize the video encoder with the output resolution
             _videoEncoder = new VideoEncoder(_outputWidth, _outputHeight, FrameRate, RecordingDuration, outputDirectory, MirrorVertically);
 
@@ -189,7 +191,11 @@ namespace BetaHub
 #if !UNITY_WEBGL || UNITY_EDITOR
             if (_audioCapture != null && _audioCapture.IsCapturing)
             {
-                _audioCapture.StopCapture();
+                string orphanedAudio = _audioCapture.StopCapture();
+                if (orphanedAudio != null)
+                {
+                    try { System.IO.File.Delete(orphanedAudio); } catch (System.Exception) { }
+                }
             }
             _audioCapture = null;
 

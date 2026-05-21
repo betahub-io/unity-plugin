@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.8.2
+
+### Fixed
+- Fix .wav audio files and other temp files (concat.txt, temp_concat.mp4) persisting in the BH_Recording folder between sessions.
+- Fix orphaned audio file leak when the game exits or scene unloads while recording is active.
+- Clean up stale recording directories from previous sessions on startup.
+
 ## 1.8.1
 
 ### Fixed

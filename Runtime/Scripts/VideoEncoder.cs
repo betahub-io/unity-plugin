@@ -101,7 +101,10 @@ namespace BetaHub
 
             // Clean up segments with retry logic for better file access handling
             RemoveAllSegmentsWithRetry();
-            
+
+            // Clean up leftover temp files (wav, concat.txt, temp_concat.mp4)
+            CleanupTempFiles();
+
             // Clean up the unique instance directory if it's empty
             CleanupInstanceDirectory();
         }
@@ -358,102 +361,112 @@ namespace BetaHub
             #endif
 
             #if !ENABLE_IL2CPP || ENABLE_BETAHUB_FFMPEG
-            if (!hasAudio)
+            try
             {
-                var mergeProcess = CreateProcessWrapper();
-                mergeProcess.Start(ffmpegPath, new[] {
-                    "-f", "concat", "-safe", "0", "-i", concatFilePath,
-                    "-c", "copy", mergedFilePath
-                });
-                mergeProcess.WaitForExit();
-
-                if (mergeProcess.ExitCode != 0)
+                if (!hasAudio)
                 {
-                    UnityEngine.Debug.LogError("Error during merging segments.");
-                    UnityEngine.Debug.LogError(string.Join("\n", mergeProcess.ReadStderr()));
+                    var mergeProcess = CreateProcessWrapper();
+                    mergeProcess.Start(ffmpegPath, new[] {
+                        "-f", "concat", "-safe", "0", "-i", concatFilePath,
+                        "-c", "copy", mergedFilePath
+                    });
+                    mergeProcess.WaitForExit();
+
+                    if (mergeProcess.ExitCode != 0)
+                    {
+                        UnityEngine.Debug.LogError("Error during merging segments.");
+                        UnityEngine.Debug.LogError(string.Join("\n", mergeProcess.ReadStderr()));
+                    }
+                }
+                else
+                {
+                    // Two-pass approach for precise audio-video sync:
+                    // 1. Concatenate video segments
+                    // 2. Probe exact video duration
+                    // 3. Mux with audio trimmed to match
+
+                    string tempVideoPath = Path.Combine(outputDir, "temp_concat.mp4");
+
+                    var concatProcess = CreateProcessWrapper();
+                    concatProcess.Start(ffmpegPath, new[] {
+                        "-f", "concat", "-safe", "0", "-i", concatFilePath,
+                        "-c", "copy", tempVideoPath
+                    });
+                    concatProcess.WaitForExit();
+
+                    if (concatProcess.ExitCode != 0)
+                    {
+                        UnityEngine.Debug.LogError("Error during concatenating segments.");
+                        UnityEngine.Debug.LogError(string.Join("\n", concatProcess.ReadStderr()));
+                        return null;
+                    }
+
+                    float videoDuration = ProbeMediaDuration(ffmpegPath, tempVideoPath);
+                    if (videoDuration <= 0)
+                    {
+                        videoDuration = files.Length * segmentLength;
+                        UnityEngine.Debug.LogWarning($"Could not probe video duration, using estimate: {videoDuration}s");
+                    }
+
+                    // Compensate for the audio tail: audio kept recording for audioTailSeconds
+                    // after video stopped. We skip that tail so both streams end at the same point.
+                    float sseofValue = videoDuration + audioTailSeconds;
+
+                    // Drift correction: video frames are paced by a software Stopwatch,
+                    // but audio runs on the hardware clock. Compute the ratio to stretch
+                    // audio to match the video's actual playback speed.
+                    double videoNominalDuration = (double)_totalFramesWritten / frameRate;
+                    double atempo = 1.0;
+                    if (videoNominalDuration > 0 && _wallClockDuration > 0)
+                    {
+                        atempo = _wallClockDuration / videoNominalDuration;
+                        atempo = System.Math.Max(0.5, System.Math.Min(2.0, atempo));
+                    }
+
+                    #if BETAHUB_DEBUG
+                    UnityEngine.Debug.Log($"Video duration: {videoDuration:F2}s, audio tail: {audioTailSeconds:F3}s, sseof: {sseofValue:F2}s");
+                    UnityEngine.Debug.Log($"Drift correction: {_totalFramesWritten} frames in {_wallClockDuration:F2}s wall-clock, nominal {videoNominalDuration:F2}s, atempo: {atempo:F6}");
+                    #endif
+
+                    var muxArgs = new List<string> {
+                        "-i", tempVideoPath,
+                        "-sseof", "-" + sseofValue.ToString("F2", CultureInfo.InvariantCulture),
+                        "-i", audioFilePath,
+                        "-c:v", "copy", "-c:a", "aac", "-b:a", "128k"
+                    };
+
+                    if (System.Math.Abs(atempo - 1.0) > 0.0001)
+                    {
+                        muxArgs.AddRange(new[] { "-af", "atempo=" + atempo.ToString("F6", CultureInfo.InvariantCulture) });
+                    }
+
+                    muxArgs.Add("-shortest");
+                    muxArgs.Add(mergedFilePath);
+
+                    var muxProcess = CreateProcessWrapper();
+                    muxProcess.Start(ffmpegPath, muxArgs.ToArray());
+                    muxProcess.WaitForExit();
+
+                    if (muxProcess.ExitCode != 0)
+                    {
+                        UnityEngine.Debug.LogError("Error during audio-video muxing.");
+                        UnityEngine.Debug.LogError(string.Join("\n", muxProcess.ReadStderr()));
+                    }
+
+                    try { File.Delete(tempVideoPath); } catch (System.Exception) { }
                 }
             }
-            else
+            finally
             {
-                // Two-pass approach for precise audio-video sync:
-                // 1. Concatenate video segments
-                // 2. Probe exact video duration
-                // 3. Mux with audio trimmed to match
-
-                string tempVideoPath = Path.Combine(outputDir, "temp_concat.mp4");
-
-                var concatProcess = CreateProcessWrapper();
-                concatProcess.Start(ffmpegPath, new[] {
-                    "-f", "concat", "-safe", "0", "-i", concatFilePath,
-                    "-c", "copy", tempVideoPath
-                });
-                concatProcess.WaitForExit();
-
-                if (concatProcess.ExitCode != 0)
+                if (audioFilePath != null && File.Exists(audioFilePath))
                 {
-                    UnityEngine.Debug.LogError("Error during concatenating segments.");
-                    UnityEngine.Debug.LogError(string.Join("\n", concatProcess.ReadStderr()));
-                    File.Delete(concatFilePath);
-                    return null;
+                    try { File.Delete(audioFilePath); } catch (System.Exception) { }
                 }
-
-                float videoDuration = ProbeMediaDuration(ffmpegPath, tempVideoPath);
-                if (videoDuration <= 0)
+                if (File.Exists(concatFilePath))
                 {
-                    videoDuration = files.Length * segmentLength;
-                    UnityEngine.Debug.LogWarning($"Could not probe video duration, using estimate: {videoDuration}s");
+                    try { File.Delete(concatFilePath); } catch (System.Exception) { }
                 }
-
-                // Compensate for the audio tail: audio kept recording for audioTailSeconds
-                // after video stopped. We skip that tail so both streams end at the same point.
-                float sseofValue = videoDuration + audioTailSeconds;
-
-                // Drift correction: video frames are paced by a software Stopwatch,
-                // but audio runs on the hardware clock. Compute the ratio to stretch
-                // audio to match the video's actual playback speed.
-                double videoNominalDuration = (double)_totalFramesWritten / frameRate;
-                double atempo = 1.0;
-                if (videoNominalDuration > 0 && _wallClockDuration > 0)
-                {
-                    atempo = _wallClockDuration / videoNominalDuration;
-                    atempo = System.Math.Max(0.5, System.Math.Min(2.0, atempo));
-                }
-
-                #if BETAHUB_DEBUG
-                UnityEngine.Debug.Log($"Video duration: {videoDuration:F2}s, audio tail: {audioTailSeconds:F3}s, sseof: {sseofValue:F2}s");
-                UnityEngine.Debug.Log($"Drift correction: {_totalFramesWritten} frames in {_wallClockDuration:F2}s wall-clock, nominal {videoNominalDuration:F2}s, atempo: {atempo:F6}");
-                #endif
-
-                var muxArgs = new List<string> {
-                    "-i", tempVideoPath,
-                    "-sseof", "-" + sseofValue.ToString("F2", CultureInfo.InvariantCulture),
-                    "-i", audioFilePath,
-                    "-c:v", "copy", "-c:a", "aac", "-b:a", "128k"
-                };
-
-                if (System.Math.Abs(atempo - 1.0) > 0.0001)
-                {
-                    muxArgs.AddRange(new[] { "-af", "atempo=" + atempo.ToString("F6", CultureInfo.InvariantCulture) });
-                }
-
-                muxArgs.Add("-shortest");
-                muxArgs.Add(mergedFilePath);
-
-                var muxProcess = CreateProcessWrapper();
-                muxProcess.Start(ffmpegPath, muxArgs.ToArray());
-                muxProcess.WaitForExit();
-
-                if (muxProcess.ExitCode != 0)
-                {
-                    UnityEngine.Debug.LogError("Error during audio-video muxing.");
-                    UnityEngine.Debug.LogError(string.Join("\n", muxProcess.ReadStderr()));
-                }
-
-                try { File.Delete(tempVideoPath); } catch (System.Exception) { }
-                try { File.Delete(audioFilePath); } catch (System.Exception) { }
             }
-
-            File.Delete(concatFilePath);
             #endif
 
             return mergedFilePath;
@@ -824,6 +837,45 @@ namespace BetaHub
             catch (System.Exception ex)
             {
                 UnityEngine.Debug.LogWarning($"Could not clean up instance directory {outputDir}: {ex.Message}");
+            }
+        }
+        private void CleanupTempFiles()
+        {
+            if (!Directory.Exists(outputDir))
+                return;
+
+            string[] tempPatterns = { "*.wav", "concat.txt", "temp_concat.mp4" };
+            foreach (var pattern in tempPatterns)
+            {
+                foreach (var file in Directory.GetFiles(outputDir, pattern))
+                {
+                    try { File.Delete(file); }
+                    catch (System.Exception) { }
+                }
+            }
+        }
+
+        public static void CleanupStaleRecordingDirectories(string baseOutputDir, double maxAgeSeconds = 60)
+        {
+            if (!Directory.Exists(baseOutputDir))
+                return;
+
+            var staleThreshold = System.DateTime.Now.AddSeconds(-maxAgeSeconds);
+
+            foreach (var dir in Directory.GetDirectories(baseOutputDir))
+            {
+                try
+                {
+                    if (Directory.GetLastWriteTime(dir) < staleThreshold)
+                    {
+                        UnityEngine.Debug.LogWarning($"BetaHub: Cleaning up stale recording directory: {dir}");
+                        Directory.Delete(dir, true);
+                    }
+                }
+                catch (System.Exception ex)
+                {
+                    UnityEngine.Debug.LogWarning($"BetaHub: Could not clean up stale directory {dir}: {ex.Message}");
+                }
             }
         }
     }
