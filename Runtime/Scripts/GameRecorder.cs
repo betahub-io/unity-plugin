@@ -39,6 +39,10 @@ namespace BetaHub
         [Tooltip("Audio capture source. 'None' disables audio. 'UnityAudioListener' captures Unity's audio output. 'Wwise' captures Wwise audio output (requires BETAHUB_WWISE scripting define).")]
         public AudioCaptureMode AudioCapture = AudioCaptureMode.UnityAudioListener;
 
+        [Header("Diagnostics")]
+        [Tooltip("Troubleshooting only. When enabled, logs detailed audio/video timing at merge time and preserves the raw intermediate files (audio .wav and pre-mux video) instead of deleting them, so audio-sync issues can be diagnosed. Leave OFF in production; temp files will accumulate while it is on.")]
+        public bool RecordingDiagnostics = false;
+
         // set this to a render texture to capture a specific render texture instead of the screen
         [HideInInspector]
         public RenderTexture CaptureRenderTexture;
@@ -177,6 +181,7 @@ namespace BetaHub
 
             // Initialize the video encoder with the output resolution
             _videoEncoder = new VideoEncoder(_outputWidth, _outputHeight, FrameRate, RecordingDuration, outputDirectory, MirrorVertically);
+            _videoEncoder.Diagnostics = RecordingDiagnostics;
 
             // Initialize audio capture backend
             InitializeAudioCapture();
