@@ -439,8 +439,25 @@ namespace BetaHub
                     float videoDuration = ProbeMediaDuration(ffmpegPath, tempVideoPath);
                     if (videoDuration <= 0)
                     {
-                        videoDuration = files.Length * segmentLength;
-                        UnityEngine.Debug.LogWarning($"Could not probe video duration, using estimate: {videoDuration}s");
+                        // Probe failed - fall back to an estimate. The naive
+                        // `files.Length * segmentLength` counts the final segment as a
+                        // full segmentLength, but it is almost always partial (recording
+                        // stops mid-segment), inflating the duration by up to one whole
+                        // segment (~10s). That error feeds straight into the audio
+                        // end-anchor below and desyncs audio by the same amount. Recover
+                        // the partial last segment from the frames we actually wrote.
+                        double totalVideoSeconds = frameRate > 0
+                            ? (double)_totalFramesWritten / frameRate
+                            : files.Length * segmentLength;
+                        double lastSegmentSeconds = totalVideoSeconds % segmentLength;
+                        if (lastSegmentSeconds <= 0.001 && totalVideoSeconds > 0)
+                        {
+                            // Stopped exactly on a boundary: the last kept segment is full.
+                            lastSegmentSeconds = segmentLength;
+                        }
+                        int fullSegments = files.Length > 0 ? files.Length - 1 : 0;
+                        videoDuration = (float)(fullSegments * segmentLength + lastSegmentSeconds);
+                        UnityEngine.Debug.LogWarning($"Could not probe video duration, using frame-based estimate: {videoDuration:F2}s");
                     }
 
                     // Compensate for the audio tail: audio kept recording for audioTailSeconds
