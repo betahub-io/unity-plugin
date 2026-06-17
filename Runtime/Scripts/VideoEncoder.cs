@@ -60,6 +60,37 @@ namespace BetaHub
         private long _totalFramesWritten;
         private double _wallClockDuration;
 
+        // Time (seconds, on the encoder stopwatch) at which the first video frame was
+        // written. The encoder stopwatch starts at essentially the same instant audio
+        // capture begins, so this approximates how far video startup lagged audio start.
+        private double _firstFrameDelay = -1;
+
+        // When true, the recording pipeline logs detailed audio/video timing at merge
+        // time and preserves the raw intermediate artifacts (audio wav, pre-mux video)
+        // instead of deleting them, so they can be inspected for sync issues.
+        // Off by default; runtime-togglable via GameRecorder. Safe to ship.
+        public bool Diagnostics { get; set; }
+
+        private bool DiagnosticsEnabled
+        {
+            get
+            {
+                #if BETAHUB_DEBUG
+                return true;
+                #else
+                return Diagnostics;
+                #endif
+            }
+        }
+
+        private void LogDiag(string message)
+        {
+            if (DiagnosticsEnabled)
+            {
+                UnityEngine.Debug.Log("BetaHub Diagnostics: " + message);
+            }
+        }
+
         public VideoEncoder(int width, int height, int frameRate, int recordingDurationSeconds, string baseOutputDir = "Recording", bool mirrorVertically = false)
         {
             this.width = width;
@@ -235,7 +266,11 @@ namespace BetaHub
                                 {
                                     framesWritten++;
                                     double now = stopwatch.Elapsed.TotalSeconds;
-                                    if (firstFrameTime < 0) firstFrameTime = now;
+                                    if (firstFrameTime < 0)
+                                    {
+                                        firstFrameTime = now;
+                                        _firstFrameDelay = now;
+                                    }
                                     lastFrameTime = now;
                                 }
                             }
@@ -404,8 +439,25 @@ namespace BetaHub
                     float videoDuration = ProbeMediaDuration(ffmpegPath, tempVideoPath);
                     if (videoDuration <= 0)
                     {
-                        videoDuration = files.Length * segmentLength;
-                        UnityEngine.Debug.LogWarning($"Could not probe video duration, using estimate: {videoDuration}s");
+                        // Probe failed - fall back to an estimate. The naive
+                        // `files.Length * segmentLength` counts the final segment as a
+                        // full segmentLength, but it is almost always partial (recording
+                        // stops mid-segment), inflating the duration by up to one whole
+                        // segment (~10s). That error feeds straight into the audio
+                        // end-anchor below and desyncs audio by the same amount. Recover
+                        // the partial last segment from the frames we actually wrote.
+                        double totalVideoSeconds = frameRate > 0
+                            ? (double)_totalFramesWritten / frameRate
+                            : files.Length * segmentLength;
+                        double lastSegmentSeconds = totalVideoSeconds % segmentLength;
+                        if (lastSegmentSeconds <= 0.001 && totalVideoSeconds > 0)
+                        {
+                            // Stopped exactly on a boundary: the last kept segment is full.
+                            lastSegmentSeconds = segmentLength;
+                        }
+                        int fullSegments = files.Length > 0 ? files.Length - 1 : 0;
+                        videoDuration = (float)(fullSegments * segmentLength + lastSegmentSeconds);
+                        UnityEngine.Debug.LogWarning($"Could not probe video duration, using frame-based estimate: {videoDuration:F2}s");
                     }
 
                     // Compensate for the audio tail: audio kept recording for audioTailSeconds
@@ -423,10 +475,21 @@ namespace BetaHub
                         atempo = System.Math.Max(0.5, System.Math.Min(2.0, atempo));
                     }
 
-                    #if BETAHUB_DEBUG
-                    UnityEngine.Debug.Log($"Video duration: {videoDuration:F2}s, audio tail: {audioTailSeconds:F3}s, sseof: {sseofValue:F2}s");
-                    UnityEngine.Debug.Log($"Drift correction: {_totalFramesWritten} frames in {_wallClockDuration:F2}s wall-clock, nominal {videoNominalDuration:F2}s, atempo: {atempo:F6}");
-                    #endif
+                    if (DiagnosticsEnabled)
+                    {
+                        // Probe the raw audio so we can see the length mismatch between the
+                        // unbounded audio stream and the rolling video window. This is the
+                        // number the pipeline never logged before.
+                        float audioDuration = ProbeMediaDuration(ffmpegPath, audioFilePath);
+
+                        LogDiag($"window video duration: {videoDuration:F3}s (probed), audio raw duration: {audioDuration:F3}s, " +
+                                $"audio tail: {audioTailSeconds:F3}s, sseof from audio end: {sseofValue:F3}s");
+                        LogDiag($"video start lag (first frame after encoder start ~= after audio start): {_firstFrameDelay:F3}s");
+                        LogDiag($"drift: {_totalFramesWritten} frames in {_wallClockDuration:F3}s wall-clock vs nominal {videoNominalDuration:F3}s " +
+                                $"(ratio {(videoNominalDuration > 0 ? _wallClockDuration / videoNominalDuration : 0):F4}), atempo applied: {atempo:F6}" +
+                                (System.Math.Abs(atempo - 1.0) <= 0.0001 ? " (none)" : "") +
+                                ((atempo <= 0.5001 || atempo >= 1.9999) ? " [CLAMPED - drift exceeds correction range]" : ""));
+                    }
 
                     var muxArgs = new List<string> {
                         "-i", tempVideoPath,
@@ -452,13 +515,28 @@ namespace BetaHub
                         UnityEngine.Debug.LogError("Error during audio-video muxing.");
                         UnityEngine.Debug.LogError(string.Join("\n", muxProcess.ReadStderr()));
                     }
+                    else if (DiagnosticsEnabled)
+                    {
+                        float mergedDuration = ProbeMediaDuration(ffmpegPath, mergedFilePath);
+                        LogDiag($"merged output duration: {mergedDuration:F3}s");
+                    }
 
-                    try { File.Delete(tempVideoPath); } catch (System.Exception) { }
+                    if (DiagnosticsEnabled)
+                    {
+                        // Preserve the pre-mux video so the raw streams can be compared offline.
+                        LogDiag($"artifacts preserved for inspection in: {Path.GetFullPath(outputDir)} " +
+                                $"(raw audio: {Path.GetFileName(audioFilePath)}, pre-mux video: {Path.GetFileName(tempVideoPath)})");
+                    }
+                    else
+                    {
+                        try { File.Delete(tempVideoPath); } catch (System.Exception) { }
+                    }
                 }
             }
             finally
             {
-                if (audioFilePath != null && File.Exists(audioFilePath))
+                // When diagnostics are on, keep the raw audio for offline inspection.
+                if (!DiagnosticsEnabled && audioFilePath != null && File.Exists(audioFilePath))
                 {
                     try { File.Delete(audioFilePath); } catch (System.Exception) { }
                 }
@@ -842,6 +920,10 @@ namespace BetaHub
         private void CleanupTempFiles()
         {
             if (!Directory.Exists(outputDir))
+                return;
+
+            // When diagnostics are on, keep the raw audio and pre-mux video for inspection.
+            if (DiagnosticsEnabled)
                 return;
 
             string[] tempPatterns = { "*.wav", "concat.txt", "temp_concat.mp4" };

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.8.3
+
+### Fixed
+- Fix audio/video desync in IL2CPP builds: the native process wrapper killed FFmpeg on stop before it could finalize the in-progress recording segment, dropping the most recent video segment (~one segment length) so audio ended up out of sync. The wrapper now lets FFmpeg exit cleanly (finalizing its last segment) before force-killing. Requires the updated native libraries.
+- IL2CPP: Fix the FFmpeg media-duration probe returning empty — the native process wrapper now drains buffered stderr after the process exits, so video duration is measured correctly instead of falling back to an estimate.
+- VideoEncoder: When the duration probe is unavailable, the fallback estimate now accounts for the partial final segment instead of over-counting it.
+
 ## 1.8.2
 
 ### Fixed

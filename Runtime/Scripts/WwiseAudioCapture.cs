@@ -19,6 +19,10 @@ namespace BetaHub
         private int _segmentIndex;
         private readonly List<string> _segmentPaths = new List<string>();
         private bool _wwiseIsRecording;
+#if BETAHUB_DEBUG
+        private System.Diagnostics.Stopwatch _captureStopwatch;
+        private int _resumeCount;
+#endif
 
         public bool IsCapturing { get; private set; }
 
@@ -75,6 +79,11 @@ namespace BetaHub
             if (StartWwiseCapture())
             {
                 IsCapturing = true;
+#if BETAHUB_DEBUG
+                _resumeCount = 0;
+                _captureStopwatch = System.Diagnostics.Stopwatch.StartNew();
+                Debug.Log("BetaHub Wwise diag: StartCapture");
+#endif
             }
         }
 
@@ -89,6 +98,9 @@ namespace BetaHub
         {
             if (!IsCapturing || _wwiseIsRecording) return;
 
+#if BETAHUB_DEBUG
+            _resumeCount++;
+#endif
             StartWwiseCapture();
         }
 
@@ -103,21 +115,103 @@ namespace BetaHub
                 StopWwiseCapture();
             }
 
-            if (_segmentPaths.Count == 0) return null;
-            if (_segmentPaths.Count == 1) return _segmentPaths[0];
-
-            string mergedPath = Path.Combine(_outputDirectory, "wwise_capture_merged.wav");
-            if (ConcatenateWavFiles(_segmentPaths, mergedPath))
+            string result;
+            if (_segmentPaths.Count == 0)
             {
-                foreach (var seg in _segmentPaths)
+                result = null;
+            }
+            else if (_segmentPaths.Count == 1)
+            {
+                result = _segmentPaths[0];
+            }
+            else
+            {
+                string mergedPath = Path.Combine(_outputDirectory, "wwise_capture_merged.wav");
+                if (ConcatenateWavFiles(_segmentPaths, mergedPath))
                 {
-                    try { File.Delete(seg); } catch (Exception) { }
+                    foreach (var seg in _segmentPaths)
+                    {
+                        try { File.Delete(seg); } catch (Exception) { }
+                    }
+                    result = mergedPath;
                 }
-                return mergedPath;
+                else
+                {
+                    result = _segmentPaths[_segmentPaths.Count - 1];
+                }
             }
 
-            return _segmentPaths[_segmentPaths.Count - 1];
+#if BETAHUB_DEBUG
+            double wallClock = _captureStopwatch != null ? _captureStopwatch.Elapsed.TotalSeconds : -1;
+            LogCaptureDiagnostics(result, wallClock, _segmentPaths.Count);
+#endif
+            return result;
         }
+
+#if BETAHUB_DEBUG
+
+        // Diagnostic: compares how long capture was ACTIVE (wall-clock) against how
+        // much audio Wwise actually produced (WAV length). A ratio well below 1.0 means
+        // the engine under-rendered while capturing (OutputCapture is RenderAudio-cadence
+        // bound, not real-time). Helps pin down the build-only short-audio bug.
+        private void LogCaptureDiagnostics(string path, double wallClockSeconds, int segmentCount)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(path) || !File.Exists(path))
+                {
+                    Debug.Log($"BetaHub Wwise diag: StopCapture - NO audio file. wall-clock={wallClockSeconds:F2}s, segments={segmentCount}, resumes={_resumeCount}");
+                    return;
+                }
+
+                int sampleRate = 0;
+                short channels = 0;
+                short bits = 0;
+                long dataBytes = 0;
+
+                using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read))
+                using (var reader = new BinaryReader(stream))
+                {
+                    reader.ReadBytes(4);  // "RIFF"
+                    reader.ReadInt32();   // file size
+                    reader.ReadBytes(4);  // "WAVE"
+                    while (stream.Position <= stream.Length - 8)
+                    {
+                        string chunkId = new string(reader.ReadChars(4));
+                        int chunkSize = reader.ReadInt32();
+                        if (chunkId == "fmt ")
+                        {
+                            reader.ReadInt16();            // audio format
+                            channels = reader.ReadInt16();
+                            sampleRate = reader.ReadInt32();
+                            reader.ReadInt32();            // byte rate
+                            reader.ReadInt16();            // block align
+                            bits = reader.ReadInt16();
+                            if (chunkSize > 16) reader.ReadBytes(chunkSize - 16);
+                        }
+                        else if (chunkId == "data")
+                        {
+                            dataBytes = chunkSize;
+                            break;
+                        }
+                        else
+                        {
+                            stream.Position += chunkSize;
+                        }
+                    }
+                }
+
+                double byteRate = sampleRate * channels * (bits / 8.0);
+                double wavSeconds = byteRate > 0 ? dataBytes / byteRate : 0;
+                double ratio = wallClockSeconds > 0 ? wavSeconds / wallClockSeconds : 0;
+                Debug.Log($"BetaHub Wwise diag: StopCapture - wall-clock={wallClockSeconds:F2}s, wav={wavSeconds:F2}s, ratio={ratio:F3}, sampleRate={sampleRate}, channels={channels}, bits={bits}, segments={segmentCount}, resumes={_resumeCount}, file={Path.GetFileName(path)}");
+            }
+            catch (Exception e)
+            {
+                Debug.Log($"BetaHub Wwise diag failed: {e.Message}");
+            }
+        }
+#endif
 
         private bool StartWwiseCapture()
         {
