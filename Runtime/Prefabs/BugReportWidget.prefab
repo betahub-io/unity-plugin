@@ -1,0 +1,193 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &350286554092871843
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 5578980833541128555}
+  - component: {fileID: 66287609127694524}
+  - component: {fileID: 1907612857857416244}
+  - component: {fileID: 6141141258050480228}
+  - component: {fileID: 3615450303508474920}
+  - component: {fileID: 6568827704472433143}
+  m_Layer: 0
+  m_Name: BugReportWidget
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &5578980833541128555
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 350286554092871843}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &66287609127694524
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 350286554092871843}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 19102, guid: 0000000000000000e000000000000000, type: 0}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_PanelSettings: {fileID: 11400000, guid: 1a3b384967a5946fb95c5afc44719675, type: 2}
+  m_ParentUI: {fileID: 0}
+  sourceAsset: {fileID: 9197481963319205126, guid: 7d2883792764e4e0990caa452ca3c447, type: 3}
+  m_SortingOrder: 0
+--- !u!114 &1907612857857416244
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 350286554092871843}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5d6a9c54d6bfc4c33a5a56b11dd0143e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  TimeoutSeconds: 5
+--- !u!114 &6141141258050480228
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 350286554092871843}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d05f01f8205814cb2b778826b30c98f2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  SubmitEndpoint: https://app.betahub.io
+  ProjectID: pr-5287510306
+  AuthToken: tkn-15e6fbc1470613d5cfd2199edbde52157379b8c6dcd365441eabf8fea62d76a7
+  MediaUploadType: 0
+  ReleaseId: 0
+  ReleaseLabel: 
+  IncludePlayerLog: 1
+  IncludeVideo: 1
+  DefaultEmailAddress: 
+  deviceAuthManager: {fileID: 0}
+  geolocationProvider: {fileID: 0}
+  latencyProvider: {fileID: 0}
+--- !u!114 &3615450303508474920
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 350286554092871843}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d140507fc9ceb4e6ea7621a4a80a0d24, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  FrameRate: 30
+  RecordingDuration: 60
+  DownscaleVideo: 0
+  MaxVideoHeight: 1080
+  MaxVideoWidth: 1920
+  RenderFPSOverlay: 1
+  RenderCursor: 0
+  MirrorVertically: 0
+  AudioCapture: 1
+  RecordingDiagnostics: 0
+  CaptureRenderTexture: {fileID: 0}
+  DebugMode: 0
+--- !u!114 &6568827704472433143
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 350286554092871843}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f164773193ba04f50bfc0228472b5664, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  ShortcutAction:
+    m_Name: BugReportShortcut
+    m_Type: 0
+    m_ExpectedControlType: 
+    m_Id: 7747f120-b535-4d15-a1fd-81460bc9ce22
+    m_Processors: 
+    m_Interactions: 
+    m_SingletonActionBindings:
+    - m_Name: 
+      m_Id: abfcd9cb-13ab-4986-bca2-d67134ecee25
+      m_Path: <Keyboard>/f12
+      m_Interactions: 
+      m_Processors: 
+      m_Groups: 
+      m_Action: BugReportShortcut
+      m_Flags: 0
+    m_Flags: 0
+  UseLightTheme: 0
+  RequireTermsAcceptance: 0
+  TermsUrl: 
+  Strings:
+    Title: Report a bug
+    ErrorTitle: Couldn't send
+    UnavailableTitle: Bug reporting unavailable
+    DescriptionPlaceholder: What went wrong, and what did you expect instead?
+    StepsPlaceholder: '1. Open the inventory
+
+      2. Drag the sword onto the shield
+
+      3.
+      Game freezes'
+    ScreenshotMeta: taken when you pressed {0}
+    ClipTitle: Last {0} s of play
+    ClipMeta: "video + audio \xB7 {0}"
+    LogMeta: "{0} \xB7 {1}"
+    SendReport: Send report
+    Sending: "Sending\u2026"
+    Cancel: Cancel
+    UploadingTitle: Almost there
+    UploadingText: "Your report is saved. Uploading attachments\u2026"
+    SentTitle: Report sent
+    SentAnonymous: saved anonymously
+    SentSignedIn: under your BetaHub reports
+    EmailPlaceholder: you@example.com
+    EmailMeALink: Email me a link
+    EmailSaved: We'll email {0} when there's news.
+    EmailInvalid: That doesn't look like an email address.
+    EmailFailed: Couldn't save your email. Try again or just go back.
+    SentNote: We'll also tell you when it's fixed. Nothing else, no account.
+    SentSignedInNote: We'll notify you on BetaHub when it's fixed.
+    BackToGame: Back to game
+    CopyLink: Copy link
+    LinkCopied: Link copied
+    ToastUploading: Uploading your report
+    ToastUploadingSub: the game continues
+    ToastDone: Report sent
+    ToastDoneSub: thank you
+    TermsText: I accept the terms of bug reporting
+    HintClose: Esc  close
+    HintSend: Ctrl+Enter  send
+  OnBugReportWindowShown:
+    m_PersistentCalls:
+      m_Calls: []
+  OnBugReportWindowHidden:
+    m_PersistentCalls:
+      m_Calls: []

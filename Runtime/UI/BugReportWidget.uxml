@@ -1,0 +1,151 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../UIElementsSchema/UIElements.xsd">
+  <Style src="BugReportWidget.uss" />
+
+  <!-- Bug report widget. Static content here is what the design preview shows; BugReportWidget.cs
+       fills it at runtime. Sections other than Compose start hidden. -->
+  <ui:VisualElement name="bh-overlay" class="bh-overlay">
+    <ui:VisualElement name="bh-widget" class="bh-widget bh-theme-dark">
+
+      <ui:VisualElement class="bh-head">
+        <ui:VisualElement class="bh-head__text">
+          <ui:Label name="bh-title" text="Report a bug" class="bh-title bh-bold" />
+          <ui:Label name="bh-subtitle" text="Reporting as Kasia_P" class="bh-subtitle bh-hidden" />
+        </ui:VisualElement>
+        <ui:Button name="bh-close" text="×" class="bh-close" />
+      </ui:VisualElement>
+
+      <!-- COMPOSE -->
+      <ui:VisualElement name="bh-compose" class="bh-body">
+
+        <ui:VisualElement class="bh-group">
+          <ui:VisualElement class="bh-label-row">
+            <ui:Label text="WHAT HAPPENED" class="bh-label bh-bold" />
+            <ui:Label name="bh-count" text="102 / 2000" class="bh-count" />
+          </ui:VisualElement>
+          <ui:VisualElement class="bh-field-wrap">
+            <ui:TextField name="bh-description" multiline="true" class="bh-field bh-field--desc"
+              value="Dragging the sword onto the shield in the inventory freezes the game for ~2 s, then the sword is gone." />
+            <ui:Label name="bh-description-placeholder" text="What went wrong, and what did you expect instead?" class="bh-placeholder bh-hidden" />
+          </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement class="bh-group">
+          <ui:VisualElement class="bh-label-row">
+            <ui:Label text="STEPS TO REPRODUCE" class="bh-label bh-bold" />
+            <ui:Label text="optional" class="bh-label-opt" />
+          </ui:VisualElement>
+          <ui:VisualElement class="bh-field-wrap">
+            <ui:TextField name="bh-steps" multiline="true" class="bh-field bh-field--steps" value="" />
+            <ui:Label name="bh-steps-placeholder" text="1. Open the inventory&#10;2. Drag the sword onto the shield&#10;3. Game freezes" class="bh-placeholder" />
+          </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement class="bh-group bh-group--last">
+          <ui:VisualElement class="bh-label-row">
+            <ui:Label text="SENT WITH THIS REPORT" class="bh-label bh-bold" />
+            <ui:Label text="click to leave out" class="bh-label-opt" />
+          </ui:VisualElement>
+          <ui:VisualElement name="bh-cards" class="bh-cards">
+
+            <ui:VisualElement name="bh-card-screenshot" class="bh-card bh-card--on" focusable="true">
+              <ui:VisualElement class="bh-card__box"><ui:VisualElement class="bh-card__tick" /></ui:VisualElement>
+              <ui:Label text="Screenshot" class="bh-card__name bh-bold" />
+              <ui:VisualElement name="bh-shot-image" class="bh-card__preview bh-card__preview--shot">
+                <ui:VisualElement class="bh-shot__sky" />
+                <ui:VisualElement class="bh-shot__ground" />
+                <ui:VisualElement class="bh-shot__player" />
+                <ui:VisualElement class="bh-shot__enemy" />
+              </ui:VisualElement>
+              <ui:Label name="bh-shot-meta" text="taken when you pressed F12" class="bh-card__meta" />
+            </ui:VisualElement>
+
+            <ui:VisualElement name="bh-card-clip" class="bh-card bh-card--on" focusable="true">
+              <ui:VisualElement class="bh-card__box"><ui:VisualElement class="bh-card__tick" /></ui:VisualElement>
+              <ui:Label name="bh-clip-title" text="Last 60 s of play" class="bh-card__name bh-bold" />
+              <ui:VisualElement class="bh-card__preview bh-card__preview--clip">
+                <ui:VisualElement class="bh-bar" style="height: 30%;" />
+                <ui:VisualElement class="bh-bar" style="height: 55%;" />
+                <ui:VisualElement class="bh-bar" style="height: 40%;" />
+                <ui:VisualElement class="bh-bar" style="height: 75%;" />
+                <ui:VisualElement class="bh-bar" style="height: 50%;" />
+                <ui:VisualElement class="bh-bar" style="height: 90%;" />
+                <ui:VisualElement class="bh-bar" style="height: 60%;" />
+                <ui:VisualElement class="bh-bar" style="height: 35%;" />
+                <ui:VisualElement class="bh-bar" style="height: 70%;" />
+                <ui:VisualElement class="bh-bar" style="height: 45%;" />
+                <ui:VisualElement class="bh-bar" style="height: 80%;" />
+                <ui:VisualElement class="bh-bar" style="height: 55%;" />
+                <ui:VisualElement class="bh-bar" style="height: 25%;" />
+                <ui:VisualElement class="bh-bar" style="height: 65%;" />
+                <ui:Label text="▶" class="bh-clip__play" />
+              </ui:VisualElement>
+              <ui:Label name="bh-clip-meta" text="video + audio · 1:00" class="bh-card__meta" />
+            </ui:VisualElement>
+
+            <ui:VisualElement name="bh-card-log" class="bh-card bh-card--on bh-card--last" focusable="true">
+              <ui:VisualElement class="bh-card__box"><ui:VisualElement class="bh-card__tick" /></ui:VisualElement>
+              <ui:Label text="Game log" class="bh-card__name bh-bold" />
+              <ui:VisualElement class="bh-card__preview bh-card__preview--log">
+                <ui:Label name="bh-log-text" class="bh-log__text" text="[14:02:11] Scene loaded: Dungeon_03&#10;[14:02:14] Warn Missing ref: Sword_LOD1&#10;[14:02:15] Inventory.Drop(sword)&#10;[14:02:15] NullReferenceException" />
+              </ui:VisualElement>
+              <ui:Label name="bh-log-meta" text="BH_Player.log · 1.2 MB" class="bh-card__meta" />
+            </ui:VisualElement>
+
+          </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement name="bh-terms" class="bh-terms bh-hidden">
+          <ui:Toggle name="bh-terms-toggle" class="bh-toggle" />
+          <ui:Label name="bh-terms-text" text="I accept the terms of bug reporting" class="bh-terms__text" />
+        </ui:VisualElement>
+      </ui:VisualElement>
+
+      <!-- UPLOADING (wait mode) -->
+      <ui:VisualElement name="bh-uploading" class="bh-body bh-hidden">
+        <ui:Label name="bh-uploading-text" text="Your report is saved. Uploading attachments…" class="bh-note" />
+      </ui:VisualElement>
+
+      <!-- SENT -->
+      <ui:VisualElement name="bh-sent" class="bh-body bh-hidden">
+        <ui:VisualElement name="bh-email-row" class="bh-group">
+          <ui:VisualElement class="bh-label-row">
+            <ui:Label text="GET UPDATES" class="bh-label bh-bold" />
+            <ui:Label text="optional" class="bh-label-opt" />
+          </ui:VisualElement>
+          <ui:VisualElement class="bh-email">
+            <ui:VisualElement class="bh-field-wrap bh-email__field">
+              <ui:TextField name="bh-email" class="bh-field" value="" />
+              <ui:Label name="bh-email-placeholder" text="you@example.com" class="bh-placeholder" />
+            </ui:VisualElement>
+            <ui:Button name="bh-email-send" text="Email me a link" class="bh-btn bh-bold bh-btn--outline" />
+          </ui:VisualElement>
+          <ui:Label name="bh-email-error" text="Couldn't save your email. Try again or just go back." class="bh-error-line bh-hidden" />
+          <ui:Label name="bh-sent-note" text="We'll also tell you when it's fixed. Nothing else, no account." class="bh-note" />
+        </ui:VisualElement>
+        <ui:Label name="bh-sent-signedin-note" text="We'll notify you on BetaHub when it's fixed." class="bh-note bh-hidden" />
+      </ui:VisualElement>
+
+      <ui:VisualElement class="bh-foot">
+        <ui:VisualElement name="bh-hints" class="bh-hints">
+          <ui:Label name="bh-hint-close" text="Esc  close" class="bh-hint" />
+          <ui:Label name="bh-hint-send" text="Ctrl+Enter  send" class="bh-hint" />
+          <ui:Label name="bh-status" text="" class="bh-status bh-hidden" />
+        </ui:VisualElement>
+        <ui:Button name="bh-cancel" text="Cancel" class="bh-btn bh-bold bh-btn--ghost" />
+        <ui:Button name="bh-send" text="Send report" class="bh-btn bh-bold bh-btn--primary" />
+        <ui:Button name="bh-copy-link" text="Copy link" class="bh-btn bh-bold bh-btn--ghost bh-hidden" />
+        <ui:Button name="bh-back" text="Back to game" class="bh-btn bh-bold bh-btn--primary bh-hidden" />
+      </ui:VisualElement>
+
+    </ui:VisualElement>
+  </ui:VisualElement>
+
+  <!-- Background upload toast, shown while the panel is closed and an upload is running -->
+  <ui:VisualElement name="bh-toast" class="bh-toast bh-theme-dark bh-hidden">
+    <ui:VisualElement class="bh-toast__dot" />
+    <ui:VisualElement>
+      <ui:Label name="bh-toast-text" text="Uploading your report" class="bh-toast__text bh-bold" />
+      <ui:Label name="bh-toast-sub" text="the game continues" class="bh-toast__sub" />
+    </ui:VisualElement>
+  </ui:VisualElement>
+</ui:UXML>
