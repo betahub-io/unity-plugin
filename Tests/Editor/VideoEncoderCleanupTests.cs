@@ -25,9 +25,20 @@ namespace BetaHub.Tests
             }
         }
 
+        // BETAHUB_DEBUG forces recording diagnostics on, and diagnostics keep the temp files
+        // (wav, concat.txt, temp_concat.mp4) on purpose. Tests that expect cleanup step aside there.
+        private static void IgnoreWhenDebugKeepsTempFiles()
+        {
+#if BETAHUB_DEBUG
+            Assert.Ignore("BETAHUB_DEBUG keeps diagnostic temp files by design; this test needs it undefined.");
+#endif
+        }
+
         [Test]
         public void Dispose_ShouldDeleteWavFiles()
         {
+            IgnoreWhenDebugKeepsTempFiles();
+
             var encoder = new VideoEncoder(320, 240, 30, 60, _tempBaseDir);
             string outputDir = encoder.OutputDirectory;
 
@@ -44,6 +55,8 @@ namespace BetaHub.Tests
         [Test]
         public void Dispose_ShouldDeleteConcatTxt()
         {
+            IgnoreWhenDebugKeepsTempFiles();
+
             var encoder = new VideoEncoder(320, 240, 30, 60, _tempBaseDir);
             string outputDir = encoder.OutputDirectory;
 
@@ -58,6 +71,8 @@ namespace BetaHub.Tests
         [Test]
         public void Dispose_ShouldDeleteTempConcatMp4()
         {
+            IgnoreWhenDebugKeepsTempFiles();
+
             var encoder = new VideoEncoder(320, 240, 30, 60, _tempBaseDir);
             string outputDir = encoder.OutputDirectory;
 
@@ -87,6 +102,8 @@ namespace BetaHub.Tests
         [Test]
         public void Dispose_ShouldDeleteInstanceDirWhenOnlyTempFilesRemain()
         {
+            IgnoreWhenDebugKeepsTempFiles();
+
             var encoder = new VideoEncoder(320, 240, 30, 60, _tempBaseDir);
             string outputDir = encoder.OutputDirectory;
 
