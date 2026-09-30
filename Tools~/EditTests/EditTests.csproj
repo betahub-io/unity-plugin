@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Fast feedback loop: compiles Runtime/Scripts + Tests/Editor against Unity's DLLs and runs the
+    plain-C# NUnit tests with the dotnet SDK. Seconds instead of minutes, no Unity license needed.
+    Not a replacement for the Unity test runner; see README.md in this folder.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <DefineConstants>UNITY_EDITOR;UNITY_2022_3_OR_NEWER;UNITY_INCLUDE_TESTS;ENABLE_INPUT_SYSTEM;UNITY_STANDALONE_OSX</DefineConstants>
+    <NoWarn>CS0618;CS1701;CS1702;CS0649;CS0414;CS0168;CS0219;CS8632</NoWarn>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <PluginRoot>$(MSBuildProjectDirectory)/../..</PluginRoot>
+    <!-- Override with environment variables when paths differ on your machine. -->
+    <UnityEditorPath Condition="'$(UnityEditorPath)' == ''">$(UNITY_EDITOR_PATH)</UnityEditorPath>
+    <UnityEditorPath Condition="'$(UnityEditorPath)' == ''">/Applications/Unity/Hub/Editor/2022.3.62f3/Unity.app</UnityEditorPath>
+    <UnityManaged>$(UnityEditorPath)/Contents/Managed</UnityManaged>
+    <UnityWorkspace Condition="'$(UnityWorkspace)' == ''">$(BETAHUB_UNITY_WORKSPACE)</UnityWorkspace>
+    <UnityWorkspace Condition="'$(UnityWorkspace)' == ''">/Users/piotrkorzuszek/Projects/betahub/betahub-unity-plugin-workspace-2022/BetaHub Unity Plugin</UnityWorkspace>
+    <ScriptAssemblies>$(UnityWorkspace)/Library/ScriptAssemblies</ScriptAssemblies>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(PluginRoot)/Runtime/Scripts/**/*.cs" />
+    <Compile Include="$(PluginRoot)/Tests/Editor/**/*.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="$(UnityManaged)/UnityEngine/*.dll" />
+    <Reference Include="$(UnityManaged)/UnityEditor.dll" />
+    <!-- Package assemblies compiled by the workspace project; open it in Unity once if these are missing. -->
+    <Reference Include="$(ScriptAssemblies)/UnityEngine.UI.dll" />
+    <Reference Include="$(ScriptAssemblies)/Unity.TextMeshPro.dll" />
+    <Reference Include="$(ScriptAssemblies)/Unity.InputSystem.dll" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="15.9.0" />
+    <PackageReference Include="NUnit" Version="3.11.0" />
+    <PackageReference Include="NUnit3TestAdapter" Version="3.11.0" />
+  </ItemGroup>
+  <Target Name="CheckUnityPaths" BeforeTargets="CoreCompile">
+    <Error Condition="!Exists('$(UnityManaged)/UnityEngine')" Text="Unity editor not found at '$(UnityEditorPath)'. Set UNITY_EDITOR_PATH to your Unity.app." />
+    <Error Condition="!Exists('$(ScriptAssemblies)/Unity.TextMeshPro.dll')" Text="Compiled package assemblies not found in '$(ScriptAssemblies)'. Set BETAHUB_UNITY_WORKSPACE to a Unity project that consumes this plugin and open it once." />
+  </Target>
+</Project>
