@@ -1,11 +1,8 @@
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
-using System;
-using System.IO;
 using System.Collections;
 using UnityEngine.Events;
-using System.Collections.Generic;
 using UnityEngine.Serialization;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
@@ -13,25 +10,20 @@ using UnityEngine.InputSystem;
 
 namespace BetaHub
 {
-    public enum MediaUploadType
-    {
-        /// <summary>
-        /// The media will be uploaded in the background without blocking the process
-        /// </summary>
-        UploadInBackground,
-        /// <summary>
-        /// The process will wait until the media has finished uploading before continuing
-        /// </summary>
-        WaitForUpload
-    }
-
-    [RequireComponent(typeof(CustomFieldValidator))]
+    /// <summary>
+    /// The shipped bug report form. Pure view: collects input, shows progress and results, and
+    /// delegates everything else to the <see cref="BetaHubReporter"/> on the same GameObject.
+    /// Use it as a starting point for your own form, or replace it entirely.
+    /// </summary>
+    [RequireComponent(typeof(BetaHubReporter))]
     public class BugReportUI : MonoBehaviour
     {
-        public const string DEMO_PROJECT_ID = "pr-5287510306";
+        private const string SubmitLabel = "Submit";
+        private const string SubmittingLabel = "Submitting...";
+        private const string UploadingLabel = "Uploading...";
+        private const string RecordingDurationPlaceholder = "{TIME}";
+        private const string ScreenshotFileName = "screenshot.png";
 
-        private static BugReportUI _instance;
-        
         [FormerlySerializedAs("bugReportPanel")]
         public GameObject BugReportPanel;
 
@@ -40,7 +32,7 @@ namespace BetaHub
 
         [FormerlySerializedAs("stepsField")]
         public TMP_InputField StepsField;
-        
+
         public Toggle IncludeVideoToggle;
         public Toggle IncludeScreenshotToggle;
         public Toggle IncludePlayerLogToggle;
@@ -57,42 +49,8 @@ namespace BetaHub
         [FormerlySerializedAs("messagePanelUI")]
         public MessagePanelUI MessagePanelUI;
 
-        [Tooltip("Upload in background : The media will be uploaded in the background without blocking the process" +
-            " \n Wait for upload : The process will wait until the media has finished uploading before continuing")]
-        [FormerlySerializedAs("mediaUploadType")]
-        public MediaUploadType MediaUploadType;
-
         [FormerlySerializedAs("reportSubmittedUI")]
         public ReportSubmittedUI ReportSubmittedUI;
-
-        [FormerlySerializedAs("submitEndpoint")]
-        public string SubmitEndpoint = "https://app.betahub.io";
-
-        [FormerlySerializedAs("projectID")]
-        public string ProjectID;
-
-        [FormerlySerializedAs("authToken")]
-        public string AuthToken;
-
-        // Device authentication manager for user login flow
-        [Tooltip("Device Authentication (Optional). If set, the user may be authenticated via device auth.")]
-        [SerializeField] private DeviceAuthManager deviceAuthManager;
-
-        // Geolocation provider for collecting location data
-        [Tooltip("Geolocation Provider (Optional). If set, location data will be included in bug reports.")]
-        [SerializeField] private GeolocationProvider geolocationProvider;
-
-        // Latency provider for collecting network latency data
-        [Tooltip("Latency Provider (Optional). If set, network latency data will be included in bug reports.")]
-        [SerializeField] private LatencyProvider latencyProvider;
-
-        // Custom field validator for validating provider requirements
-        private CustomFieldValidator customFieldValidator;
-
-        // If set, this email address will be used as the default email address of the reporter.
-        // This is a hidden field since it's purpose is to be pre-filled programmatically by the developer if the user is somehow already logged in with a specific email address.
-        [HideInInspector, FormerlySerializedAs("defaultEmailAddress")]
-        public string DefaultEmailAddress;
 
     #if ENABLE_INPUT_SYSTEM
         [FormerlySerializedAs("shortcutAction")]
@@ -102,64 +60,15 @@ namespace BetaHub
         public KeyCode ShortcutKey = KeyCode.F12;
     #endif
 
-        [FormerlySerializedAs("includePlayerLog")]
-        public bool IncludePlayerLog = true;
-
-        [FormerlySerializedAs("includeVideo")]
-        public bool IncludeVideo = true;
-
-        [Tooltip("The release ID to associate the bug report with. If not set (0), the bug report will be " +
-            "associated with the latest release. Requires the AuthToken to have a permission of creating new releases.")]
-        public int ReleaseId = 0;
-        
-        [Tooltip("The release label to associate the bug report with. If not created yet on the backend, " +
-            "a new release will be created with this label. Requires the AuthToken to have a permission of creating new releases. " +
-            "If not set (null), the bug report will be associated with the latest release.")]
-        public string ReleaseLabel = "";
-
         public UnityEvent OnBugReportWindowShown;
         public UnityEvent OnBugReportWindowHidden;
 
-        private List<Issue.ScreenshotFileReference> _screenshots = new List<Issue.ScreenshotFileReference>();
-        private List<Issue.LogFileReference> _logFiles = new List<Issue.LogFileReference>();
-        private List<Issue.VideoFileReference> _videos = new List<Issue.VideoFileReference>();
-
-        // User-defined custom fields: static values and dynamic providers
-        private readonly Dictionary<string, string> _userCustomFields = new Dictionary<string, string>();
-        private readonly Dictionary<string, Func<string>> _userCustomFieldProviders = new Dictionary<string, Func<string>>();
-
-        private static Logger _logger;
-        
-        public static Logger Logger => _logger;
+        private BetaHubReporter _reporter;
+        private ReportSubmission _activeSubmission;
+        private TMP_Text _submitButtonLabel;
+        private bool _uiWasVisible;
         private bool _cursorStateChanged;
         private CursorLockMode _previousCursorLockMode;
-
-        private GameRecorder _gameRecorder;
-
-        // we keep track of the issues to not record the video when any of the issues are being uploaded
-        private List<Issue> _issues = new List<Issue>();
-
-        private bool _uiWasVisible = false;
-
-#if !DISABLE_BETAHUB_LOGGER
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        private static void InitializeLogger()
-        {
-            _logger = new Logger();
-        }
-#endif
-        
-        void Awake()
-        {
-            if (_instance == null)
-            {
-                _instance = this;
-            }
-            else
-            {
-                Destroy(gameObject);
-            }
-        }
 
         void OnEnable()
         {
@@ -182,122 +91,61 @@ namespace BetaHub
             }
     #endif
         }
-        
+
         void Start()
         {
-            _gameRecorder = GetComponent<GameRecorder>();
-            
-            // Get the required CustomFieldValidator component (automatically added by RequireComponent)
-            customFieldValidator = GetComponent<CustomFieldValidator>();
-            
+            _reporter = GetComponent<BetaHubReporter>();
+            _submitButtonLabel = SubmitButton.GetComponentInChildren<TMP_Text>();
+
             BugReportPanel.SetActive(false);
             SubmitButton.onClick.AddListener(SubmitBugReport);
-            CloseButton.onClick.AddListener(() =>
-            {
-                BugReportPanel.SetActive(false);
-            });
+            CloseButton.onClick.AddListener(() => BugReportPanel.SetActive(false));
 
-            if (string.IsNullOrEmpty(ProjectID))
+            if (_reporter == null)
             {
-                Debug.LogError("Project ID is not set. I won't be able to submit bug reports.");
+                Debug.LogError(UnityBetaHubLog.Prefix + "BugReportUI needs a BetaHubReporter component on the same GameObject. Add one, or use the shipped prefab. The form will not submit.", this);
+                SubmitButton.interactable = false;
+                return;
             }
 
-#if DISABLE_BETAHUB_LOGGER
-            Debug.LogWarning("DISABLE_BETAHUB_LOGGER is enabled. Player logs will not be captured for bug reports. Remove this scripting define symbol to enable logging.");
-#endif
-
-            // Check for auth token if not using device auth
-            if (string.IsNullOrEmpty(AuthToken))
+            var recorder = GetComponent<GameRecorder>();
+            if (recorder == null)
             {
-                Debug.LogWarning("Auth token is not set. Bug reports will only work if device authentication is available and user is signed in.");
-            }
-
-            // auth token must start with tkn- if provided
-            if (!string.IsNullOrEmpty(AuthToken) && !AuthToken.StartsWith("tkn-"))
-            {
-                Debug.LogError("Auth token must start with tkn-. I won't be able to submit bug reports.");
-            }
-
-            var gameRecorder = GetComponent<GameRecorder>();
-            if (gameRecorder == null)
-            {
-                Debug.LogWarning("GameRecorder component is not attached to the same GameObject as BugReportUI. Video won't be recorded.");
                 IncludeVideoToggle.interactable = false;
             }
             else
             {
-                // update {TIME} in toggle label
-                int recordingDurationSeconds = gameRecorder.RecordingDuration;
-                var textComponent = IncludeVideoToggle.GetComponentInChildren<Text>();
-
-                if (textComponent != null)
+                var toggleLabel = IncludeVideoToggle.GetComponentInChildren<Text>();
+                if (toggleLabel != null)
                 {
-                    textComponent.text = textComponent.text.Replace("{TIME}", recordingDurationSeconds.ToString() + " Seconds");
-                }
-                else
-                {
-                    Debug.LogWarning("Could not find Text component in IncludeVideoToggle. Make sure the text is set in the inspector.");
+                    toggleLabel.text = toggleLabel.text.Replace(RecordingDurationPlaceholder, recorder.RecordingDuration + " Seconds");
                 }
             }
-
-            // Validate custom fields for providers
-            ValidateProviderCustomFields();
-
-            DontDestroyOnLoad(gameObject);
         }
 
         void Update()
         {
-            if (_gameRecorder != null)
+            bool visible = UiIsVisible();
+            if (visible && !_uiWasVisible)
             {
-                if (SholdBeRecordingVideo() && (!_gameRecorder.IsRecording || _gameRecorder.IsPaused))
-                {
-                    _gameRecorder.StartRecording();
-                }
-                else if (!SholdBeRecordingVideo() && (_gameRecorder.IsRecording && !_gameRecorder.IsPaused))
-                {
-                    _gameRecorder.PauseRecording();
-                }
+                OnBugReportWindowShown?.Invoke();
+                _reporter?.NotifyReportWindowShown();
+                ModifyCursorState();
             }
+            else if (!visible && _uiWasVisible)
+            {
+                OnBugReportWindowHidden?.Invoke();
+                _reporter?.NotifyReportWindowHidden();
+                RestoreCursorState();
+            }
+            _uiWasVisible = visible;
 
-            if (UiIsVisible())
-            {
-                if (!_uiWasVisible)
-                {
-                    OnBugReportWindowShown?.Invoke();
-                    
-                    // Start latency testing when bug report window is shown
-                    if (latencyProvider != null && latencyProvider.EnableLatency)
-                    {
-                        latencyProvider.StartLatencyTest();
-                    }
-                    
-                    ModifyCursorState();
-                }
-                _uiWasVisible = true;
-            }
-            else if (!UiIsVisible())
-            {
-                if (_uiWasVisible)
-                {
-                    OnBugReportWindowHidden?.Invoke();
-                    RestoreCursorState();
-                }
-                _uiWasVisible = false;
-            }
-            
     #if !ENABLE_INPUT_SYSTEM
             if (ShortcutKey != KeyCode.None && Input.GetKeyDown(ShortcutKey))
             {
                 StartCoroutine(CaptureScreenshotAndShowUI());
             }
     #endif
-        }
-
-        private bool SholdBeRecordingVideo()
-        {
-            // if true, the report is being uploaded, some processes should be paused
-            return IncludeVideo && !UiIsVisible() && !_issues.Exists(issue => !issue.IsMediaUploadComplete);
         }
 
         private bool UiIsVisible()
@@ -334,23 +182,27 @@ namespace BetaHub
 
         bool IsNewInputSystemEnabled()
         {
-            // Check if the new input system is enabled
             return InputSystem.settings != null;
         }
     #endif
 
+        /// <summary>Captures a screenshot of the current frame and opens the form. Bound to the shortcut.</summary>
+        public void Show()
+        {
+            StartCoroutine(CaptureScreenshotAndShowUI());
+        }
+
         IEnumerator CaptureScreenshotAndShowUI()
         {
-            // Capture screenshot
-            string screenshotPath = Application.persistentDataPath + "/screenshot.png";
-            ScreenCapture.CaptureScreenshot(screenshotPath);
+            if (_reporter == null) yield break;
 
-            AddScreenshot(screenshotPath, true);
+            string screenshotPath = Application.persistentDataPath + "/" + ScreenshotFileName;
+            ScreenCapture.CaptureScreenshot(screenshotPath);
+            _reporter.AddScreenshot(screenshotPath, true);
 
             // wait for another frame
             yield return null;
 
-            // reset the fields
             DescriptionField.text = "";
             StepsField.text = "";
             IncludeVideoToggle.isOn = true;
@@ -359,463 +211,94 @@ namespace BetaHub
 
             #if BETAHUB_DEBUG
                 Debug.Log("BETAHUB_DEBUG: Prefilling description and steps for reproduce for faster testing");
-                // prefill the description and steps for reproduce for faster testing
                 DescriptionField.text = "The game is crashing when I press the sounds setting button. It happens on the main menu and on the settings menu.";
                 StepsField.text = "1. Go to the main menu\n2. Press the settings button\n3. Press the sounds button\n4. Crash the game";
             #endif
-            
+
             BugReportPanel.SetActive(true);
-        }
-
-        // Sets screenshot path to be uploaded. Useful on manual invocation of bug report UI.
-        public void AddScreenshot(string path, bool removeAfterUpload)
-        {
-            _screenshots.Add(new Issue.ScreenshotFileReference { path = path, removeAfterUpload = removeAfterUpload });
-        }
-
-        public void AddLogFile(string path, bool removeAfterUpload)
-        {
-            _logFiles.Add(new Issue.LogFileReference { path = path, removeAfterUpload = removeAfterUpload });
-        }
-
-        // Adds a video file to be uploaded with the next bug report.
-        // The video is always uploaded regardless of the Include Video toggle state.
-        public void AddVideo(string path, bool removeAfterUpload)
-        {
-            _videos.Add(new Issue.VideoFileReference { path = path, removeAfterUpload = removeAfterUpload });
         }
 
         void SubmitBugReport()
         {
-            StartCoroutine(SubmitBugReportCoroutine());
-        }
+            if (_activeSubmission != null && !_activeSubmission.IsFinished)
+            {
+                Debug.LogWarning(UnityBetaHubLog.Prefix + "Submit ignored: the previous report is still in progress.", this);
+                return;
+            }
 
-        private IEnumerator SubmitBugReportCoroutine()
-        {
-            string description = DescriptionField.text;
-            string steps = StepsField.text;
-
-            // Filter screenshots and logs based on toggle state
-            List<Issue.ScreenshotFileReference> screenshots = null;
-            List<Issue.LogFileReference> logFiles = null;
-            GameRecorder gameRecorder = null;
-            
-            if (IncludeScreenshotToggle.isOn && _screenshots.Count > 0)
+            var options = new BugReportOptions
             {
-                // copy to new list
-                screenshots = new List<Issue.ScreenshotFileReference>(_screenshots);
-            }
-            
-            if (IncludePlayerLogToggle.isOn)
-            {
-                logFiles = new List<Issue.LogFileReference>(_logFiles);
-                
-                // Add logger log file if it exists
-                if (IncludePlayerLog && _logger != null && !string.IsNullOrEmpty(_logger.LogPath) && File.Exists(_logger.LogPath))
-                {
-                    // skip if size over 200MB
-                    if (new FileInfo(_logger.LogPath).Length < 200 * 1024 * 1024)
-                    {
-                        logFiles.Add(new Issue.LogFileReference { logger = _logger, removeAfterUpload = false });
-                    }
-                }
-            }
-            
-            if (IncludeVideo && IncludeVideoToggle.isOn)
-            {
-                gameRecorder = _gameRecorder;
-            }
-            
-            // Collect custom fields: user static fields, then user providers, then built-in providers (last wins)
-            var customFieldsData = CollectUserCustomFields();
-            
-            // Get geolocation and ASN data
-            if (geolocationProvider != null && (geolocationProvider.EnableGeolocation || geolocationProvider.EnableAsnCollection))
-            {
-                bool locationReceived = false;
-                string locationError = null;
-                
-                yield return geolocationProvider.GetLocationDataAsync(
-                    (locationData) => {
-                        if (locationData != null)
-                        {
-                            if (geolocationProvider.EnableGeolocation && !string.IsNullOrEmpty(locationData.country))
-                            {
-                                customFieldsData["country"] = locationData.country;
-                                Debug.Log("BugReportUI: Including location data in bug report: " + locationData.country);
-                            }
-                            
-                            if (geolocationProvider.EnableAsnCollection && !string.IsNullOrEmpty(locationData.asn))
-                            {
-                                customFieldsData["asn"] = locationData.asn;
-                                Debug.Log("BugReportUI: Including ASN data in bug report: " + locationData.asn);
-                            }
-                        }
-                        locationReceived = true;
-                    },
-                    (error) => {
-                        locationError = error;
-                        locationReceived = true;
-                        Debug.LogWarning("BugReportUI: Failed to get location/ASN data: " + error);
-                    }
-                );
-                
-                // Wait for location request to complete (success or failure)
-                while (!locationReceived)
-                {
-                    yield return null;
-                }
-            }
-            
-            // Get latency data (stop any ongoing test and get current results)
-            if (latencyProvider != null && latencyProvider.EnableLatency)
-            {
-                // Stop the latency test and get whatever results we have
-                latencyProvider.StopLatencyTest();
-                var latencyData = latencyProvider.GetCurrentLatencyData();
-                
-                if (latencyData != null && latencyData.HasSuccessfulResults())
-                {
-                    customFieldsData["latency"] = latencyData.GetFormattedLatency();
-                    Debug.Log("BugReportUI: Including latency data in bug report: " + latencyData.GetFormattedLatency());
-                }
-                else
-                {
-                    Debug.LogWarning("BugReportUI: No latency data available for bug report.");
-                }
-            }
-            
-            // Log custom fields if any
-            if (customFieldsData.Count > 0)
-            {
-                var fieldsList = new System.Collections.Generic.List<string>();
-                foreach (var kvp in customFieldsData)
-                {
-                    fieldsList.Add($"{kvp.Key}={kvp.Value}");
-                }
-                Debug.Log("BugReportUI: Final custom fields: " + string.Join(", ", fieldsList.ToArray()));
-            }
-            
-            // Create Issue instance and post it with authentication
-            string effectiveAuthToken = GetEffectiveAuthToken();
-            Issue issue = new Issue(SubmitEndpoint, ProjectID, effectiveAuthToken, MessagePanelUI, ReportSubmittedUI, gameRecorder);
-            _issues.Add(issue);
-
-
-            Action<ErrorMessage> onIssueError = (ErrorMessage errorMessage) =>
-            {
-                try {
-                    // error, get ready to try again
-                    SubmitButton.interactable = true;
-                    SubmitButton.GetComponentInChildren<TMP_Text>().text = "Submit";
-
-                    if (errorMessage.exception != null)
-                    {
-                        Debug.LogError("Error submitting bug report: " + errorMessage.exception);
-                        MessagePanelUI.ShowMessagePanel("Error", "Error submitting bug report. Please try again later.");
-                    }
-                    else if (!string.IsNullOrEmpty(errorMessage.error))
-                    {
-                        MessagePanelUI.ShowMessagePanel("Error", errorMessage.error);
-                    }
-                    else
-                    {
-                        MessagePanelUI.ShowMessagePanel("Error", "Unknown error submitting bug report. Please try again later.");
-                    }
-                }
-                catch (Exception e)
-                {
-                    Debug.LogError("Error displaying error message: " + e);
-                }
+                IncludeScreenshots = IncludeScreenshotToggle.isOn,
+                IncludeLogs = IncludePlayerLogToggle.isOn,
+                IncludeRecording = IncludeVideoToggle.isOn,
             };
 
+            SetSubmitButton(false, SubmittingLabel);
 
-            // Developer-added videos are always included, regardless of toggle state
-            List<Issue.VideoFileReference> videos = _videos.Count > 0 ? new List<Issue.VideoFileReference>(_videos) : null;
+            _activeSubmission = _reporter.Submit(DescriptionField.text, StepsField.text, options);
+            _activeSubmission.StateChanged += OnSubmissionStateChanged;
+            _activeSubmission.ReporterEmailFailed += OnReporterEmailFailed;
 
-            CoroutineUtils.StartThrowingCoroutine(this,
-            issue.PostIssue(description, steps, screenshots, logFiles, ReleaseId, ReleaseLabel, false,
-                (issueId) => // successful post
-                {
-                    SubmitButton.interactable = true;
-                    SubmitButton.GetComponentInChildren<TMP_Text>().text = "Submit";
+            // A configuration problem yields an already failed handle; StateChanged will not fire again.
+            if (_activeSubmission.State == ReportSubmissionState.Failed)
+            {
+                OnSubmissionStateChanged(_activeSubmission);
+            }
+        }
 
-                    // Clear lists after successful upload
-                    _screenshots.Clear();
-                    _logFiles.Clear();
-                    _videos.Clear();
+        private void OnSubmissionStateChanged(ReportSubmission submission)
+        {
+            switch (submission.State)
+            {
+                case ReportSubmissionState.UploadingMedia:
+                    SetSubmitButton(false, UploadingLabel);
+                    break;
 
-                    // Check if user is authenticated via device auth
-                    if (IsUserAuthenticatedViaDeviceAuth())
-                    {
-                        // For authenticated users: publish immediately and show thanks
-                        StartCoroutine(PublishIssueAndShowThanks(issue));
-                    }
-                    else
-                    {
-                        // For non-authenticated users: show email UI which handles publishing
-                        string effectiveEmail = GetEffectiveEmailAddress();
-                        ReportSubmittedUI.Show(issue, effectiveEmail);
-                    }
-
-                    // hide bug report panel
+                case ReportSubmissionState.AwaitingPublish:
+                    SetSubmitButton(true, SubmitLabel);
                     BugReportPanel.SetActive(false);
-                },
-                MediaUploadType,
-                (error) =>
-                {
-                    onIssueError(new ErrorMessage { error = error });
-                },
-                customFieldsData.Count > 0 ? customFieldsData : null,
-                videos
-            ),
-            (ex) => // done
-            {
-                if (ex != null)
-                {
-                    onIssueError(new ErrorMessage { exception = ex });
-                }
-            });
+                    ReportSubmittedUI.Show(submission, _reporter.EffectiveEmailAddress);
+                    break;
 
-            SubmitButton.interactable = false;
-            SubmitButton.GetComponentInChildren<TMP_Text>().text = "Submitting...";
-        }
+                case ReportSubmissionState.Publishing:
+                    // Reached directly when the user is authenticated and the report auto-publishes.
+                    SetSubmitButton(true, SubmitLabel);
+                    BugReportPanel.SetActive(false);
+                    break;
 
-        class ErrorMessage {
-            public string error;
-            public Exception exception;
-        }
-
-        class IssueResponse {
-            public string id;
-        }
-
-        #region Device Authentication Integration
-
-        private bool IsDeviceAuthAvailable()
-        {
-            return deviceAuthManager != null && !string.IsNullOrEmpty(ProjectID);
-        }
-
-        private string GetEffectiveAuthToken()
-        {
-            // Check if user is authenticated via device auth at submit time
-            if (deviceAuthManager != null && deviceAuthManager.IsAuthenticated())
-            {
-                string jwtToken = deviceAuthManager.JwtToken;
-                if (!string.IsNullOrEmpty(jwtToken))
-                {
-                    // Return AuthToken,JwtToken format when signed in
-                    return string.IsNullOrEmpty(AuthToken) ? jwtToken : $"{AuthToken},{jwtToken}";
-                }
-            }
-
-            // Fall back to configured auth token only
-            return AuthToken;
-        }
-
-        private string GetEffectiveEmailAddress()
-        {
-            // If user is authenticated via device auth, don't use email address
-            // Backend already knows who the reporter is from the JWT token
-            if (deviceAuthManager != null && deviceAuthManager.IsAuthenticated())
-            {
-                // Return null/empty - backend knows the user from JWT token
-                return null;
-            }
-
-            // Fall back to configured default email for non-authenticated users
-            return DefaultEmailAddress;
-        }
-
-        public void SetDeviceAuthManager(DeviceAuthManager authManager)
-        {
-            deviceAuthManager = authManager;
-        }
-
-        public void SetGeolocationProvider(GeolocationProvider provider)
-        {
-            geolocationProvider = provider;
-        }
-
-        public void SetLatencyProvider(LatencyProvider provider)
-        {
-            latencyProvider = provider;
-        }
-
-        private bool IsUserAuthenticatedViaDeviceAuth()
-        {
-            return deviceAuthManager != null && deviceAuthManager.IsAuthenticated();
-        }
-
-        private IEnumerator PublishIssueAndShowThanks(Issue issue)
-        {
-            // Publish the issue immediately (no email needed - backend knows user from JWT)
-            var publishCoroutine = issue.Publish(false); // false = don't email the report
-            yield return publishCoroutine;
-            
-            // Check if publishing was successful by checking if the coroutine completed without errors
-            // Note: Issue.Publish() should handle its own errors internally, so we assume success here
-            MessagePanelUI.ShowMessagePanel("Thank You", "Your bug report has been submitted successfully. Thank you for helping us improve the game!");
-        }
-
-        void OnDestroy()
-        {
-            // Cleanup handled automatically since we don't subscribe to events
-        }
-
-        public static void PauseLogger()
-        {
-#if !DISABLE_BETAHUB_LOGGER
-            if (_logger != null)
-            {
-                _logger.PauseLogging();
-            }
-#endif
-        }
-
-        public static void ResumeLogger()
-        {
-#if !DISABLE_BETAHUB_LOGGER
-            if (_logger != null)
-            {
-                _logger.ResumeLogging();
-            }
-#endif
-        }
-
-        #endregion
-
-        #region Custom Fields API
-
-        /// <summary>
-        /// Sets a custom field value that will be included in every bug report submission.
-        /// The field must exist in your BetaHub project's custom fields configuration
-        /// and be marked as tester_settable.
-        /// </summary>
-        /// <param name="name">The custom field identifier as configured in BetaHub.</param>
-        /// <param name="value">The value to set for this field.</param>
-        public void SetCustomField(string name, string value)
-        {
-            if (string.IsNullOrEmpty(name))
-            {
-                Debug.LogWarning("BugReportUI: Cannot set custom field with null or empty name");
-                return;
-            }
-            if (value == null)
-            {
-                Debug.LogWarning($"BugReportUI: Cannot set custom field '{name}' to null value. Use RemoveCustomField() to remove a field.");
-                return;
-            }
-            _userCustomFields[name] = value;
-        }
-
-        /// <summary>
-        /// Removes a previously set static custom field value.
-        /// </summary>
-        /// <param name="name">The custom field identifier to remove.</param>
-        public void RemoveCustomField(string name)
-        {
-            if (string.IsNullOrEmpty(name))
-                return;
-            _userCustomFields.Remove(name);
-        }
-
-        /// <summary>
-        /// Registers a dynamic custom field provider. The valueGetter function is called
-        /// at submission time to get the current value. If a static field with the same name
-        /// exists, the provider's value takes precedence.
-        /// </summary>
-        /// <param name="name">The custom field identifier as configured in BetaHub.</param>
-        /// <param name="valueGetter">A function that returns the current value for this field.</param>
-        public void RegisterCustomFieldProvider(string name, Func<string> valueGetter)
-        {
-            if (string.IsNullOrEmpty(name))
-            {
-                Debug.LogWarning("BugReportUI: Cannot register custom field provider with null or empty name");
-                return;
-            }
-            if (valueGetter == null)
-            {
-                Debug.LogWarning("BugReportUI: Cannot register custom field provider with null valueGetter");
-                return;
-            }
-            _userCustomFieldProviders[name] = valueGetter;
-        }
-
-        /// <summary>
-        /// Removes a previously registered custom field provider.
-        /// </summary>
-        /// <param name="name">The custom field identifier to unregister.</param>
-        public void UnregisterCustomFieldProvider(string name)
-        {
-            if (string.IsNullOrEmpty(name))
-                return;
-            _userCustomFieldProviders.Remove(name);
-        }
-
-        /// <summary>
-        /// Collects all user-defined custom fields (static values and dynamic providers).
-        /// Provider values take precedence over static values for the same field name.
-        /// </summary>
-        private Dictionary<string, string> CollectUserCustomFields()
-        {
-            var result = new Dictionary<string, string>(_userCustomFields);
-
-            foreach (var kvp in _userCustomFieldProviders)
-            {
-                try
-                {
-                    string value = kvp.Value();
-                    if (value != null)
+                case ReportSubmissionState.Published:
+                    if (_reporter.IsUserAuthenticated)
                     {
-                        result[kvp.Key] = value;
+                        MessagePanelUI.ShowMessagePanel("Thank You", "Your bug report has been submitted successfully. Thank you for helping us improve the game!");
                     }
-                }
-                catch (Exception ex)
-                {
-                    Debug.LogWarning($"BugReportUI: Custom field provider '{kvp.Key}' threw an exception: {ex.Message}");
-                }
-            }
+                    Detach(submission);
+                    break;
 
-            return result;
+                case ReportSubmissionState.Failed:
+                    SetSubmitButton(true, SubmitLabel);
+                    MessagePanelUI.ShowMessagePanel("Error", submission.Error);
+                    Detach(submission);
+                    break;
+            }
         }
 
-        #endregion
-
-        private void ValidateProviderCustomFields()
+        private void OnReporterEmailFailed(string error)
         {
-            // Skip validation if we don't have the necessary credentials
-            if (string.IsNullOrEmpty(SubmitEndpoint) || string.IsNullOrEmpty(ProjectID))
-            {
-                Debug.LogWarning("BugReportUI: Cannot validate custom fields - missing endpoint or project ID");
-                return;
-            }
+            MessagePanelUI.ShowMessagePanel("Error", "Could not save your email address: " + error);
+        }
 
-            string effectiveAuthToken = GetEffectiveAuthToken();
-            if (string.IsNullOrEmpty(effectiveAuthToken))
-            {
-                Debug.LogWarning("BugReportUI: Cannot validate custom fields - no auth token available");
-                return;
-            }
+        private void Detach(ReportSubmission submission)
+        {
+            submission.StateChanged -= OnSubmissionStateChanged;
+            submission.ReporterEmailFailed -= OnReporterEmailFailed;
+        }
 
-            // Collect required fields from all attached providers
-            var requiredFields = new List<CustomFieldRequirement>();
-
-            if (geolocationProvider != null && geolocationProvider.RequiredCustomFields != null)
+        private void SetSubmitButton(bool interactable, string label)
+        {
+            SubmitButton.interactable = interactable;
+            if (_submitButtonLabel != null)
             {
-                requiredFields.AddRange(geolocationProvider.RequiredCustomFields);
-            }
-
-            if (latencyProvider != null && latencyProvider.RequiredCustomFields != null)
-            {
-                requiredFields.AddRange(latencyProvider.RequiredCustomFields);
-            }
-
-            // Run validation if we have any required fields
-            if (requiredFields.Count > 0 && customFieldValidator != null)
-            {
-                customFieldValidator.ValidateCustomFields(SubmitEndpoint, ProjectID, effectiveAuthToken, requiredFields);
+                _submitButtonLabel.text = label;
             }
         }
     }

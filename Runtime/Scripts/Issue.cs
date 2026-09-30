@@ -7,16 +7,19 @@ namespace BetaHub
     using UnityEngine;
     using UnityEngine.Networking;
 
-    // Represents an issue (persistent or not on BetaHub)
-    public class Issue
+    // HTTP client for one BetaHub issue: draft creation, media upload, reporter email and publish.
+    // Workflow state (what to publish when) lives in ReportSubmission; this class only talks to the server.
+    public class Issue : IIssueClient
     {
+        private const string UnknownErrorMessage = "Unknown error";
+
         // set if the issue is persistent on BetaHub
         public string Id { get; private set; }
 
         public string Url { get; private set; }
 
-        // returns true if the media upload is complete
-        public bool IsMediaUploadComplete { get { return _mediaUploadComplete; } }
+        string IIssueClient.IssueId => Id;
+        string IIssueClient.IssueUrl => Url;
 
         private string _betahubEndpoint;
 
@@ -28,20 +31,8 @@ namespace BetaHub
         // token to update an issue, starts with tkn-
         private string _updateIssueAuthToken;
 
-        // State flags for publishing logic
-        private bool _mediaUploadComplete = false;
-        private bool _publishRequested = false;
-        private bool _isPublished = false;
-
         private GameRecorder _gameRecorder;
 
-        private MessagePanelUI _messagePanelUI;
-
-        private ReportSubmittedUI _reportSubmittedUI;
-
-        private bool _emailMyReport = false;
-        
-        // Reference structs moved to be nested inside Issue class
         public struct LogFileReference
         {
             public string path;
@@ -61,251 +52,149 @@ namespace BetaHub
             public bool removeAfterUpload;
         }
 
-        public Issue(string betahubEndpoint, string projectId,
-                    string authToken,
-                    MessagePanelUI messagePanelUI, ReportSubmittedUI reportSubmittedUI, GameRecorder gameRecorder)
+        /// <param name="gameRecorder">When set, the recorder's last minute is stopped, saved and uploaded with the media.</param>
+        public Issue(string betahubEndpoint, string projectId, string authToken, GameRecorder gameRecorder = null)
         {
-            _betahubEndpoint = betahubEndpoint;
-            if (!betahubEndpoint.EndsWith("/"))
+            if (string.IsNullOrEmpty(betahubEndpoint))
             {
-                _betahubEndpoint += "/";
+                throw new ArgumentException("BetaHub endpoint is required", nameof(betahubEndpoint));
             }
-
-            _projectId = projectId;
-            _createIssueAuthToken = authToken;
-            _messagePanelUI = messagePanelUI;
-            _reportSubmittedUI = reportSubmittedUI;
-
-            if (gameRecorder != null)
-            {
-                _gameRecorder = gameRecorder;
-            }
-
-            if (!authToken.StartsWith("tkn-"))
-            {
-                throw new Exception("Auth token must start with tkn-");
-            }
-
             if (string.IsNullOrEmpty(projectId))
             {
-                throw new Exception("Project ID is required");
+                throw new ArgumentException("Project ID is required", nameof(projectId));
+            }
+            if (string.IsNullOrEmpty(authToken))
+            {
+                throw new ArgumentException("Auth token is required", nameof(authToken));
             }
 
-            if (messagePanelUI == null)
-            {
-                throw new Exception("Message panel UI is required");
-            }
-
-            if (reportSubmittedUI == null)
-            {
-                throw new Exception("Report submitted UI is required");
-            }
+            _betahubEndpoint = betahubEndpoint.EndsWith("/") ? betahubEndpoint : betahubEndpoint + "/";
+            _projectId = projectId;
+            _createIssueAuthToken = authToken;
+            _gameRecorder = gameRecorder;
         }
 
-        // Posts an issue to BetaHub.
-        // The posting flow looks as follows:
-        // 1. A draft issue is created with a title and description. This sets the Issue.Id and _updateIssueAuthToken.
-        // 2. Media files are uploaded to the issue in the background.
-        // 3. The user can optionally post their email address (not implemented here).
-        // 4. After media upload finishes, the issue is published if requested (either via autoPublish or a prior call to Publish).
-        // Parameters:
-        // - description: description of the issue
-        // - steps: (optional) steps to reproduce the issue
-        // - screenshots: (optional) screenshots of the issue
-        // - logFiles: (optional) log files of the issue
-        // - autoPublish: (optional) if true, the issue will be requested to be published automatically after media upload.
-        public IEnumerator PostIssue(string description, string steps = null,
-                                     List<ScreenshotFileReference> screenshots = null, List<LogFileReference> logFiles = null,
-                                     int releaseId = 0, string releaseLabel = "",
-                                     bool autoPublish = false,
-                                     Action<string> onAllMediaUploaded = null, MediaUploadType mediaUploadType = MediaUploadType.UploadInBackground, Action<string> onError = null,
-                                     Dictionary<string, string> customFields = null,
-                                     List<VideoFileReference> videos = null)
+        // Creates the draft issue. On success Id, Url and the update token are set.
+        public IEnumerator CreateDraft(BugReportDraft draft, ReleaseTarget release, Action<string> onError)
         {
             if (Id != null)
             {
-                throw new Exception("Issue instance cannot be reused for posting.");
+                throw new InvalidOperationException("Issue instance cannot be reused for posting.");
+            }
+            if (release.HasId && release.HasLabel)
+            {
+                throw new ArgumentException("Cannot set both release ID and release label");
             }
 
-            if (releaseId > 0 && !string.IsNullOrEmpty(releaseLabel))
+            DraftResult result = default;
+            yield return PostIssueDraft(draft.Description, draft.Steps, release.Id, release.Label, draft.CustomFields, r => result = r);
+
+            if (result.Error != null)
             {
-                throw new Exception("Cannot set both release ID and release label");
-            }
-
-            // Initialize state for this posting attempt
-            _publishRequested = autoPublish;
-            _mediaUploadComplete = false;
-            _isPublished = false;
-
-            string issueIdLocal = null; // Use local variables for draft result callback
-            string issueUrlLocal = null;
-            string updateIssueAuthTokenLocal = null;
-            string error = null;
-
-            yield return PostIssueDraft(description, steps, releaseId, releaseLabel, customFields, (draftResult) =>
-            {
-                issueIdLocal = draftResult.IssueId;
-                updateIssueAuthTokenLocal = draftResult.UpdateIssueAuthToken;
-                error = draftResult.Error;
-                issueUrlLocal = draftResult.Url;
-            });
-
-            if (error != null)
-            {
-                Debug.LogError("Error posting issue: " + error);
-                onError?.Invoke(error);
+                onError?.Invoke(result.Error);
                 yield break;
             }
 
-            // Draft created successfully, store ID and token in member variables
-            this.Id = issueIdLocal;
-            this.Url = issueUrlLocal;
-            this._updateIssueAuthToken = updateIssueAuthTokenLocal;
-
-            if (mediaUploadType == MediaUploadType.UploadInBackground)
-            {
-                onAllMediaUploaded?.Invoke(this.Id); // Notify caller with the persistent ID
-            }
-
-            yield return PostAllMedia(screenshots, logFiles, _gameRecorder, videos);
-
-            if (mediaUploadType == MediaUploadType.WaitForUpload)
-            {
-                onAllMediaUploaded?.Invoke(this.Id); // Notify caller with the persistent ID
-            }
-
-            // Mark media as complete and attempt to publish if requested
-            yield return MarkMediaCompleteAndTryPublish();
+            Id = result.IssueId;
+            Url = result.Url;
+            _updateIssueAuthToken = result.UpdateIssueAuthToken;
         }
 
-        public IEnumerator SubmitEmail(string email)
+        // Uploads screenshots, logs, the recording (if any) and extra videos. Individual upload
+        // failures are logged and reported to the server as client events; they do not abort the report.
+        public IEnumerator UploadMedia(BugReportDraft draft)
+        {
+            RequirePersisted("upload media");
+            yield return PostAllMedia(draft.Screenshots, draft.LogFiles, draft.IncludeRecording ? _gameRecorder : null, draft.Videos);
+        }
+
+        public IEnumerator SetReporterEmail(string email, Action<string> onError)
         {
             if (string.IsNullOrEmpty(email))
             {
-                throw new Exception("Email is required");
+                throw new ArgumentException("Email is required", nameof(email));
             }
-
-            // issue must be persistent
-            if (string.IsNullOrEmpty(Id))
-            {
-                throw new Exception("Issue must be persistent before submitting email");
-            }
+            RequirePersisted("set reporter email");
 
             WWWForm form = new WWWForm();
             form.AddField("email", email);
+
             using (UnityWebRequest www = UnityWebRequest.Post(GetSubmitEmailUrl(), form))
             {
-                www.SetRequestHeader("Authorization", "Bearer " + _updateIssueAuthToken);
-                www.SetRequestHeader("BetaHub-Project-ID", _projectId);
-                www.SetRequestHeader("Accept", "application/json");
+                SetUpdateHeaders(www);
                 yield return www.SendWebRequest();
 
                 if (www.result != UnityWebRequest.Result.Success)
                 {
                     Debug.LogError("Error submitting email: " + www.error + "\nResponse body: " + www.downloadHandler?.text);
+                    onError?.Invoke(ExtractErrorMessage(www));
                 }
             }
         }
 
-
-        // Requests the issue to be published.
-        // If media upload is already complete, it publishes immediately.
-        // Otherwise, it sets a flag ensuring publication occurs once media upload finishes.
-        public IEnumerator Publish(bool emailMyReport)
+        public IEnumerator Publish(bool emailMyReport, Action<string> onError)
         {
-            _emailMyReport = emailMyReport;
-            
-            // Request publishing and attempt to publish if conditions are met
-            yield return RequestPublishAndTryPublish();
+            RequirePersisted("publish");
+
+            WWWForm form = new WWWForm();
+            form.AddField("email_my_report", emailMyReport.ToString());
+
+            string url = $"{_betahubEndpoint}projects/{_projectId}/issues/g-{Id}/publish";
+            using (UnityWebRequest www = UnityWebRequest.Post(url, form))
+            {
+                SetUpdateHeaders(www);
+                yield return www.SendWebRequest();
+
+                if (www.result != UnityWebRequest.Result.Success)
+                {
+                    Debug.LogError("Error publishing issue: " + www.error + "\nResponse body: " + www.downloadHandler?.text);
+                    onError?.Invoke(ExtractErrorMessage(www));
+                    yield break;
+                }
+
+                Debug.Log("Issue published successfully!");
+                if (_projectId == BetaHubReporter.DEMO_PROJECT_ID)
+                {
+                    Debug.Log("Demo project published issue: " + Url);
+                }
+            }
         }
 
-        // Helper method called after media upload completes
-        private IEnumerator MarkMediaCompleteAndTryPublish()
+        private void RequirePersisted(string action)
         {
-            bool lockTaken = false;
-            try
+            if (string.IsNullOrEmpty(Id) || string.IsNullOrEmpty(_updateIssueAuthToken))
             {
-                System.Threading.Monitor.TryEnter(this, 1000, ref lockTaken); // 1 second timeout
-                if (lockTaken)
-                {
-                    _mediaUploadComplete = true;
-                }
-                else
-                {
-                    Debug.LogWarning("Failed to acquire lock for MarkMediaCompleteAndTryPublish within timeout");
-                }
+                throw new InvalidOperationException($"Cannot {action}: the draft issue has not been created yet.");
             }
-            finally
-            {
-                if (lockTaken)
-                {
-                    System.Threading.Monitor.Exit(this);
-                }
-            }
-            yield return CheckAndPublishIfReady();
         }
 
-        // Helper method called by the public Publish() method
-        private IEnumerator RequestPublishAndTryPublish()
+        private void SetUpdateHeaders(UnityWebRequest www)
         {
-            bool lockTaken = false;
-            try
-            {
-                System.Threading.Monitor.TryEnter(this, 1000, ref lockTaken); // 1 second timeout
-                if (lockTaken)
-                {
-                    _publishRequested = true;
-                }
-                else
-                {
-                    Debug.LogWarning("Failed to acquire lock for RequestPublishAndTryPublish within timeout");
-                }
-            }
-            finally
-            {
-                if (lockTaken)
-                {
-                    System.Threading.Monitor.Exit(this);
-                }
-            }
-            yield return CheckAndPublishIfReady();
+            www.SetRequestHeader("Authorization", "Bearer " + _updateIssueAuthToken);
+            www.SetRequestHeader("BetaHub-Project-ID", _projectId);
+            www.SetRequestHeader("Accept", "application/json");
         }
 
-        // Centralized check to publish the issue if all conditions are met
-        private IEnumerator CheckAndPublishIfReady()
+        // Server errors arrive as {"error":"...","status":"..."}; fall back to the transport error.
+        private static string ExtractErrorMessage(UnityWebRequest www)
         {
-            bool shouldPublish = false;
-            bool lockTaken = false;
-            try
+            string body = www.downloadHandler?.text;
+            if (!string.IsNullOrEmpty(body))
             {
-                System.Threading.Monitor.TryEnter(this, 1000, ref lockTaken); // 1 second timeout
-                if (lockTaken)
+                try
                 {
-                    // Check if publish is requested, media is done, not already published, and we have the necessary ID/token
-                    if (_publishRequested && _mediaUploadComplete && !_isPublished && !string.IsNullOrEmpty(Id) && !string.IsNullOrEmpty(_updateIssueAuthToken))
+                    ErrorMessage parsed = JsonUtility.FromJson<ErrorMessage>(body);
+                    if (parsed != null && !string.IsNullOrEmpty(parsed.error))
                     {
-                        shouldPublish = true;
-                        _isPublished = true; // Prevent duplicate publish attempts
+                        return parsed.error;
                     }
                 }
-                else
+                catch (Exception)
                 {
-                    Debug.LogWarning("Failed to acquire lock for CheckAndPublishIfReady within timeout");
+                    // not JSON, fall through
                 }
             }
-            finally
-            {
-                if (lockTaken)
-                {
-                    System.Threading.Monitor.Exit(this);
-                }
-            }
-
-            if (shouldPublish)
-            {
-                yield return PublishNow();
-            }
-            // else: Conditions not met yet, publishing will be checked again later if needed.
+            return string.IsNullOrEmpty(www.error) ? UnknownErrorMessage : www.error;
         }
 
         // posts a draft issue to BetaHub.
@@ -345,22 +234,7 @@ namespace BetaHub
 
                 if (www.result != UnityWebRequest.Result.Success)
                 {
-                    string errorMessage = www.downloadHandler.text;
-                    // try parsing as json, the format should be {"error":"...","status":"..."}
-                    try {
-                        ErrorMessage errorMessageObject = JsonUtility.FromJson<ErrorMessage>(errorMessage);
-                        if (errorMessageObject != null)
-                        {
-                            errorMessage = errorMessageObject.error;
-                        } else {
-                            errorMessage = "Unknown error";
-                        }
-                    }
-                    catch (Exception e)
-                    {
-                        Debug.LogError("Error parsing error message: " + e);
-                    }
-
+                    string errorMessage = ExtractErrorMessage(www);
                     Debug.LogError("Response code: " + www.responseCode);
                     onResult?.Invoke(new DraftResult { IssueId = null, UpdateIssueAuthToken = null, Url = null, Error = errorMessage });
                     yield break;
@@ -570,10 +444,10 @@ namespace BetaHub
             
             if (isLogFile)
             {
-                if (BugReportUI.Logger != null && filePath == BugReportUI.Logger.LogPath)
+                if (BetaHubReporter.Logger != null && filePath == BetaHubReporter.Logger.LogPath)
                 {
                     Debug.Log("Reading log file safely using Logger instance");
-                    fileData = BugReportUI.Logger.ReadLogFileBytes();
+                    fileData = BetaHubReporter.Logger.ReadLogFileBytes();
                     if (fileData == null)
                     {
                         Debug.LogError("Failed to read log file data from Logger instance");
@@ -583,7 +457,7 @@ namespace BetaHub
                 }
                 else
                 {
-                    BugReportUI.PauseLogger();
+                    BetaHubReporter.PauseLogger();
                     
                     try
                     {
@@ -593,11 +467,11 @@ namespace BetaHub
                     {
                         Debug.LogError($"Error reading file {filePath}: {ex.Message}");
                         PostClientEvent("error", "upload_failed", $"Failed to read log file {Path.GetFileName(filePath)}: {ex.Message}");
-                        BugReportUI.ResumeLogger();
+                        BetaHubReporter.ResumeLogger();
                         yield break;
                     }
                     
-                    BugReportUI.ResumeLogger();
+                    BetaHubReporter.ResumeLogger();
                 }
             }
             else
@@ -658,44 +532,6 @@ namespace BetaHub
             }
         }
 
-        private IEnumerator PublishNow()
-        {
-            // Ensure we have valid parameters before proceeding
-            if (string.IsNullOrEmpty(Id) || string.IsNullOrEmpty(_updateIssueAuthToken))
-            {
-                Debug.LogError("Cannot publish issue: Missing Issue ID or Update Token.");
-                yield break;
-            }
-
-            WWWForm form = new WWWForm();
-            form.AddField("email_my_report", _emailMyReport.ToString());
-
-            string url = $"{_betahubEndpoint}projects/{_projectId}/issues/g-{Id}/publish";
-            using (UnityWebRequest www = UnityWebRequest.Post(url, form)) // POST request with empty body
-            {
-                www.SetRequestHeader("Authorization", "Bearer " + _updateIssueAuthToken);
-                www.SetRequestHeader("BetaHub-Project-ID", _projectId);
-                www.SetRequestHeader("Accept", "application/json");
-
-                yield return www.SendWebRequest();
-
-                if (www.result != UnityWebRequest.Result.Success)
-                {
-                    Debug.LogError("Error publishing issue: " + www.error + "\nResponse body: " + www.downloadHandler?.text);
-                }
-                else
-                {
-                    Debug.Log("Issue published successfully!");
-
-                    if (_projectId == BugReportUI.DEMO_PROJECT_ID)
-                    {
-                        Debug.Log("Demo project published issue: " + Url);
-                    }
-                }
-            }
-        }
-        
-        
         private class ErrorMessage 
         {
             public string error;

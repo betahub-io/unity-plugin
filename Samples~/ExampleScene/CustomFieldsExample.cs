@@ -8,26 +8,26 @@ using BetaHub;
 /// </summary>
 public class CustomFieldsExample : MonoBehaviour
 {
-    [SerializeField] private BugReportUI bugReportUI;
+    [SerializeField] private BetaHubReporter reporter;
 
     [Header("Example Custom Field Values")]
     [SerializeField] private string gameId = "my-game-123";
 
     void Start()
     {
-        if (bugReportUI == null)
+        if (reporter == null)
         {
-            Debug.LogError("CustomFieldsExample: Missing BugReportUI reference!");
+            Debug.LogError("CustomFieldsExample: Missing BetaHubReporter reference!");
             return;
         }
 
         // Static custom field: value is set once and included in every bug report.
-        bugReportUI.SetCustomField("game_id", gameId);
+        reporter.SetCustomField("game_id", gameId);
 
         // Dynamic custom field provider: the function is called at submission time,
         // so it always returns the current value.
-        bugReportUI.RegisterCustomFieldProvider("current_level", () => GetCurrentLevelName());
-        bugReportUI.RegisterCustomFieldProvider("play_time", () => GetPlayTime());
+        reporter.RegisterCustomFieldProvider("current_level", () => GetCurrentLevelName());
+        reporter.RegisterCustomFieldProvider("play_time", () => GetPlayTime());
     }
 
     private string GetCurrentLevelName()
@@ -46,8 +46,8 @@ public class CustomFieldsExample : MonoBehaviour
     #if UNITY_EDITOR
     void OnValidate()
     {
-        if (bugReportUI == null)
-            bugReportUI = FindObjectOfType<BugReportUI>();
+        if (reporter == null)
+            reporter = FindObjectOfType<BetaHubReporter>();
     }
     #endif
 }

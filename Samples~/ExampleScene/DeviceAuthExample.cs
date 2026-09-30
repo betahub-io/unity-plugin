@@ -52,8 +52,14 @@ public class DeviceAuthExample : MonoBehaviour
         authUI.SetAuthManager(authManager);
         authUI.SetMessagePanelUI(bugReportUI.MessagePanelUI);
 
-        // Link bug report UI to auth manager
-        bugReportUI.SetDeviceAuthManager(authManager);
+        // Link the reporter (same GameObject as the form) to the auth manager
+        var reporter = bugReportUI.GetComponent<BetaHubReporter>();
+        if (reporter == null)
+        {
+            Debug.LogError("DeviceAuthExample: BugReportUI has no BetaHubReporter on its GameObject.");
+            return;
+        }
+        reporter.SetDeviceAuthManager(authManager);
 
         Debug.Log("Device authentication setup complete. Press T to test authentication, Y to show status.");
     }

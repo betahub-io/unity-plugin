@@ -1,95 +1,96 @@
-using System;
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 
 namespace BetaHub
 {
+    /// <summary>
+    /// Post-submit step for anonymous reporters: optional email, then publish.
+    /// </summary>
     public class ReportSubmittedUI : MonoBehaviour
     {
         public TMP_InputField EmailInputField;
-
         public Toggle EmailMyReportToggle;
-
         public Button SubmitEmailButton;
-
         public Button SkipButton;
 
-        private Issue _issue;
+        private ReportSubmission _submission;
 
-        public void Show(Issue issue, string defaultEmailAddress = "")
+        public void Show(ReportSubmission submission, string defaultEmailAddress = "")
         {
-            if (issue == null)
+            if (submission == null)
             {
-                throw new Exception("Issue is required");
+                throw new System.ArgumentNullException(nameof(submission));
             }
 
-            _issue = issue;
-            gameObject.SetActive(true);
+            Detach();
+            _submission = submission;
+            _submission.StateChanged += OnSubmissionStateChanged;
+
             EmailInputField.text = defaultEmailAddress;
+            SetButtonsInteractable(true);
+            gameObject.SetActive(true);
         }
 
         public void Hide()
         {
             gameObject.SetActive(false);
         }
-        
+
         void Start()
         {
             gameObject.SetActive(false);
-
-            SubmitEmailButton.onClick.AddListener(() => StartCoroutine(SubmitEmail()));
-            SkipButton.onClick.AddListener(() => StartCoroutine(Skip()));
+            SubmitEmailButton.onClick.AddListener(SubmitEmail);
+            SkipButton.onClick.AddListener(Skip);
         }
 
-        IEnumerator SubmitEmail()
+        void OnDestroy()
         {
-            DisableAllButtons();
+            Detach();
+        }
 
-            try
+        private void SubmitEmail()
+        {
+            string email = EmailInputField.text;
+            if (string.IsNullOrEmpty(email))
             {
-                string email = EmailInputField.text;
-                if (string.IsNullOrEmpty(email))
-                {
-                    Debug.LogError("Email is required");
-                    yield break;
-                }
+                Debug.LogWarning(UnityBetaHubLog.Prefix + "Email is empty. Enter an address or use Skip.", this);
+                return;
+            }
 
-                yield return _issue.SubmitEmail(email);
-                yield return _issue.Publish(EmailMyReportToggle.isOn);
+            SetButtonsInteractable(false);
+            _submission.SetReporterEmail(email);
+            _submission.Publish(EmailMyReportToggle.isOn);
+        }
+
+        private void Skip()
+        {
+            SetButtonsInteractable(false);
+            _submission.Publish(false);
+        }
+
+        private void OnSubmissionStateChanged(ReportSubmission submission)
+        {
+            if (submission.IsFinished)
+            {
+                Detach();
                 Hide();
             }
-            finally
+        }
+
+        private void Detach()
+        {
+            if (_submission != null)
             {
-                EnableAllButtons();
+                _submission.StateChanged -= OnSubmissionStateChanged;
+                _submission = null;
             }
         }
 
-        IEnumerator Skip()
+        private void SetButtonsInteractable(bool interactable)
         {
-            DisableAllButtons();
-
-            try
-            {
-                yield return _issue.Publish(false);
-                Hide();
-            } finally {
-                EnableAllButtons();
-            }
-        }
-
-        void DisableAllButtons()
-        {
-            SubmitEmailButton.interactable = false;
-            SkipButton.interactable = false;
-        }
-
-        void EnableAllButtons()
-        {
-            SubmitEmailButton.interactable = true;
-            SkipButton.interactable = true;
+            SubmitEmailButton.interactable = interactable;
+            SkipButton.interactable = interactable;
         }
     }
 }

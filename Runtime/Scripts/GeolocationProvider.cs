@@ -181,20 +181,20 @@ namespace BetaHub
         
         void Start()
         {
-            // Try to auto-attach to BugReportUI on the same GameObject
-            var bugReportUI = GetComponent<BugReportUI>();
-            if (bugReportUI != null)
+            // Try to auto-attach to BetaHubReporter on the same GameObject
+            var reporter = GetComponent<BetaHubReporter>();
+            if (reporter != null)
             {
-                bugReportUI.SetGeolocationProvider(this);
+                reporter.SetGeolocationProvider(this);
                 #if BETAHUB_DEBUG
-                Debug.Log("GeolocationProvider: Successfully attached to BugReportUI on the same GameObject.");
+                Debug.Log("GeolocationProvider: Successfully attached to BetaHubReporter on the same GameObject.");
                 #endif
             }
             else
             {
-                Debug.LogWarning("GeolocationProvider: No BugReportUI found on the same GameObject. " +
+                Debug.LogWarning("GeolocationProvider: No BetaHubReporter found on the same GameObject. " +
                     "Geolocation data will not be included in bug reports. " +
-                    "Please attach BugReportUI to the same GameObject or manually call SetGeolocationProvider().");
+                    "Please attach BetaHubReporter to the same GameObject or manually call SetGeolocationProvider().");
             }
         }
         
@@ -202,10 +202,10 @@ namespace BetaHub
         void OnValidate()
         {
             // Provide editor-time validation feedback
-            var bugReportUI = GetComponent<BugReportUI>();
-            if (bugReportUI == null)
+            var reporter = GetComponent<BetaHubReporter>();
+            if (reporter == null)
             {
-                Debug.LogWarning("GeolocationProvider: For automatic setup, attach BugReportUI to the same GameObject. " +
+                Debug.LogWarning("GeolocationProvider: For automatic setup, attach BetaHubReporter to the same GameObject. " +
                     "Otherwise, you'll need to manually call SetGeolocationProvider().", this);
             }
         }

@@ -2127,6 +2127,7 @@ GameObject:
   - component: {fileID: 3630024247677609244}
   - component: {fileID: 3630024247677609245}
   - component: {fileID: 3630024247677609234}
+  - component: {fileID: 3630024247677609250}
   - component: {fileID: 3630024247677609235}
   - component: {fileID: 3630024247677609246}
   - component: {fileID: 3630024247677609241}
@@ -2225,6 +2226,30 @@ MonoBehaviour:
   m_BlockingMask:
     serializedVersion: 2
     m_Bits: 4294967295
+--- !u!114 &3630024247677609250
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3630024247677609232}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d05f01f8205814cb2b778826b30c98f2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  SubmitEndpoint: https://app.betahub.io
+  ProjectID: pr-5287510306
+  AuthToken: tkn-15e6fbc1470613d5cfd2199edbde52157379b8c6dcd365441eabf8fea62d76a7
+  MediaUploadType: 0
+  ReleaseId: 0
+  ReleaseLabel: 
+  IncludePlayerLog: 1
+  IncludeVideo: 1
+  DefaultEmailAddress: 
+  deviceAuthManager: {fileID: 0}
+  geolocationProvider: {fileID: 0}
+  latencyProvider: {fileID: 0}
 --- !u!114 &3630024247677609235
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2247,15 +2272,7 @@ MonoBehaviour:
   CloseButton: {fileID: 6839878271182632936}
   MessagePanel: {fileID: 3630024248915368460}
   MessagePanelUI: {fileID: 3630024248915368456}
-  MediaUploadType: 0
   ReportSubmittedUI: {fileID: 8165929657888516934}
-  SubmitEndpoint: https://app.betahub.io
-  ProjectID: pr-5287510306
-  AuthToken: tkn-15e6fbc1470613d5cfd2199edbde52157379b8c6dcd365441eabf8fea62d76a7
-  deviceAuthManager: {fileID: 0}
-  geolocationProvider: {fileID: 0}
-  latencyProvider: {fileID: 0}
-  DefaultEmailAddress: 
   ShortcutAction:
     m_Name: BugReportShortcut
     m_Type: 0
@@ -2273,10 +2290,6 @@ MonoBehaviour:
       m_Action: BugReportShortcut
       m_Flags: 0
     m_Flags: 0
-  IncludePlayerLog: 1
-  IncludeVideo: 1
-  ReleaseId: 0
-  ReleaseLabel: 
   OnBugReportWindowShown:
     m_PersistentCalls:
       m_Calls: []
