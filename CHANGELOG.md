@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- New default UI: `BugReportWidget` prefab built with UI Toolkit (`Runtime/UI/BugReportWidget.uxml` + `.uss`). One panel, six states, attachments shown as cards with a real screenshot thumbnail, background upload toast, inline optional email after sending, errors in the header instead of banners, keyboard shortcuts and gamepad focus. Reskin by overriding USS variables; light theme included; all strings editable; inspector preview of every screen without Play mode.
+- `Tools~/UxmlPreview/uxml2html.rb`: renders the UXML/USS to HTML for design review in a browser. Measured against Unity: identical layout, 4% of widget pixels differ (glyph anti-aliasing).
+- `Tests/Preview`: PlayMode tests that render the widget to a PNG headless and smoke-test the prefab through every preview state.
+- `Tools~/EditTests`: dotnet project that runs the plain-C# EditMode tests in seconds without Unity.
+
+### Changed
+- Split `BugReportUI` into a headless `BetaHubReporter` component (configuration, attachments, custom fields, recording policy, submission) and a pure view. Custom UIs call `BetaHubReporter.Submit()` and follow the returned `ReportSubmission` handle instead of driving coroutines. `Issue` is now a thin HTTP client; publish/email sequencing lives in `ReportSubmission`.
+- Breaking: `ProjectID`, `AuthToken`, `SubmitEndpoint`, release, upload mode, include flags, `DefaultEmailAddress`, provider references and the attachment/custom field API moved from `BugReportUI` to `BetaHubReporter`. `GeolocationProvider` and `LatencyProvider` auto-attach to `BetaHubReporter`. `ReportSubmittedUI.Show` takes a `ReportSubmission`.
+
+### Improved
+- Startup configuration checks log actionable `BetaHub:`-prefixed errors and hints; a misconfigured reporter returns an already failed submission instead of throwing.
+- Reporter email failures are surfaced to the UI instead of being logged only.
+- Publish failures now put the submission in a Failed state with the server message.
+
 ## 1.8.3
 
 ### Fixed

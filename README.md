@@ -63,9 +63,9 @@ The plugin supports an optional device authentication flow that provides a seaml
 
 ### Setup
 
-1. Add the `DeviceAuthCanvas` prefab to your scene alongside the existing `BugReportingFormCanvas`
+1. Add the `DeviceAuthCanvas` prefab to your scene alongside the `BugReportWidget` prefab
 2. Configure both prefabs with the same Project ID
-3. Link the `DeviceAuthManager` component to your `BugReportUI` component
+3. Link the `DeviceAuthManager` component to your `BetaHubReporter` component (on the `BugReportWidget` object)
 4. Optionally customize entity information (game name, type) in the `DeviceAuthManager`
 
 ### Integration Example
@@ -88,26 +88,86 @@ The plugin includes a complete example scene (`DeviceAuthExample.cs`) demonstrat
 
 Join our [Discord server](https://discord.gg/g2wpRtG) for support, feedback, and feature requests.
 
+## Architecture: Reporter and UI
+
+The `BugReportWidget` prefab carries these components on one GameObject:
+
+- `BetaHubReporter`: headless core. Configuration (Project ID, Auth Token, release, upload mode), attachments, custom fields, recording policy and submission. Your code talks to this one.
+- `BugReportWidget` + `UIDocument`: the shipped form, built with UI Toolkit (`Runtime/UI/BugReportWidget.uxml` and `.uss`). A view over the reporter.
+- `GameRecorder`, `CustomFieldValidator`: recording and custom field checks.
+
+The older uGUI form (`BugReportingFormCanvas` prefab with `BugReportUI`) still works and still talks to the same reporter, but new features land in the UI Toolkit widget.
+
+### Reskinning the widget
+
+The look is a set of USS variables (`--bh-ground`, `--bh-surface`, `--bh-accent`, ...). Add your own stylesheet to the `UIDocument`'s panel or to the UXML and override the variables; no prefab surgery needed. `UseLightTheme` on the widget switches to the light token set. Strings are editable on the component. Select the prefab and use the inspector's Preview section to see any screen in the Game view without entering Play mode.
+
+Configuration mistakes are reported once in the Unity console at startup, prefixed with `BetaHub:`, together with the fix.
+
 ## Programmatic Attachments
 
-You can programmatically attach additional files to bug reports using the following methods on `BugReportUI`:
+Attach additional files to the next bug report through `BetaHubReporter`:
 
 ```csharp
-BugReportUI bugReportUI = FindObjectOfType<BugReportUI>();
+BetaHubReporter reporter = FindObjectOfType<BetaHubReporter>();
 
 // Attach a screenshot (subject to the Include Screenshot toggle)
-bugReportUI.AddScreenshot("/path/to/screenshot.png", removeAfterUpload: true);
+reporter.AddScreenshot("/path/to/screenshot.png", removeAfterUpload: true);
 
 // Attach a log file (subject to the Include Player Log toggle)
-bugReportUI.AddLogFile("/path/to/custom.log", removeAfterUpload: true);
+reporter.AddLogFile("/path/to/custom.log", removeAfterUpload: true);
 
 // Attach a video file (always uploaded, not subject to the Include Video toggle)
-bugReportUI.AddVideo("/path/to/video.mp4", removeAfterUpload: true);
+reporter.AddVideo("/path/to/video.mp4", removeAfterUpload: true);
 ```
 
 - `removeAfterUpload`: if `true`, the file will be deleted from disk after successful upload.
 - Screenshots and log files are conditionally included based on their respective UI toggles. Developer-added videos are always uploaded regardless of the toggle state.
+- Attachments are cleared once a report's draft is created on the server.
 - The backend allows a maximum of 3 video clips per issue (including the automatically recorded video).
+
+## Custom Fields
+
+```csharp
+reporter.SetCustomField("game_id", "my-game-123");
+reporter.RegisterCustomFieldProvider("current_level", () => SceneManager.GetActiveScene().name);
+```
+
+Providers are evaluated at submit time and override a static field of the same name. Fields must exist in your project and be marked as tester settable.
+
+## Building Your Own UI
+
+Submit directly and follow the handle. No coroutines needed on your side:
+
+```csharp
+BetaHubReporter reporter = FindObjectOfType<BetaHubReporter>();
+
+// Tell the reporter while your form is open so recording pauses and latency sampling starts.
+reporter.NotifyReportWindowShown();
+
+ReportSubmission submission = reporter.Submit(description, steps, BugReportOptions.All);
+submission.StateChanged += s =>
+{
+    switch (s.State)
+    {
+        case ReportSubmissionState.AwaitingPublish:
+            // Draft exists. Optionally collect an email, then publish.
+            s.SetReporterEmail("player@example.com");
+            s.Publish(emailMyReport: true);
+            break;
+        case ReportSubmissionState.Published:
+            Debug.Log("Reported: " + s.IssueUrl);
+            break;
+        case ReportSubmissionState.Failed:
+            Debug.LogError(s.Error);
+            break;
+    }
+};
+
+reporter.NotifyReportWindowHidden();
+```
+
+States: `Preparing`, `CreatingDraft`, `UploadingMedia` (WaitForUpload mode only), `AwaitingPublish`, `Publishing`, `Published`, `Failed`. Signed-in users (device authentication) skip `AwaitingPublish`; the report publishes automatically. A misconfigured reporter returns a handle already in `Failed` with the reason in `Error`.
 
 ## Audio Recording
 
@@ -144,7 +204,7 @@ Audio recording automatically pauses when the bug report form is visible and res
   - CPU overhead from continuous disk writes
   - File access violations when multiple Unity instances run simultaneously
 - Bug reports will still work, but won't include captured Unity logs
-- A warning will be displayed when BugReportUI starts with logging disabled
+- A warning will be displayed when BetaHubReporter starts with logging disabled
 
 **When to use:**
 - Production builds where logging overhead impacts performance

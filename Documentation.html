@@ -139,7 +139,7 @@
                 </ul>
             </li>
             <li>Bug reports will still work, but won't include captured Unity logs</li>
-            <li>A warning will be displayed when BugReportUI starts with logging disabled</li>
+            <li>A warning will be displayed when BetaHubReporter starts with logging disabled</li>
         </ul>
         <p><strong>When to use:</strong></p>
         <ul>
@@ -156,13 +156,13 @@
     </div>
 
     <ol>
-        <li>Locate the BugReportingFormCanvas prefab in Packages/BetaHub Bug Reporter/Runtime/Prefabs.</li>
-        <li>Drag it into your scene.</li>
+        <li>Locate the <code>BugReportWidget</code> prefab in Packages/BetaHub Bug Reporter/Runtime/Prefabs.</li>
+        <li>Drag it into your scene. Make sure the scene has an <code>EventSystem</code> (GameObject &gt; UI &gt; Event System) so the form receives input.</li>
         <li>Run your game and press <code>F12</code> to test the bug report form with the demo project.</li>
         <li>To use your own project:
             <ul>
-                <li>Select the BugReportingFormCanvas object in the hierarchy</li>
-                <li>In the inspector, find the <code>Project ID</code> field and enter your BetaHub project ID</li>
+                <li>Select the BugReportWidget object in the hierarchy</li>
+                <li>On the <code>BetaHubReporter</code> component, find the <code>Project ID</code> field and enter your BetaHub project ID</li>
                 <li>Enter your <code>Auth Token</code> (found in Project Settings > Integrations > Tokens)</li>
             </ul>
         </li>
@@ -212,7 +212,7 @@
         </li>
         <li>Link the components together:
             <ul>
-                <li>Set the <code>DeviceAuthManager</code> reference in your <code>BugReportUI</code> component</li>
+                <li>Set the <code>DeviceAuthManager</code> reference in your <code>BetaHubReporter</code> component (on the BugReportingFormCanvas object)</li>
                 <li>Set the <code>MessagePanelUI</code> reference in your <code>DeviceAuthUI</code> component</li>
             </ul>
         </li>
@@ -290,7 +290,7 @@ authManager.OnAuthError += (string error) =&gt; {
     <h4>Setup Instructions</h4>
 
     <ol>
-        <li>In your scene, select the GameObject containing your <code>BugReportUI</code> component</li>
+        <li>In your scene, select the GameObject containing your <code>BetaHubReporter</code> component</li>
         <li>Click <strong>Add Component</strong> and search for <code>GeolocationProvider</code>, or drag the script from the project window</li>
         <li>Configure the provider in the inspector:
             <ul>
@@ -300,11 +300,11 @@ authManager.OnAuthError += (string error) =&gt; {
                 <li><strong>Timeout Seconds:</strong> Request timeout (default: 5 seconds)</li>
             </ul>
         </li>
-        <li>The component will automatically link itself to the <code>BugReportUI</code> on the same GameObject</li>
+        <li>The component will automatically link itself to the <code>BetaHubReporter</code> on the same GameObject</li>
     </ol>
 
     <div class="note">
-        <strong>Automatic Setup:</strong> When <code>GeolocationProvider</code> is attached to the same GameObject as <code>BugReportUI</code>, it will automatically configure itself and display a success message in the console. If placed on a different GameObject, you'll see a warning message with setup instructions.
+        <strong>Automatic Setup:</strong> When <code>GeolocationProvider</code> is attached to the same GameObject as <code>BetaHubReporter</code>, it will automatically configure itself and display a success message in the console. If placed on a different GameObject, you'll see a warning message with setup instructions.
     </div>
 
     <h3>LatencyProvider</h3>
@@ -344,7 +344,7 @@ authManager.OnAuthError += (string error) =&gt; {
     <h4>Setup Instructions</h4>
 
     <ol>
-        <li>In your scene, select the GameObject containing your <code>BugReportUI</code> component</li>
+        <li>In your scene, select the GameObject containing your <code>BetaHubReporter</code> component</li>
         <li>Click <strong>Add Component</strong> and search for <code>LatencyProvider</code>, or drag the script from the project window</li>
         <li>Configure the provider in the inspector:
             <ul>
@@ -359,7 +359,7 @@ authManager.OnAuthError += (string error) =&gt; {
                 <li><strong>Ping Interval:</strong> Interval between background pings in continuous mode (default: 15 seconds)</li>
             </ul>
         </li>
-        <li>The component will automatically link itself to the <code>BugReportUI</code> on the same GameObject</li>
+        <li>The component will automatically link itself to the <code>BetaHubReporter</code> on the same GameObject</li>
     </ol>
 
     <div class="warning">
@@ -371,7 +371,7 @@ authManager.OnAuthError += (string error) =&gt; {
     <ul>
         <li><strong>"No latency data available":</strong> All ping requests failed. Check network connectivity and endpoint accessibility.</li>
         <li><strong>"No country information found":</strong> Geolocation service didn't return expected headers. This may indicate network issues or endpoint changes.</li>
-        <li><strong>Warning messages in console:</strong> If components are not on the same GameObject as <code>BugReportUI</code>, you'll see warnings with setup instructions.</li>
+        <li><strong>Warning messages in console:</strong> If components are not on the same GameObject as <code>BetaHubReporter</code>, you'll see warnings with setup instructions.</li>
     </ul>
 
     <h4>Data Integration</h4>
@@ -395,13 +395,27 @@ latency=ping.betahub.io: min/avg/max = 45ms/67ms/89ms (10/10 requests)</code></p
 
     <h3>Configuration</h3>
 
-    <p>Adjust these settings in the BugReportingFormCanvas inspector:</p>
+    <p>The BugReportWidget object carries the headless core and the form. <code>BetaHubReporter</code> holds the settings below, attachments, custom fields, the recording policy and submission. <code>BugReportWidget</code> with its <code>UIDocument</code> is the shipped UI Toolkit form, a view over the reporter that you reskin through USS variables or replace. The older <code>BugReportingFormCanvas</code> (uGUI) prefab keeps working with the same reporter. Configuration problems are logged once at startup in the Unity console, prefixed with <code>BetaHub:</code>, together with the fix.</p>
+
+    <p>Adjust these settings on the <code>BetaHubReporter</code> component:</p>
 
     <ul>
         <li><strong>Project ID</strong>: Your BetaHub project identifier (found in Project Settings > General > Project Information).</li>
         <li><strong>Auth Token</strong>: Your application token for API authentication (found in Project Settings > Integrations > Tokens). This is <strong>not an API key</strong> and does not need to be kept secret - it's a project identifier that helps prevent API abuse and spam while identifying your application.</li>
         <li><strong>Default Email Address</strong>: <em>Optional programmatic field.</em> If set, this email address will be used as the default email address of the reporter. This is a hidden field intended to be pre-filled programmatically by the developer if the user is already logged in with a specific email address.</li>
-        <li><strong>Shortcut Key</strong>: Default is F12. Set to None to disable and open the form programmatically.</li>
+        <li><strong>Media Upload Type</strong>: <em>Upload in background</em> lets the reporter continue while media uploads; <em>Wait for upload</em> keeps the form open until media has been uploaded.</li>
+        <li><strong>Release ID / Release Label</strong>: <em>Optional.</em> Associate reports with a specific release instead of the latest one.</li>
+        <li><strong>Include Player Log / Include Video</strong>: Master switches for attaching the plugin's log and the recording.</li>
+    </ul>
+
+    <p>Settings on the <code>BugReportWidget</code> component:</p>
+
+    <ul>
+        <li><strong>Shortcut</strong>: Default is F12. Set to None to disable and open the form programmatically with <code>Show()</code>.</li>
+        <li><strong>Use Light Theme</strong>: switches to the light token set. Any other look: override the <code>--bh-*</code> USS variables from your own stylesheet.</li>
+        <li><strong>Require Terms Acceptance / Terms Url</strong>: optional checkbox that must be ticked before sending.</li>
+        <li><strong>Strings</strong>: all player-facing copy, editable per language.</li>
+        <li><strong>Preview</strong> (inspector section): shows any screen with sample data in the Game view without Play mode.</li>
         <li><strong>Performance_Sampler</strong>
             <ul>
                 <li><strong>Sample Frequency</strong>: How often to sample game performance.</li>
@@ -429,38 +443,68 @@ latency=ping.betahub.io: min/avg/max = 45ms/67ms/89ms (10/10 requests)</code></p
 
     <h3>Programmatic Integration</h3>
 
-    <p>To open the bug report form on specific events:</p>
+    <p>To open the shipped form on specific events, call <code>Show()</code> on the <code>BugReportWidget</code> component. It captures a screenshot and opens the form. Default inclusions:</p>
 
-    <ol>
-        <li>Call <code>SetActive</code> on the <code>BugReportUI</code> object.</li>
-        <li>Be aware of default inclusions:
-            <ul>
-                <li>Video: Yes (control with <code>IncludeVideo</code>)</li>
-                <li>Player.log: Yes (control with <code>IncludePlayerLog</code>)</li>
-                <li>Screenshots: No (add manually)</li>
-            </ul>
-        </li>
-    </ol>
+    <ul>
+        <li>Video: Yes (control with <code>IncludeVideo</code> on the reporter)</li>
+        <li>Player.log: Yes (control with <code>IncludePlayerLog</code> on the reporter)</li>
+        <li>Screenshots: No (add manually)</li>
+    </ul>
 
-    <h4>Including Screenshots</h4>
+    <h4>Including Screenshots and Logs</h4>
 
-    <p>Use <code>AddScreenshot</code> on the <code>BugReportUI</code> object:</p>
+    <p>Use the attachment methods on <code>BetaHubReporter</code>:</p>
 
-    <pre><code>public void AddScreenshot(string path, bool removeAfterUpload)</code></pre>
+    <pre><code>public void AddScreenshot(string path, bool removeAfterUpload)
+public void AddLogFile(string path, bool removeAfterUpload)
+public void AddVideo(string path, bool removeAfterUpload)</code></pre>
 
     <div class="note">
         <strong>Tip:</strong> Capture screenshots before opening menus for more valuable bug context.
     </div>
 
-    <h4>Including Logs</h4>
-
-    <p>Use <code>AddLog</code> on the <code>BugReportUI</code> object:</p>
-
-    <pre><code>public void AddLog(string path, bool removeAfterUpload)</code></pre>
-
     <div class="note">
-        <strong>Note:</strong> Call these functions each time you want to include screenshots or logs. The plugin doesn't store them between reports.
+        <strong>Note:</strong> Attachments are cleared once a report's draft has been created on the server. Call these functions each time you want to include files.
     </div>
+
+    <h4>Custom Fields</h4>
+
+    <pre><code>reporter.SetCustomField("game_id", "my-game-123");
+reporter.RegisterCustomFieldProvider("current_level", () =&gt; SceneManager.GetActiveScene().name);</code></pre>
+
+    <p>Providers are evaluated at submit time and override a static field of the same name. Fields must exist in your project and be marked as tester settable.</p>
+
+    <h4>Building Your Own UI</h4>
+
+    <p>Submit through the reporter and follow the returned handle. No coroutines are needed on your side.</p>
+
+    <pre><code>BetaHubReporter reporter = FindObjectOfType&lt;BetaHubReporter&gt;();
+
+// Tell the reporter while your form is open so recording pauses and latency sampling starts.
+reporter.NotifyReportWindowShown();
+
+ReportSubmission submission = reporter.Submit(description, steps, BugReportOptions.All);
+submission.StateChanged += s =&gt;
+{
+    switch (s.State)
+    {
+        case ReportSubmissionState.AwaitingPublish:
+            // Draft exists. Optionally collect an email, then publish.
+            s.SetReporterEmail("player@example.com");
+            s.Publish(emailMyReport: true);
+            break;
+        case ReportSubmissionState.Published:
+            Debug.Log("Reported: " + s.IssueUrl);
+            break;
+        case ReportSubmissionState.Failed:
+            Debug.LogError(s.Error);
+            break;
+    }
+};
+
+reporter.NotifyReportWindowHidden();</code></pre>
+
+    <p>States: <code>Preparing</code>, <code>CreatingDraft</code>, <code>UploadingMedia</code> (Wait for upload mode only), <code>AwaitingPublish</code>, <code>Publishing</code>, <code>Published</code>, <code>Failed</code>. Signed-in users (device authentication) skip <code>AwaitingPublish</code>; the report publishes automatically. A misconfigured reporter returns a handle already in <code>Failed</code> with the reason in <code>Error</code>. <code>ReporterEmailFailed</code> fires when the email could not be saved; the report stays publishable.</p>
 
     <h2>Support</h2>
 
