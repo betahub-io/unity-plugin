@@ -7,6 +7,10 @@
 - `Tools~/UxmlPreview/uxml2html.rb`: renders the UXML/USS to HTML for design review in a browser. Measured against Unity: identical layout, 4% of widget pixels differ (glyph anti-aliasing).
 - `Tests/Preview`: PlayMode tests that render the widget to a PNG headless and smoke-test the prefab through every preview state.
 - `Tools~/EditTests`: dotnet project that runs the plain-C# EditMode tests in seconds without Unity.
+- Attachment list: `BetaHubReporter.CollectAttachments()` returns one row per screenshot, recording, log, network and location data, added file and provider item; `Submit(description, steps, AttachmentSet)` sends only the included rows. A left-out Location row sends no geolocation request.
+- `BetaHubReporter.AddFile()` attaches any file (saves, dumps) and `RegisterAttachmentProvider()` adds rows computed at open time; Data rows are sent as a text file.
+- Per-attachment upload progress: `ReportSubmission.AttachmentUploadChanged`, `TryGetUploadState()` and `UploadProgress`, fed by `UnityWebRequest.uploadProgress`. A failed upload marks its row as Failed.
+- `BetaHubReporter.CaptureScreenshot()` replaces the previous capture instead of piling up a screenshot per opened form.
 
 ### Changed
 - Split `BugReportUI` into a headless `BetaHubReporter` component (configuration, attachments, custom fields, recording policy, submission) and a pure view. Custom UIs call `BetaHubReporter.Submit()` and follow the returned `ReportSubmission` handle instead of driving coroutines. `Issue` is now a thin HTTP client; publish/email sequencing lives in `ReportSubmission`.

@@ -55,6 +55,16 @@ namespace BetaHub.Tests
         }
 
         [Test]
+        public void DuplicateIdKeepsTheFirst()
+        {
+            var first = Desc("shot", AttachmentKind.Image);
+            var set = new AttachmentSet(new[] { first, Desc("shot", AttachmentKind.Log, on: false) });
+            Assert.AreEqual(1, set.Items.Count);
+            Assert.AreSame(first, set.Items[0]);
+            Assert.IsTrue(set.IsIncluded("shot"));
+        }
+
+        [Test]
         public void EmptySetIsValid()
         {
             var set = new AttachmentSet(System.Array.Empty<AttachmentDescriptor>());

@@ -448,23 +448,26 @@ latency=ping.betahub.io: min/avg/max = 45ms/67ms/89ms (10/10 requests)</code></p
     <ul>
         <li>Video: Yes (control with <code>IncludeVideo</code> on the reporter)</li>
         <li>Player.log: Yes (control with <code>IncludePlayerLog</code> on the reporter)</li>
-        <li>Screenshots: No (add manually)</li>
+        <li>Screenshot: Yes, captured when the form opens (<code>CaptureScreenshot()</code> on the reporter)</li>
     </ul>
 
-    <h4>Including Screenshots and Logs</h4>
+    <h4>Attachments</h4>
 
-    <p>Use the attachment methods on <code>BetaHubReporter</code>:</p>
+    <p>When the form opens, <code>CollectAttachments()</code> builds one row per thing that can travel with the report: the screenshot, the recording, the game log, network and location data, files added in code and rows from your providers. Rows start included unless a provider sets <code>IncludedByDefault = false</code>; only included rows are sent.</p>
 
     <pre><code>public void AddScreenshot(string path, bool removeAfterUpload)
 public void AddLogFile(string path, bool removeAfterUpload)
-public void AddVideo(string path, bool removeAfterUpload)</code></pre>
+public void AddVideo(string path, bool removeAfterUpload)
+public void AddFile(string path, string name = null, bool removeAfterUpload = false)   // any file, up to 50 MB
+public void RegisterAttachmentProvider(IAttachmentProvider provider)                  // rows computed at open time
+public AttachmentSet CollectAttachments()</code></pre>
 
     <div class="note">
-        <strong>Tip:</strong> Capture screenshots before opening menus for more valuable bug context.
+        <strong>Note:</strong> File rows need <code>FilePath</code>; Data rows need <code>Fields</code> and are sent as a text file. Invalid rows, repeated ids and built-in ids are skipped with a console warning. A left-out Location row sends no geolocation request.
     </div>
 
     <div class="note">
-        <strong>Note:</strong> Attachments are cleared once a report's draft has been created on the server. Call these functions each time you want to include files.
+        <strong>Note:</strong> Added files and the screenshot are cleared once a report's draft has been created on the server. Call these functions each time you want to include files.
     </div>
 
     <h4>Custom Fields</h4>
@@ -480,10 +483,19 @@ reporter.RegisterCustomFieldProvider("current_level", () =&gt; SceneManager.GetA
 
     <pre><code>BetaHubReporter reporter = FindObjectOfType&lt;BetaHubReporter&gt;();
 
-// Tell the reporter while your form is open so recording pauses and latency sampling starts.
+// Capture before your form is visible, then tell the reporter it is open:
+// recording pauses and latency sampling starts.
+yield return reporter.CaptureScreenshot();
 reporter.NotifyReportWindowShown();
 
-ReportSubmission submission = reporter.Submit(description, steps, BugReportOptions.All);
+// One row per attachment; let the player leave any out.
+AttachmentSet attachments = reporter.CollectAttachments();
+
+ReportSubmission submission = reporter.Submit(description, steps, attachments);
+submission.AttachmentUploadChanged += (s, id) =&gt;
+{
+    s.TryGetUploadState(id, out AttachmentUploadState state);   // Queued, Uploading, Sent or Failed
+};
 submission.StateChanged += s =&gt;
 {
     switch (s.State)

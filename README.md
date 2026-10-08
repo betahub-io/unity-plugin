@@ -104,26 +104,38 @@ The look is a set of USS variables (`--bh-ground`, `--bh-surface`, `--bh-accent`
 
 Configuration mistakes are reported once in the Unity console at startup, prefixed with `BetaHub:`, together with the fix.
 
-## Programmatic Attachments
+## Attachments
 
-Attach additional files to the next bug report through `BetaHubReporter`:
+When the form opens, the reporter builds the list of what can travel with the report: the screenshot, the last minute of play, the game log, network and location data when those providers are on, files added in code, and rows from your providers. Rows start included unless a provider sets `IncludedByDefault = false`; the player can leave any of them out, and only included rows are sent.
 
 ```csharp
 BetaHubReporter reporter = FindObjectOfType<BetaHubReporter>();
 
-// Attach a screenshot (subject to the Include Screenshot toggle)
+// Files for the next report, one row each.
 reporter.AddScreenshot("/path/to/screenshot.png", removeAfterUpload: true);
-
-// Attach a log file (subject to the Include Player Log toggle)
 reporter.AddLogFile("/path/to/custom.log", removeAfterUpload: true);
-
-// Attach a video file (always uploaded, not subject to the Include Video toggle)
 reporter.AddVideo("/path/to/video.mp4", removeAfterUpload: true);
+reporter.AddFile("/path/to/slot2.sav", "Save file");   // any file, up to 50 MB
+
+// Rows computed each time the form opens.
+class HardwareRows : IAttachmentProvider
+{
+    public IEnumerable<AttachmentDescriptor> GetAttachments()
+    {
+        yield return new AttachmentDescriptor
+        {
+            Id = "hardware", Name = "Hardware", Meta = "GPU, RAM", Kind = AttachmentKind.Data,
+            Fields = new[] { new KeyValuePair<string, string>("gpu", SystemInfo.graphicsDeviceName) },
+        };
+    }
+}
+reporter.RegisterAttachmentProvider(new HardwareRows());
 ```
 
-- `removeAfterUpload`: if `true`, the file will be deleted from disk after successful upload.
-- Screenshots and log files are conditionally included based on their respective UI toggles. Developer-added videos are always uploaded regardless of the toggle state.
-- Attachments are cleared once a report's draft is created on the server.
+- `removeAfterUpload`: delete the file from disk once its upload was attempted. Use it for temporary files only.
+- File rows need `FilePath`; Data rows need `Fields` and are sent as a text file. Invalid rows, repeated ids and built-in ids (`BuiltInAttachments`) are skipped with a console warning.
+- A left-out Location row sends no geolocation request.
+- Added files and the screenshot are cleared once a report's draft is created on the server.
 - The backend allows a maximum of 3 video clips per issue (including the automatically recorded video).
 
 ## Custom Fields
@@ -142,10 +154,21 @@ Submit directly and follow the handle. No coroutines needed on your side:
 ```csharp
 BetaHubReporter reporter = FindObjectOfType<BetaHubReporter>();
 
-// Tell the reporter while your form is open so recording pauses and latency sampling starts.
+// Capture before your form is visible, then tell the reporter it is open:
+// recording pauses and latency sampling starts.
+yield return reporter.CaptureScreenshot();
 reporter.NotifyReportWindowShown();
 
-ReportSubmission submission = reporter.Submit(description, steps, BugReportOptions.All);
+// One row per attachment; bind them to toggles and let the player leave any out.
+AttachmentSet attachments = reporter.CollectAttachments();
+attachments.SetIncluded(BuiltInAttachments.Location, false);
+
+ReportSubmission submission = reporter.Submit(description, steps, attachments);
+submission.AttachmentUploadChanged += (s, id) =>
+{
+    s.TryGetUploadState(id, out AttachmentUploadState state);
+    Debug.Log($"{id}: {state.Status} {state.Progress:P0}, overall {s.UploadProgress:P0}");
+};
 submission.StateChanged += s =>
 {
     switch (s.State)
@@ -166,6 +189,8 @@ submission.StateChanged += s =>
 
 reporter.NotifyReportWindowHidden();
 ```
+
+Each included row reports `Queued`, `Uploading` (with progress), `Sent` or `Failed`; a failed row does not stop the report. The legacy `Submit(description, steps, BugReportOptions)` overload still works: it collects the list and applies the three toggles.
 
 States: `Preparing`, `CreatingDraft`, `UploadingMedia` (WaitForUpload mode only), `AwaitingPublish`, `Publishing`, `Published`, `Failed`. Signed-in users (device authentication) skip `AwaitingPublish`; the report publishes automatically. A misconfigured reporter returns a handle already in `Failed` with the reason in `Error`.
 

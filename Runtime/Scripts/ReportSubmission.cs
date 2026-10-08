@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 
 namespace BetaHub
 {
@@ -18,6 +19,30 @@ namespace BetaHub
         Failed,
     }
 
+    public enum AttachmentUploadStatus
+    {
+        Queued,
+        Uploading,
+        Sent,
+        /// <summary>This item did not arrive. The rest of the report is unaffected.</summary>
+        Failed,
+    }
+
+    public readonly struct AttachmentUploadState
+    {
+        public readonly AttachmentUploadStatus Status;
+        /// <summary>0 to 1. Sent and Failed items are 1: nothing is left to wait for.</summary>
+        public readonly float Progress;
+
+        public AttachmentUploadState(AttachmentUploadStatus status, float progress)
+        {
+            Status = status;
+            Progress = progress;
+        }
+
+        public bool IsFinished => Status == AttachmentUploadStatus.Sent || Status == AttachmentUploadStatus.Failed;
+    }
+
     /// <summary>
     /// Handle for one bug report submission. Drives <see cref="IIssueClient"/> through the draft,
     /// media upload, optional reporter email and publish steps, and exposes state to any UI.
@@ -34,6 +59,8 @@ namespace BetaHub
         private bool _publishDispatched;
         private bool _emailMyReport;
         private bool _emailInFlight;
+        private readonly Dictionary<string, AttachmentUploadState> _uploads = new Dictionary<string, AttachmentUploadState>();
+        private readonly List<string> _inlineIds = new List<string>();
 
         public ReportSubmissionState State { get; private set; } = ReportSubmissionState.Preparing;
         public string Error { get; private set; }
@@ -51,6 +78,31 @@ namespace BetaHub
         public event Action<ReportSubmission> MediaUploadCompleted;
         /// <summary>The reporter email could not be saved. The report itself is still publishable.</summary>
         public event Action<string> ReporterEmailFailed;
+        /// <summary>One attachment's upload state changed; read it with <see cref="TryGetUploadState"/>.</summary>
+        public event Action<ReportSubmission, string> AttachmentUploadChanged;
+
+        /// <summary>Upload state of an included attachment. False for ids that are not part of this report.</summary>
+        public bool TryGetUploadState(string attachmentId, out AttachmentUploadState state)
+        {
+            if (attachmentId == null)
+            {
+                state = default;
+                return false;
+            }
+            return _uploads.TryGetValue(attachmentId, out state);
+        }
+
+        /// <summary>Mean progress of all included attachments, 0 to 1. With none, 1 once media upload finished.</summary>
+        public float UploadProgress
+        {
+            get
+            {
+                if (_uploads.Count == 0) return IsMediaUploadComplete ? 1f : 0f;
+                float sum = 0f;
+                foreach (var state in _uploads.Values) sum += state.Progress;
+                return sum / _uploads.Count;
+            }
+        }
 
         public ReportSubmission(IIssueClient client, ICoroutineRunner runner, IBetaHubLog log)
         {
@@ -79,6 +131,15 @@ namespace BetaHub
 
             _started = true;
             _publishRequested = autoPublish;
+            foreach (var upload in draft.Uploads)
+            {
+                _uploads[upload.AttachmentId] = new AttachmentUploadState(AttachmentUploadStatus.Queued, 0f);
+            }
+            foreach (var id in draft.InlineAttachmentIds)
+            {
+                _uploads[id] = new AttachmentUploadState(AttachmentUploadStatus.Queued, 0f);
+                _inlineIds.Add(id);
+            }
             _runner.Run(Guarded(RunFlow(draft, release, uploadType)));
         }
 
@@ -140,14 +201,19 @@ namespace BetaHub
                 yield break;
             }
 
+            foreach (var id in _inlineIds)
+            {
+                SetUploadState(id, AttachmentUploadStatus.Sent, 1f);
+            }
             DraftCreated?.Invoke(this);
             SetState(uploadType == MediaUploadType.WaitForUpload
                 ? ReportSubmissionState.UploadingMedia
                 : StateAfterDraft());
 
-            yield return _client.UploadMedia(draft);
+            yield return _client.UploadMedia(draft, OnUploadProgress);
             if (State == ReportSubmissionState.Failed) yield break;
 
+            FailUnreportedUploads(draft);
             IsMediaUploadComplete = true;
             MediaUploadCompleted?.Invoke(this);
 
@@ -160,6 +226,36 @@ namespace BetaHub
             {
                 DispatchPublish();
             }
+        }
+
+        private void OnUploadProgress(string attachmentId, AttachmentUploadStatus status, float progress)
+        {
+            if (attachmentId == null || !_uploads.ContainsKey(attachmentId))
+            {
+                _log.Warning($"Upload progress for unknown attachment '{attachmentId}' ignored.");
+                return;
+            }
+            SetUploadState(attachmentId, status, progress);
+        }
+
+        // A client that returns without reporting an item would leave its row spinning forever.
+        private void FailUnreportedUploads(BugReportDraft draft)
+        {
+            foreach (var upload in draft.Uploads)
+            {
+                if (_uploads[upload.AttachmentId].IsFinished) continue;
+                _log.Warning($"Upload of attachment '{upload.AttachmentId}' never reported a result; marked as failed.");
+                SetUploadState(upload.AttachmentId, AttachmentUploadStatus.Failed, 1f);
+            }
+        }
+
+        private void SetUploadState(string attachmentId, AttachmentUploadStatus status, float progress)
+        {
+            var state = new AttachmentUploadState(status, status == AttachmentUploadStatus.Queued ? 0f
+                : status == AttachmentUploadStatus.Uploading ? Math.Max(0f, Math.Min(1f, progress)) : 1f);
+            if (_uploads[attachmentId].Equals(state)) return;
+            _uploads[attachmentId] = state;
+            AttachmentUploadChanged?.Invoke(this, attachmentId);
         }
 
         private ReportSubmissionState StateAfterDraft()

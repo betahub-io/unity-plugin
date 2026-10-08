@@ -22,7 +22,6 @@ namespace BetaHub
         private const string SubmittingLabel = "Submitting...";
         private const string UploadingLabel = "Uploading...";
         private const string RecordingDurationPlaceholder = "{TIME}";
-        private const string ScreenshotFileName = "screenshot.png";
 
         [FormerlySerializedAs("bugReportPanel")]
         public GameObject BugReportPanel;
@@ -196,12 +195,7 @@ namespace BetaHub
         {
             if (_reporter == null) yield break;
 
-            string screenshotPath = Application.persistentDataPath + "/" + ScreenshotFileName;
-            ScreenCapture.CaptureScreenshot(screenshotPath);
-            _reporter.AddScreenshot(screenshotPath, true);
-
-            // wait for another frame
-            yield return null;
+            yield return _reporter.CaptureScreenshot();
 
             DescriptionField.text = "";
             StepsField.text = "";

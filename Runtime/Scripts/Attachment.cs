@@ -11,6 +11,21 @@ namespace BetaHub
         File,
     }
 
+    /// <summary>Ids of the rows the reporter produces itself. Provider ids must not reuse them.</summary>
+    public static class BuiltInAttachments
+    {
+        public const string Screenshot = "screenshot";
+        public const string Recording = "recording";
+        public const string PlayerLog = "player-log";
+        public const string Latency = "latency";
+        public const string Location = "location";
+
+        public static bool IsBuiltIn(string id)
+        {
+            return id == Screenshot || id == Recording || id == PlayerLog || id == Latency || id == Location;
+        }
+    }
+
     /// <summary>
     /// One thing that can travel with a report. The reporter assembles a list of these at open time
     /// from its own capture (screenshot, clip, log) and from anything providers register. The view
@@ -23,11 +38,19 @@ namespace BetaHub
         public string Meta;
         public AttachmentKind Kind;
         public bool IncludedByDefault = true;
+
+        /// <summary>The file sent for Image, Clip, Log and File rows.</summary>
+        public string FilePath;
+        /// <summary>Delete <see cref="FilePath"/> once the upload was attempted. For temporary files only.</summary>
+        public bool RemoveAfterUpload;
+        /// <summary>Data rows: shown in the preview and sent as a text file, one "key: value" per line.</summary>
+        public IReadOnlyList<KeyValuePair<string, string>> Fields;
     }
 
     /// <summary>
-    /// A studio, or a built-in like geolocation, contributes attachments through this. Called at the
-    /// moment the form opens, so returned meta can reflect current state.
+    /// A studio contributes attachments through this. Called each time the form opens, so returned
+    /// items can reflect current state. File rows need <see cref="AttachmentDescriptor.FilePath"/>,
+    /// Data rows need <see cref="AttachmentDescriptor.Fields"/>; anything else is skipped with a warning.
     /// </summary>
     public interface IAttachmentProvider
     {
@@ -36,7 +59,7 @@ namespace BetaHub
 
     /// <summary>
     /// Ordered attachments plus per-item include flags. Pure C#: the view reads it, the reporter
-    /// consults it when building the report. Order is preserved as given.
+    /// consults it when building the report. Order is preserved as given; a repeated id keeps the first.
     /// </summary>
     public sealed class AttachmentSet
     {
@@ -48,7 +71,7 @@ namespace BetaHub
             if (descriptors == null) return;
             foreach (var d in descriptors)
             {
-                if (d == null || string.IsNullOrEmpty(d.Id)) continue;
+                if (d == null || string.IsNullOrEmpty(d.Id) || _included.ContainsKey(d.Id)) continue;
                 _items.Add(d);
                 _included[d.Id] = d.IncludedByDefault;
             }
@@ -56,16 +79,16 @@ namespace BetaHub
 
         public IReadOnlyList<AttachmentDescriptor> Items => _items;
 
-        public bool IsIncluded(string id) => _included.TryGetValue(id, out var on) && on;
+        public bool IsIncluded(string id) => id != null && _included.TryGetValue(id, out var on) && on;
 
         public void SetIncluded(string id, bool included)
         {
-            if (_included.ContainsKey(id)) _included[id] = included;
+            if (id != null && _included.ContainsKey(id)) _included[id] = included;
         }
 
         public void Toggle(string id)
         {
-            if (_included.TryGetValue(id, out var on)) _included[id] = !on;
+            if (id != null && _included.TryGetValue(id, out var on)) _included[id] = !on;
         }
 
         public IEnumerable<string> IncludedIds

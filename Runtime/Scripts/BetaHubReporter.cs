@@ -28,6 +28,9 @@ namespace BetaHub
         private const string GeolocationCountryField = "country";
         private const string GeolocationAsnField = "asn";
         private const string LatencyField = "latency";
+        private const string ScreenshotFileName = "screenshot.png";
+        // ScreenCapture writes the file at the end of the frame; two frames is what the views always waited.
+        private const int ScreenshotFrames = 2;
 
         private static BetaHubReporter _instance;
         private static Logger _logger;
@@ -90,6 +93,8 @@ namespace BetaHub
         public string EffectiveEmailAddress => IsUserAuthenticated ? null : DefaultEmailAddress;
 
         public bool HasRecorder => _recorder != null;
+        /// <summary>The frame captured by the last <see cref="CaptureScreenshot"/>, or null.</summary>
+        public string ScreenshotPath { get; private set; }
         public GameRecorder Recorder => _recorder;
         public bool IsReportWindowVisible => _reportWindowVisible;
         public bool HasActiveUploads => _submissions.Exists(s => s.IsUploadInProgress);
@@ -191,11 +196,60 @@ namespace BetaHub
 
         // --- attachments and custom fields ---
 
+        /// <summary>
+        /// Captures the current frame as the report screenshot, replacing the previous one. Run it
+        /// before your form becomes visible so the form is not in the shot.
+        /// </summary>
+        public IEnumerator CaptureScreenshot()
+        {
+            string path = Path.Combine(Application.persistentDataPath, ScreenshotFileName);
+            ScreenCapture.CaptureScreenshot(path);
+            for (int i = 0; i < ScreenshotFrames; i++)
+            {
+                yield return null;
+            }
+
+            if (!File.Exists(path))
+            {
+                _log.Warning("Screenshot capture produced no file at " + path + ". The report goes without it.");
+                path = null;
+            }
+            ScreenshotPath = path;
+            _session.SetFrameScreenshot(path);
+        }
+
+        /// <summary>
+        /// Everything that can travel with the next report, all rows included unless a provider said
+        /// otherwise. Call when your form opens, after <see cref="CaptureScreenshot"/>; let the player
+        /// untick rows, then pass the set to <see cref="Submit(string, string, AttachmentSet)"/>.
+        /// </summary>
+        public AttachmentSet CollectAttachments()
+        {
+            var sources = new AttachmentSources
+            {
+                RecordingSeconds = _recorder != null && IncludeVideo ? _recorder.RecordingDuration : 0,
+                PlayerLog = GetPlayerLogSource(),
+                LocationCountry = geolocationProvider != null && geolocationProvider.EnableGeolocation,
+                LocationNetwork = geolocationProvider != null && geolocationProvider.EnableAsnCollection,
+                Latency = latencyProvider != null && latencyProvider.EnableLatency,
+                FileSize = FileSizeOrUnknown,
+            };
+            return _session.CollectAttachments(sources);
+        }
+
+        /// <summary>Adds a screenshot to the next report as its own row.</summary>
         public void AddScreenshot(string path, bool removeAfterUpload) => _session.AddScreenshot(path, removeAfterUpload);
         public void AddLogFile(string path, bool removeAfterUpload) => _session.AddLogFile(path, removeAfterUpload);
-        /// <summary>Adds a video to the next report. Always uploaded, regardless of the recording option.</summary>
+        /// <summary>Adds a video to the next report as its own row, separate from the gameplay recording.</summary>
         public void AddVideo(string path, bool removeAfterUpload) => _session.AddVideo(path, removeAfterUpload);
+        /// <summary>Adds any file, such as a save, to the next report. Up to 50 MB; <paramref name="name"/> defaults to the file name.</summary>
+        public void AddFile(string path, string name = null, bool removeAfterUpload = false) => _session.AddFile(path, name, removeAfterUpload);
+        /// <summary>Forgets added files and the captured screenshot. Happens on its own once a report is created.</summary>
         public void ClearAttachments() => _session.ClearAttachments();
+
+        /// <summary>Asked for rows each time <see cref="CollectAttachments"/> runs.</summary>
+        public void RegisterAttachmentProvider(IAttachmentProvider provider) => _session.RegisterAttachmentProvider(provider);
+        public void UnregisterAttachmentProvider(IAttachmentProvider provider) => _session.UnregisterAttachmentProvider(provider);
 
         /// <summary>Static custom field included in every report. Must be tester_settable in your project.</summary>
         public void SetCustomField(string name, string value) => _session.SetCustomField(name, value);
@@ -213,12 +267,26 @@ namespace BetaHub
         // --- submission ---
 
         /// <summary>
-        /// Starts a bug report submission. Returns immediately with a handle; subscribe to
-        /// <see cref="ReportSubmission.StateChanged"/> to follow progress. When the configuration is
-        /// unusable the handle is already in the Failed state and carries the reason.
+        /// For the legacy three-toggle form: collects the attachments, leaves out what the toggles
+        /// exclude and submits. New UIs call <see cref="CollectAttachments"/> and the set overload.
         /// </summary>
         public ReportSubmission Submit(string description, string steps, BugReportOptions options)
         {
+            var attachments = CollectAttachments();
+            BugReportSession.ApplyOptions(attachments, options);
+            return Submit(description, steps, attachments);
+        }
+
+        /// <summary>
+        /// Starts a bug report submission with the included rows of <paramref name="attachments"/>.
+        /// Returns immediately with a handle; subscribe to <see cref="ReportSubmission.StateChanged"/>
+        /// and <see cref="ReportSubmission.AttachmentUploadChanged"/> to follow progress. When the
+        /// configuration is unusable the handle is already in the Failed state and carries the reason.
+        /// </summary>
+        public ReportSubmission Submit(string description, string steps, AttachmentSet attachments)
+        {
+            if (attachments == null) throw new ArgumentNullException(nameof(attachments));
+
             if (_configurationError != null)
             {
                 return ReportSubmission.CreateFailed(_configurationError, _log);
@@ -236,28 +304,30 @@ namespace BetaHub
                 _log.Info("A previous report is still uploading. Recording stays paused until it finishes.");
             }
 
-            var client = new Issue(SubmitEndpoint, ProjectID, authToken, options.IncludeRecording ? _recorder : null);
+            var client = new Issue(SubmitEndpoint, ProjectID, authToken, _recorder);
             var submission = new ReportSubmission(client, this, _log);
             submission.DraftCreated += _ => _session.ClearAttachments();
             _submissions.Add(submission);
             _submissions.RemoveAll(s => s.IsFinished);
 
-            StartCoroutine(PrepareAndStart(submission, description, steps, options));
+            StartCoroutine(PrepareAndStart(submission, description, steps, attachments));
             return submission;
         }
 
-        private IEnumerator PrepareAndStart(ReportSubmission submission, string description, string steps, BugReportOptions options)
+        private IEnumerator PrepareAndStart(ReportSubmission submission, string description, string steps, AttachmentSet attachments)
         {
+            // Location is fetched only when the player left it in: a left-out row sends no request.
             var extraFields = new Dictionary<string, string>();
-            yield return CollectGeolocation(extraFields);
-            CollectLatency(extraFields);
+            if (attachments.IsIncluded(BuiltInAttachments.Location))
+            {
+                yield return CollectGeolocation(extraFields);
+            }
+            CollectLatency(extraFields, attachments.IsIncluded(BuiltInAttachments.Latency));
 
             BugReportDraft draft;
             try
             {
-                var effectiveOptions = options;
-                effectiveOptions.IncludeRecording = options.IncludeRecording && IncludeVideo;
-                draft = _session.BuildReport(description, steps, effectiveOptions, _recorder != null, GetPlayerLogSource(), extraFields);
+                draft = _session.BuildReport(description, steps, attachments, extraFields);
             }
             catch (Exception ex)
             {
@@ -280,8 +350,19 @@ namespace BetaHub
             {
                 return null;
             }
-            var reference = new Issue.LogFileReference { logger = _logger, path = _logger.LogPath, removeAfterUpload = false };
-            return new PlayerLogSource(reference, new FileInfo(_logger.LogPath).Length);
+            return new PlayerLogSource(_logger.LogPath, new FileInfo(_logger.LogPath).Length);
+        }
+
+        private static long FileSizeOrUnknown(string path)
+        {
+            try
+            {
+                return File.Exists(path) ? new FileInfo(path).Length : AttachmentSources.UnknownSize;
+            }
+            catch (Exception)
+            {
+                return AttachmentSources.UnknownSize;
+            }
         }
 
         private IEnumerator CollectGeolocation(Dictionary<string, string> fields)
@@ -320,11 +401,13 @@ namespace BetaHub
             }
         }
 
-        private void CollectLatency(Dictionary<string, string> fields)
+        private void CollectLatency(Dictionary<string, string> fields, bool include)
         {
             if (latencyProvider == null || !latencyProvider.EnableLatency) return;
 
             latencyProvider.StopLatencyTest();
+            if (!include) return;
+
             var latency = latencyProvider.GetCurrentLatencyData();
             if (latency != null && latency.HasSuccessfulResults())
             {

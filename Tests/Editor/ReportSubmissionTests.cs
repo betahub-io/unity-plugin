@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Globalization;
 using NUnit.Framework;
 
 namespace BetaHub.Tests
@@ -252,6 +253,145 @@ namespace BetaHub.Tests
 
             Assert.AreEqual(1, _client.Calls.FindAll(c => c == "draft").Count);
             Assert.AreEqual(1, _log.Warnings.Count);
+        }
+
+        // --- per-attachment upload state ---
+
+        private const string ShotId = BuiltInAttachments.Screenshot;
+        private const string ClipId = BuiltInAttachments.Recording;
+        private const string LocationId = BuiltInAttachments.Location;
+
+        private static BugReportDraft DraftWithAttachments()
+        {
+            var draft = EmptyDraft();
+            draft.Uploads.Add(new ReportUpload { AttachmentId = ShotId, Kind = UploadKind.Screenshot, Path = "/tmp/s.png" });
+            draft.Uploads.Add(new ReportUpload { AttachmentId = ClipId, Kind = UploadKind.Recording });
+            draft.InlineAttachmentIds.Add(LocationId);
+            return draft;
+        }
+
+        private AttachmentUploadState StateOf(string id)
+        {
+            Assert.IsTrue(_submission.TryGetUploadState(id, out var state), $"no upload state for {id}");
+            return state;
+        }
+
+        [Test]
+        public void Start_MarksEveryIncludedAttachmentQueued()
+        {
+            _submission.Start(DraftWithAttachments(), ReleaseTarget.Latest, MediaUploadType.UploadInBackground, false);
+
+            foreach (var id in new[] { ShotId, ClipId, LocationId })
+            {
+                Assert.AreEqual(AttachmentUploadStatus.Queued, StateOf(id).Status, id);
+                Assert.AreEqual(0f, StateOf(id).Progress, id);
+            }
+            Assert.AreEqual(0f, _submission.UploadProgress);
+        }
+
+        [Test]
+        public void TryGetUploadState_UnknownId_ReturnsFalse()
+        {
+            _submission.Start(DraftWithAttachments(), ReleaseTarget.Latest, MediaUploadType.UploadInBackground, false);
+
+            Assert.IsFalse(_submission.TryGetUploadState("left-out", out _));
+            Assert.IsFalse(_submission.TryGetUploadState(null, out _));
+        }
+
+        [Test]
+        public void InlineAttachments_AreSentWithTheDraft()
+        {
+            _client.HoldMedia = true;
+            _submission.Start(DraftWithAttachments(), ReleaseTarget.Latest, MediaUploadType.UploadInBackground, false);
+            for (int i = 0; i < 3; i++) _runner.Step();
+
+            Assert.AreEqual(AttachmentUploadStatus.Sent, StateOf(LocationId).Status);
+            Assert.AreEqual(AttachmentUploadStatus.Queued, StateOf(ShotId).Status);
+        }
+
+        [Test]
+        public void UploadProgress_FollowsTheClient_ItemByItem()
+        {
+            var seen = new List<string>();
+            _submission.AttachmentUploadChanged += (s, id) =>
+            {
+                var st = StateOf(id);
+                seen.Add($"{id}:{st.Status}:{st.Progress.ToString(CultureInfo.InvariantCulture)}");
+            };
+            _submission.Start(DraftWithAttachments(), ReleaseTarget.Latest, MediaUploadType.UploadInBackground, false);
+            _runner.RunUntilIdle();
+
+            CollectionAssert.AreEqual(new[]
+            {
+                $"{LocationId}:Sent:1",
+                $"{ShotId}:Uploading:0",
+                $"{ShotId}:Uploading:0.5",
+                $"{ShotId}:Sent:1",
+                $"{ClipId}:Uploading:0",
+                $"{ClipId}:Uploading:0.5",
+                $"{ClipId}:Sent:1",
+            }, seen);
+            Assert.AreEqual(1f, _submission.UploadProgress);
+        }
+
+        [Test]
+        public void UploadProgress_AveragesAllItems()
+        {
+            _client.HoldAfterFirstHalf = true;
+            _submission.Start(DraftWithAttachments(), ReleaseTarget.Latest, MediaUploadType.UploadInBackground, false);
+            for (int i = 0; i < 10; i++) _runner.Step();
+
+            // location sent (1), screenshot halfway (0.5), clip queued (0)
+            Assert.AreEqual(AttachmentUploadStatus.Uploading, StateOf(ShotId).Status);
+            Assert.AreEqual(0.5f, _submission.UploadProgress, 0.001f);
+        }
+
+        [Test]
+        public void FailedUpload_MarksTheItem_ButTheReportCompletes()
+        {
+            _client.FailUploads.Add(ShotId);
+            _submission.Start(DraftWithAttachments(), ReleaseTarget.Latest, MediaUploadType.UploadInBackground, autoPublish: true);
+            _runner.RunUntilIdle();
+
+            Assert.AreEqual(AttachmentUploadStatus.Failed, StateOf(ShotId).Status);
+            Assert.AreEqual(AttachmentUploadStatus.Sent, StateOf(ClipId).Status);
+            Assert.AreEqual(ReportSubmissionState.Published, _submission.State);
+            Assert.AreEqual(1f, _submission.UploadProgress, "a failed item is finished, not pending");
+        }
+
+        [Test]
+        public void UploadTheClientNeverReported_IsMarkedFailedWithWarning()
+        {
+            _client.SilentUploads.Add(ClipId);
+            _submission.Start(DraftWithAttachments(), ReleaseTarget.Latest, MediaUploadType.UploadInBackground, false);
+            _runner.RunUntilIdle();
+
+            Assert.AreEqual(AttachmentUploadStatus.Failed, StateOf(ClipId).Status);
+            Assert.AreEqual(1, _log.Warnings.Count);
+            StringAssert.Contains(ClipId, _log.Warnings[0]);
+        }
+
+        [Test]
+        public void ProgressForAnUnknownId_IsIgnoredWithWarning()
+        {
+            _client.ExtraProgressId = "ghost";
+            _submission.Start(DraftWithAttachments(), ReleaseTarget.Latest, MediaUploadType.UploadInBackground, false);
+            _runner.RunUntilIdle();
+
+            Assert.IsFalse(_submission.TryGetUploadState("ghost", out _));
+            Assert.AreEqual(1, _log.Warnings.Count);
+            StringAssert.Contains("ghost", _log.Warnings[0]);
+        }
+
+        [Test]
+        public void NoAttachments_ProgressIsCompleteOnceMediaFinishes()
+        {
+            Start();
+            Assert.AreEqual(0f, _submission.UploadProgress);
+
+            _runner.RunUntilIdle();
+
+            Assert.AreEqual(1f, _submission.UploadProgress);
         }
     }
 }

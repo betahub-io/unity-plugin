@@ -12,6 +12,12 @@ namespace BetaHub
     public class Issue : IIssueClient
     {
         private const string UnknownErrorMessage = "Unknown error";
+        private const string ScreenshotsEndpoint = "screenshots";
+        private const string LogFilesEndpoint = "log_files";
+        private const string VideoClipsEndpoint = "video_clips";
+        private const string BinaryFilesEndpoint = "binary_files";
+        private const string BinaryFileField = "binary_file[file]";
+        private const string OctetStream = "application/octet-stream";
 
         // set if the issue is persistent on BetaHub
         public string Id { get; private set; }
@@ -33,26 +39,7 @@ namespace BetaHub
 
         private GameRecorder _gameRecorder;
 
-        public struct LogFileReference
-        {
-            public string path;
-            public bool removeAfterUpload;
-            public Logger logger; // Optional: if set, use logger.ReadLogFileBytes() instead of path
-        }
-
-        public struct ScreenshotFileReference
-        {
-            public string path;
-            public bool removeAfterUpload;
-        }
-
-        public struct VideoFileReference
-        {
-            public string path;
-            public bool removeAfterUpload;
-        }
-
-        /// <param name="gameRecorder">When set, the recorder's last minute is stopped, saved and uploaded with the media.</param>
+        /// <param name="gameRecorder">Stopped, saved and uploaded when the draft includes the recording.</param>
         public Issue(string betahubEndpoint, string projectId, string authToken, GameRecorder gameRecorder = null)
         {
             if (string.IsNullOrEmpty(betahubEndpoint))
@@ -100,12 +87,23 @@ namespace BetaHub
             _updateIssueAuthToken = result.UpdateIssueAuthToken;
         }
 
-        // Uploads screenshots, logs, the recording (if any) and extra videos. Individual upload
-        // failures are logged and reported to the server as client events; they do not abort the report.
-        public IEnumerator UploadMedia(BugReportDraft draft)
+        // Uploads draft.Uploads in order and reports each one through onProgress. A failed item is
+        // logged and reported to the server as a client event; it does not stop the others.
+        public IEnumerator UploadMedia(BugReportDraft draft, Action<string, AttachmentUploadStatus, float> onProgress)
         {
             RequirePersisted("upload media");
-            yield return PostAllMedia(draft.Screenshots, draft.LogFiles, draft.IncludeRecording ? _gameRecorder : null, draft.Videos);
+            PostClientEvent("info", "upload_started", "Media upload started");
+
+            foreach (var upload in draft.Uploads)
+            {
+                string id = upload.AttachmentId;
+                onProgress?.Invoke(id, AttachmentUploadStatus.Uploading, 0f);
+                bool sent = false;
+                yield return PostUpload(upload, p => onProgress?.Invoke(id, AttachmentUploadStatus.Uploading, p), ok => sent = ok);
+                onProgress?.Invoke(id, sent ? AttachmentUploadStatus.Sent : AttachmentUploadStatus.Failed, 1f);
+            }
+
+            PostClientEvent("success", "upload_completed", "Media upload completed");
         }
 
         public IEnumerator SetReporterEmail(string email, Action<string> onError)
@@ -246,61 +244,36 @@ namespace BetaHub
             }
         }
 
-        private IEnumerator PostAllMedia(List<ScreenshotFileReference> screenshots, List<LogFileReference> logFiles, GameRecorder gameRecorder, List<VideoFileReference> videos = null)
+        private IEnumerator PostUpload(ReportUpload upload, Action<float> onProgress, Action<bool> onDone)
         {
-            PostClientEvent("info", "upload_started", "Media upload started");
-
-            if (screenshots != null)
+            switch (upload.Kind)
             {
-                Debug.Log("Posting " + screenshots.Count + " screenshots");
-
-                foreach (var screenshot in screenshots)
-                {
-                    yield return PostScreenshot(screenshot);
-                }
+                case UploadKind.Screenshot:
+                    yield return PostFile(upload, ScreenshotsEndpoint, "screenshot[image]", "image/png", null, onProgress, onDone);
+                    break;
+                case UploadKind.Log:
+                    yield return PostFile(upload, LogFilesEndpoint, "log_file[file]", "text/plain", null, onProgress, onDone);
+                    break;
+                case UploadKind.Video:
+                    yield return PostFile(upload, VideoClipsEndpoint, "video_clip[video]", "video/mp4", null, onProgress, onDone);
+                    break;
+                case UploadKind.Recording:
+                    yield return PostRecording(onProgress, onDone);
+                    break;
+                case UploadKind.File:
+                    var nameField = new Dictionary<string, string> { { "binary_file[name]", upload.Name ?? "" } };
+                    if (upload.Content != null)
+                    {
+                        yield return UploadBytes(BinaryFilesEndpoint, BinaryFileField, upload.Content, upload.FileName, OctetStream, nameField, onProgress, onDone);
+                    }
+                    else
+                    {
+                        yield return PostFile(upload, BinaryFilesEndpoint, BinaryFileField, OctetStream, nameField, onProgress, onDone);
+                    }
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(upload), upload.Kind, "Unknown upload kind.");
             }
-            else
-            {
-                Debug.Log("No screenshots to post");
-            }
-
-            if (logFiles != null)
-            {
-                Debug.Log("Posting " + logFiles.Count + " log files");
-                foreach (var logFile in logFiles)
-                {
-                    yield return PostLogFile(logFile);
-                }
-            }
-            else
-            {
-                Debug.Log("No log files to post");
-            }
-
-            if (gameRecorder != null)
-            {
-                Debug.Log("Posting video");
-#if UNITY_WEBGL && !UNITY_EDITOR
-                yield return PostVideoSegments(gameRecorder);
-#else
-                yield return PostVideo(gameRecorder);
-#endif
-            }
-            else
-            {
-                Debug.Log("No video to post");
-            }
-
-            if (videos != null && videos.Count > 0)
-            {
-                Debug.Log("Posting " + videos.Count + " additional video files");
-                foreach (var video in videos)
-                {
-                    yield return PostVideoFile(video);
-                }
-            }
-
-            PostClientEvent("success", "upload_completed", "Media upload completed");
         }
 
         private string GetPostIssueUrl()
@@ -313,56 +286,37 @@ namespace BetaHub
             return _betahubEndpoint + "projects/" + _projectId + "/issues/g-" + Id + "/set_reporter_email";
         }
         
-        private IEnumerator PostScreenshot(ScreenshotFileReference screenshot)
+        private IEnumerator PostFile(ReportUpload upload, string endpoint, string fieldName, string contentType,
+            Dictionary<string, string> extraFields, Action<float> onProgress, Action<bool> onDone)
         {
-            if (File.Exists(screenshot.path))
+            if (string.IsNullOrEmpty(upload.Path) || !File.Exists(upload.Path))
             {
-                yield return UploadFile("screenshots", "screenshot[image]", screenshot.path, "image/png");
+                Debug.LogError($"Cannot upload attachment '{upload.AttachmentId}': file not found at {upload.Path}");
+                PostClientEvent("error", "upload_failed", $"File not found: {Path.GetFileName(upload.Path)}");
+                onDone(false);
+                yield break;
+            }
 
-                if (screenshot.removeAfterUpload)
-                {
-                    File.Delete(screenshot.path);
-                }
+            yield return UploadFile(endpoint, fieldName, upload.Path, contentType, extraFields, onProgress, onDone);
+
+            if (upload.RemoveAfterUpload)
+            {
+                TryDelete(upload.Path);
             }
         }
-        
-        private IEnumerator PostLogFile(LogFileReference logFile)
-        {
-            if (logFile.logger != null)
-            {
-                // Use logger's safe read method to avoid sharing violations
-                Debug.Log("Reading BetaHub log file safely using Logger instance");
-                byte[] fileData = logFile.logger.ReadLogFileBytes();
 
-                if (fileData != null)
-                {
-                    string fileName = Path.GetFileName(logFile.logger.LogPath) ?? "BH_Player.log";
-                    yield return UploadStringAsFile("log_files", "log_file[file]", fileData, fileName, "text/plain");
-                }
-                else
-                {
-                    Debug.LogError("Failed to read log file data from Logger instance");
-                }
-            }
-            else if (File.Exists(logFile.path))
-            {
-                // Original file path logic
-                yield return UploadFile("log_files", "log_file[file]", logFile.path, "text/plain");
-
-                if (logFile.removeAfterUpload)
-                {
-                    File.Delete(logFile.path);
-                }
-            }
-        }
-        
 #if UNITY_WEBGL && !UNITY_EDITOR
-        private IEnumerator PostVideoSegments(GameRecorder gameRecorder)
+        private IEnumerator PostRecording(Action<float> onProgress, Action<bool> onDone)
         {
-            if (gameRecorder == null) yield break;
+            if (_gameRecorder == null)
+            {
+                Debug.LogError("Cannot upload the recording: no GameRecorder was given to this issue");
+                onDone(false);
+                yield break;
+            }
 
             // Stop recording — this sets IsRecording=false and triggers async finalization in JS
-            gameRecorder.StopRecordingAndSaveLastMinute();
+            _gameRecorder.StopRecordingAndSaveLastMinute();
 
             // Wait for JS-side async finalization to complete (encoder flush, muxer finalize)
             // BetaHubRecorder_IsRecording() returns 0 once the JS side is fully done
@@ -385,11 +339,13 @@ namespace BetaHub
             {
                 Debug.Log("No video segments to upload");
                 PostClientEvent("warning", "recording_error", "No video segments available after recording");
+                onDone(false);
                 yield break;
             }
 
             Debug.Log($"Uploading {segments.Count} video segments");
             string mergeGroup = System.Guid.NewGuid().ToString();
+            bool allSent = true;
             for (int i = 0; i < segments.Count; i++)
             {
                 var segment = segments[i];
@@ -400,48 +356,45 @@ namespace BetaHub
                     { "video_segment[merge_group]", mergeGroup },
                     { "video_segment[merge_total]", segments.Count.ToString() },
                 };
-                yield return UploadStringAsFile("video_segments", "video_segment[video]", segment.Data, fileName, segment.ContentType, extraFields);
+                int done = i;
+                bool sent = false;
+                yield return UploadBytes("video_segments", "video_segment[video]", segment.Data, fileName, segment.ContentType, extraFields,
+                    p => onProgress((done + p) / segments.Count), ok => sent = ok);
+                allSent &= sent;
             }
+            onDone(allSent);
         }
 #else
-        private IEnumerator PostVideo(GameRecorder gameRecorder)
+        private IEnumerator PostRecording(Action<float> onProgress, Action<bool> onDone)
         {
-            if (gameRecorder != null)
+            if (_gameRecorder == null)
             {
-                string videoPath = gameRecorder.StopRecordingAndSaveLastMinute();
-                if (!string.IsNullOrEmpty(videoPath) && File.Exists(videoPath))
-                {
-                    yield return UploadFile("video_clips", "video_clip[video]", videoPath, "video/mp4");
-
-                    // Delete the video file after uploading
-                    File.Delete(videoPath);
-                }
-                else
-                {
-                    PostClientEvent("warning", "recording_error", "Video recording produced no output file");
-                }
+                Debug.LogError("Cannot upload the recording: no GameRecorder was given to this issue");
+                onDone(false);
+                yield break;
             }
+
+            string videoPath = _gameRecorder.StopRecordingAndSaveLastMinute();
+            if (string.IsNullOrEmpty(videoPath) || !File.Exists(videoPath))
+            {
+                PostClientEvent("warning", "recording_error", "Video recording produced no output file");
+                onDone(false);
+                yield break;
+            }
+
+            yield return UploadFile(VideoClipsEndpoint, "video_clip[video]", videoPath, "video/mp4", null, onProgress, onDone);
+
+            // the saved clip is a temporary file
+            TryDelete(videoPath);
         }
 #endif
 
-        private IEnumerator PostVideoFile(VideoFileReference video)
-        {
-            if (File.Exists(video.path))
-            {
-                yield return UploadFile("video_clips", "video_clip[video]", video.path, "video/mp4");
-
-                if (video.removeAfterUpload)
-                {
-                    File.Delete(video.path);
-                }
-            }
-        }
-        
-        private IEnumerator UploadFile(string endpoint, string fieldName, string filePath, string contentType)
+        private IEnumerator UploadFile(string endpoint, string fieldName, string filePath, string contentType,
+            Dictionary<string, string> extraFields, Action<float> onProgress, Action<bool> onDone)
         {
             bool isLogFile = Path.GetExtension(filePath).Equals(".log", StringComparison.OrdinalIgnoreCase);
             byte[] fileData;
-            
+
             if (isLogFile)
             {
                 if (BetaHubReporter.Logger != null && filePath == BetaHubReporter.Logger.LogPath)
@@ -452,13 +405,14 @@ namespace BetaHub
                     {
                         Debug.LogError("Failed to read log file data from Logger instance");
                         PostClientEvent("error", "upload_failed", "Failed to read log file from Logger instance");
+                        onDone(false);
                         yield break;
                     }
                 }
                 else
                 {
                     BetaHubReporter.PauseLogger();
-                    
+
                     try
                     {
                         fileData = File.ReadAllBytes(filePath);
@@ -468,9 +422,10 @@ namespace BetaHub
                         Debug.LogError($"Error reading file {filePath}: {ex.Message}");
                         PostClientEvent("error", "upload_failed", $"Failed to read log file {Path.GetFileName(filePath)}: {ex.Message}");
                         BetaHubReporter.ResumeLogger();
+                        onDone(false);
                         yield break;
                     }
-                    
+
                     BetaHubReporter.ResumeLogger();
                 }
             }
@@ -485,18 +440,21 @@ namespace BetaHub
                 {
                     Debug.LogError($"Error reading file {filePath}: {ex.Message}");
                     PostClientEvent("error", "upload_failed", $"Failed to read file {Path.GetFileName(filePath)}: {ex.Message}");
+                    onDone(false);
                     yield break;
                 }
             }
-            
-            yield return UploadStringAsFile(endpoint, fieldName, fileData, Path.GetFileName(filePath), contentType);
+
+            yield return UploadBytes(endpoint, fieldName, fileData, Path.GetFileName(filePath), contentType, extraFields, onProgress, onDone);
         }
 
-        private IEnumerator UploadStringAsFile(string endpoint, string fieldName, byte[] fileData, string fileName, string contentType, Dictionary<string, string> extraFields = null)
+        private IEnumerator UploadBytes(string endpoint, string fieldName, byte[] fileData, string fileName, string contentType,
+            Dictionary<string, string> extraFields, Action<float> onProgress, Action<bool> onDone)
         {
             if (fileData == null)
             {
                 Debug.LogError($"Cannot upload {fileName}: file data is null");
+                onDone(false);
                 yield break;
             }
 
@@ -518,17 +476,37 @@ namespace BetaHub
                 www.SetRequestHeader("BetaHub-Project-ID", _projectId);
                 www.SetRequestHeader("Accept", "application/json");
 
-                yield return www.SendWebRequest();
+                // Poll instead of yielding the operation so the progress reaches the UI every frame.
+                var operation = www.SendWebRequest();
+                while (!operation.isDone)
+                {
+                    onProgress(www.uploadProgress);
+                    yield return null;
+                }
 
                 if (www.result != UnityWebRequest.Result.Success)
                 {
                     Debug.LogError($"Error uploading {fileName}: {www.error}\nResponse body: {www.downloadHandler?.text}");
                     PostClientEvent("error", "upload_failed", $"Failed to upload {fileName}: {www.error}");
+                    onDone(false);
                 }
                 else
                 {
                     Debug.Log($"{fileName} uploaded successfully!");
+                    onDone(true);
                 }
+            }
+        }
+
+        private static void TryDelete(string path)
+        {
+            try
+            {
+                File.Delete(path);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"Could not delete temporary file {path}: {ex.Message}");
             }
         }
 

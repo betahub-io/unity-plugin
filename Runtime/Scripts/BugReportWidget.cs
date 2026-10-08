@@ -71,7 +71,6 @@ namespace BetaHub
     [AddComponentMenu("BetaHub/Bug Report Widget")]
     public class BugReportWidget : MonoBehaviour
     {
-        private const string ScreenshotFileName = "screenshot.png";
         private const long MaxLogBytesForPreview = 2L * 1024 * 1024;
         private const int ToastDoneMilliseconds = 4000;
         private const string SampleIssueId = "4821";
@@ -454,13 +453,7 @@ namespace BetaHub
 
         private IEnumerator CaptureAndShow()
         {
-            string screenshotPath = Path.Combine(Application.persistentDataPath, ScreenshotFileName);
-            ScreenCapture.CaptureScreenshot(screenshotPath);
-            _reporter.AddScreenshot(screenshotPath, true);
-
-            // the screenshot is written asynchronously; give it a frame before reading it back
-            yield return null;
-            yield return null;
+            yield return _reporter.CaptureScreenshot();
 
             _description.SetValueWithoutNotify("");
             _steps.SetValueWithoutNotify("");
@@ -469,7 +462,7 @@ namespace BetaHub
             _submissionError = null;
             _active = null;
 
-            LoadScreenshotPreview(screenshotPath);
+            LoadScreenshotPreview(_reporter.ScreenshotPath);
             ApplyAttachmentCards();
             ApplyCardState();
             SetScreen(WidgetScreen.Compose);
