@@ -105,7 +105,7 @@ end
 class UssConverter
   private
 
-  # url("Fonts/Inter-Regular.ttf") -> embedded @font-face with a family named after the file.
+  # url("Fonts/Barlow-Regular.ttf") -> embedded @font-face with a family named after the file.
   def font_family_for(value)
     match = value.match(/url\((['"]?)(.*?)\1\)/)
     return [] unless match
