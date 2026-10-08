@@ -412,8 +412,8 @@ latency=ping.betahub.io: min/avg/max = 45ms/67ms/89ms (10/10 requests)</code></p
 
     <ul>
         <li><strong>Shortcut</strong>: Default is F12. Set to None to disable and open the form programmatically with <code>Show()</code>.</li>
-        <li><strong>Use Light Theme</strong>: switches to the light token set. Any other look: override the <code>--bh-*</code> USS variables from your own stylesheet.</li>
-        <li><strong>Require Terms Acceptance / Terms Url</strong>: optional checkbox that must be ticked before sending.</li>
+        <li><strong>Theme</strong>: the theme stylesheet. Six built-ins ship in <code>Runtime/UI/Themes</code> (Dark, Light, Neutral, Ocean, Forest, Violet); <code>SetTheme()</code> swaps it at runtime. Any other look: a stylesheet with the same <code>--bh-*</code> variables, or one generated with <code>ThemeUssWriter</code>.</li>
+        <li><strong>Require Terms Acceptance / Terms Url</strong>: optional terms row that must be accepted before sending.</li>
         <li><strong>Strings</strong>: all player-facing copy, editable per language.</li>
         <li><strong>Preview</strong> (inspector section): shows any screen with sample data in the Game view without Play mode.</li>
         <li><strong>Performance_Sampler</strong>

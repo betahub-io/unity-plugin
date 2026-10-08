@@ -38,6 +38,16 @@ namespace BetaHub.Tests
         }
 
         [Test]
+        public void MixWeighsTheFirstColor()
+        {
+            var white = ColorMath.FromHex("#ffffff");
+            var black = ColorMath.FromHex("#000000");
+            Assert.AreEqual("#808080", ColorMath.ToHex(ColorMath.Mix(white, black, 0.5f)));
+            Assert.AreEqual("#ffffff", ColorMath.ToHex(ColorMath.Mix(white, black, 1f)));
+            Assert.AreEqual("#000000", ColorMath.ToHex(ColorMath.Mix(white, black, 0f)));
+        }
+
+        [Test]
         public void HslRoundTripsApproximately()
         {
             var rgb = ColorMath.FromHex("#4fb37a");
@@ -56,6 +66,7 @@ namespace BetaHub.Tests
         private const float TextMin = 7f;      // body text, AAA
         private const float MutedMin = 4.5f;   // secondary text, AA
         private const float ComponentMin = 3f; // UI component / large text
+        private const float LargeTextAaaMin = 4.5f; // large text (>= 18.66px bold), AAA
 
         private static float C(string a, string b) => ColorMath.ContrastRatio(ColorMath.FromHex(a), ColorMath.FromHex(b));
 
@@ -127,6 +138,33 @@ namespace BetaHub.Tests
         }
 
         [Test]
+        public void FieldsAndRowsKeepTheirTextReadable()
+        {
+            foreach (var spec in BugReportThemeLibrary.BuiltIns)
+            {
+                var t = ThemeRecipe.Derive(spec.Accent, spec.NeutralTint, spec.Mode, spec.Radius);
+                Assert.GreaterOrEqual(C(t.Text, t.Field), TextMin, spec.Name + " text/field");
+                Assert.GreaterOrEqual(C(t.Muted, t.Field), MutedMin, spec.Name + " prompt/field");
+                // focused row names are 28px bold: large text, where AAA is 4.5:1
+                Assert.GreaterOrEqual(C(t.Text, t.SurfaceHi), LargeTextAaaMin, spec.Name + " text/focused row");
+                Assert.GreaterOrEqual(C(t.Accent, t.Field), ComponentMin, spec.Name + " focus border/field");
+                Assert.GreaterOrEqual(C(t.Text, t.Bar), TextMin, spec.Name + " text/prompt bar");
+            }
+        }
+
+        [Test]
+        public void DerivedSurfacesFollowTheDesign()
+        {
+            var dark = ThemeRecipe.Derive("#ff7a59", "#1c2131", ThemeMode.Dark, 10f);
+            var light = ThemeRecipe.Derive("#e0603f", "#1c2131", ThemeMode.Light, 10f);
+            var black = ColorMath.FromHex("#000000");
+
+            Assert.AreEqual(ColorMath.ToHex(ColorMath.Mix(ColorMath.FromHex(dark.Ground), black, 0.62f)), dark.Field, "dark fields sink below the ground");
+            Assert.AreEqual("#ffffff", light.Field, "light fields are paper white");
+            Assert.AreEqual(ColorMath.ToHex(ColorMath.Mix(ColorMath.FromHex(dark.Surface), ColorMath.FromHex(dark.Text), 0.84f)), dark.SurfaceHi);
+        }
+
+        [Test]
         public void AnyAccentProducesAUsableSet()
         {
             var t = ThemeRecipe.Derive("#c0392b", "#c0392b", ThemeMode.Dark, 10f);
@@ -134,6 +172,65 @@ namespace BetaHub.Tests
             foreach (var hex in new[] { t.Ground, t.Surface, t.Line, t.Text, t.Muted, t.Accent, t.OnAccent, t.Ok, t.Warn, t.Error })
             {
                 StringAssert.IsMatch("^#[0-9a-fA-F]{6}$", hex);
+            }
+        }
+    }
+
+    [TestFixture]
+    public class ThemeUssWriterTests
+    {
+        private static readonly ThemeSpec Dark = System.Array.Find(BugReportThemeLibrary.BuiltIns, s => s.Name == "Dark");
+
+        [Test]
+        public void WritesEveryTokenAsAVariableOnTheWidgetRoot()
+        {
+            var t = ThemeRecipe.Derive(Dark.Accent, Dark.NeutralTint, Dark.Mode, Dark.Radius);
+            string uss = ThemeUssWriter.Write(Dark);
+
+            StringAssert.Contains("." + ThemeUssWriter.RootClass + " {", uss);
+            var expected = new[]
+            {
+                ("--bh-ground", t.Ground), ("--bh-surface", t.Surface), ("--bh-surface-hi", t.SurfaceHi), ("--bh-line", t.Line),
+                ("--bh-text", t.Text), ("--bh-muted", t.Muted), ("--bh-accent", t.Accent), ("--bh-on-accent", t.OnAccent),
+                ("--bh-ok", t.Ok), ("--bh-warn", t.Warn), ("--bh-err", t.Error),
+                ("--bh-field", t.Field), ("--bh-field-hi", t.FieldHi), ("--bh-bar", t.Bar),
+            };
+            foreach (var (name, hex) in expected)
+            {
+                StringAssert.Contains($"{name}: {hex};", uss, name);
+            }
+            StringAssert.Contains("--bh-radius: 10px;", uss);
+            StringAssert.IsMatch(@"--bh-scrim: rgba\(\d+, \d+, \d+, 0\.\d+\);", uss);
+        }
+
+        [Test]
+        public void SaysWhereItCameFrom()
+        {
+            string uss = ThemeUssWriter.Write(Dark);
+            StringAssert.Contains(Dark.Accent, uss);
+            StringAssert.Contains("Do not edit", uss);
+        }
+
+        [Test]
+        public void FileNamePerTheme()
+        {
+            Assert.AreEqual("BugReportTheme-Ocean.uss", ThemeUssWriter.FileNameFor("Ocean"));
+        }
+
+        [Test]
+        public void UsesInvariantNumbers()
+        {
+            var previous = System.Threading.Thread.CurrentThread.CurrentCulture;
+            try
+            {
+                System.Threading.Thread.CurrentThread.CurrentCulture = new System.Globalization.CultureInfo("pl-PL");
+                string uss = ThemeUssWriter.Write(new ThemeSpec("Odd", "#4f8cff", "#4f8cff", ThemeMode.Dark, 7.5f));
+                StringAssert.Contains("--bh-radius: 7.5px;", uss);
+                StringAssert.DoesNotContain("0,", uss);
+            }
+            finally
+            {
+                System.Threading.Thread.CurrentThread.CurrentCulture = previous;
             }
         }
     }

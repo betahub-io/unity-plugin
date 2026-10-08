@@ -75,6 +75,13 @@ namespace BetaHub
             return p;
         }
 
+        /// <summary>sRGB channel mix, like CSS <c>color-mix(in srgb, a weight, b)</c>.</summary>
+        public static Rgb Mix(Rgb a, Rgb b, float weightOfA)
+        {
+            float w = Math.Max(0f, Math.Min(1f, weightOfA));
+            return new Rgb(a.R * w + b.R * (1f - w), a.G * w + b.G * (1f - w), a.B * w + b.B * (1f - w));
+        }
+
         public static float ContrastRatio(Rgb a, Rgb b)
         {
             float la = RelativeLuminance(a);

@@ -47,6 +47,19 @@ namespace BetaHub
         [HideInInspector]
         public RenderTexture CaptureRenderTexture;
 
+        /// <summary>Preview frames kept for the report form: one every interval over the recording window.</summary>
+        public const int PreviewFrameCount = 6;
+        public const float PreviewFrameInterval = 10f;
+        private const int PreviewFrameWidth = 320;
+        private const int PreviewFrameHeight = 180;
+
+        public struct PreviewFrame
+        {
+            public Texture Texture;
+            /// <summary>Seconds between this frame and the newest one.</summary>
+            public float SecondsBeforeNewest;
+        }
+
 #if !UNITY_WEBGL || UNITY_EDITOR
         // Optimized: Use RenderTextures for efficient GPU-based capture
         private RenderTexture _captureRT;
@@ -56,6 +69,9 @@ namespace BetaHub
         // GC Optimization: Reusable buffers to avoid allocations in capture loop
         private byte[] _frameDataBuffer; // Reusable buffer for frame data from GPU
         private byte[] _rgbaDataBuffer; // Reusable buffer for RGBA texture data
+
+        private RenderTexture[] _previewFrames;
+        private readonly ThumbnailRing _previewRing = new ThumbnailRing(PreviewFrameCount, PreviewFrameInterval);
 #endif
 
         public bool IsRecording { get; private set; }
@@ -218,6 +234,7 @@ namespace BetaHub
             _rgbConversionBuffer = null;
             _frameDataBuffer = null;
             _rgbaDataBuffer = null;
+            ReleasePreviewFrames();
             if (_videoEncoder != null) // can be null since Start() may not have been called
             {
                 _videoEncoder.Dispose();
@@ -428,6 +445,7 @@ namespace BetaHub
                             Graphics.Blit(CaptureRenderTexture, _captureRT);
                             AsyncGPUReadback.Request(_captureRT, 0, OnCompleteReadback);
                         }
+                        KeepPreviewFrame(CaptureRenderTexture);
                     }
                     else
                     {
@@ -447,11 +465,57 @@ namespace BetaHub
                         
                         // Use AsyncGPUReadback for non-blocking frame capture
                         AsyncGPUReadback.Request(_captureRT, 0, OnCompleteReadback);
+                        KeepPreviewFrame(_captureRT);
                     }
                 }
             }
         }
 
+        // A small GPU copy every PreviewFrameInterval; paused time (the form is open) adds none.
+        private void KeepPreviewFrame(Texture source)
+        {
+            if (IsPaused || !_previewRing.IsDue(Time.unscaledTime)) return;
+            if (_previewFrames == null)
+            {
+                _previewFrames = new RenderTexture[PreviewFrameCount];
+            }
+            int slot = _previewRing.Claim(Time.unscaledTime);
+            if (_previewFrames[slot] == null)
+            {
+                _previewFrames[slot] = new RenderTexture(PreviewFrameWidth, PreviewFrameHeight, 0, RenderTextureFormat.ARGB32);
+            }
+            Graphics.Blit(source, _previewFrames[slot]);
+        }
+
+        private void ReleasePreviewFrames()
+        {
+            _previewRing.Clear();
+            if (_previewFrames == null) return;
+            foreach (var frame in _previewFrames)
+            {
+                if (frame != null) frame.Release();
+            }
+            _previewFrames = null;
+        }
+#endif
+
+        /// <summary>Downscaled frames of the recording, oldest first. Empty on WebGL and before the first frame.</summary>
+        public List<PreviewFrame> GetPreviewFrames()
+        {
+            var frames = new List<PreviewFrame>();
+#if !UNITY_WEBGL || UNITY_EDITOR
+            if (_previewFrames == null) return frames;
+            float newest = 0f;
+            foreach (var entry in _previewRing.Ordered()) newest = entry.Time;
+            foreach (var entry in _previewRing.Ordered())
+            {
+                frames.Add(new PreviewFrame { Texture = _previewFrames[entry.Slot], SecondsBeforeNewest = newest - entry.Time });
+            }
+#endif
+            return frames;
+        }
+
+#if !UNITY_WEBGL || UNITY_EDITOR
         // Optimized: Async callback for GPU readback completion
         private void OnCompleteReadback(AsyncGPUReadbackRequest request)
         {

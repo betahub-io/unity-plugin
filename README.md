@@ -93,14 +93,14 @@ Join our [Discord server](https://discord.gg/g2wpRtG) for support, feedback, and
 The `BugReportWidget` prefab carries these components on one GameObject:
 
 - `BetaHubReporter`: headless core. Configuration (Project ID, Auth Token, release, upload mode), attachments, custom fields, recording policy and submission. Your code talks to this one.
-- `BugReportWidget` + `UIDocument`: the shipped form, built with UI Toolkit (`Runtime/UI/BugReportWidget.uxml` and `.uss`). A view over the reporter.
+- `BugReportWidget` + `UIDocument`: the shipped form, built with UI Toolkit (`Runtime/UI/BugReportWidget.uxml` and `.uss`). A full-screen view over the reporter: what happened on the left, what gets sent on the right, actions in a prompt bar. Sized for a 1080p TV (30 px field text, 64 px tall controls, a safe area), scaled to the screen height.
 - `GameRecorder`, `CustomFieldValidator`: recording and custom field checks.
 
 The older uGUI form (`BugReportingFormCanvas` prefab with `BugReportUI`) still works and still talks to the same reporter, but new features land in the UI Toolkit widget.
 
 ### Reskinning the widget
 
-The look is a set of USS variables (`--bh-ground`, `--bh-surface`, `--bh-accent`, ...). Add your own stylesheet to the `UIDocument`'s panel or to the UXML and override the variables; no prefab surgery needed. `UseLightTheme` on the widget switches to the light token set. Strings are editable on the component. Select the prefab and use the inspector's Preview section to see any screen in the Game view without entering Play mode.
+A theme is one small stylesheet of `--bh-*` variables; the layout stylesheet only reads them. Six built-ins ship in `Runtime/UI/Themes` (Dark, Light, Neutral, Ocean, Forest, Violet), each derived from one accent color with contrast checked. Assign one to the widget's **Theme** field, or call `SetTheme()` at runtime. For your own look, write a stylesheet with the same variables, or generate one from an accent with `ThemeUssWriter.Write(new ThemeSpec(...))`. Strings are editable on the component. Select the prefab and use the inspector's Preview section to see any screen, attachment count and theme in the Game view without entering Play mode.
 
 Configuration mistakes are reported once in the Unity console at startup, prefixed with `BetaHub:`, together with the fix.
 

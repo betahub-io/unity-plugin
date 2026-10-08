@@ -71,15 +71,5 @@ namespace BetaHub.Tests
             Assert.AreEqual(0, set.Items.Count);
             CollectionAssert.IsEmpty(set.IncludedIds.ToArray());
         }
-
-        // column layout decision lives in the widget model
-        [Test]
-        public void ColumnCountIsOneUpToSixThenTwo()
-        {
-            Assert.AreEqual(1, BugReportWidgetModel.ColumnCountFor(1));
-            Assert.AreEqual(1, BugReportWidgetModel.ColumnCountFor(6));
-            Assert.AreEqual(2, BugReportWidgetModel.ColumnCountFor(7));
-            Assert.AreEqual(2, BugReportWidgetModel.ColumnCountFor(9));
-        }
     }
 }

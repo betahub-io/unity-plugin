@@ -142,49 +142,88 @@ MonoBehaviour:
       m_Action: BugReportShortcut
       m_Flags: 0
     m_Flags: 0
-  UseLightTheme: 0
+  Theme: {fileID: 7433441132597879392, guid: 5457cb9c6205a43b7879669c326bce2f, type: 3}
   RequireTermsAcceptance: 0
   TermsUrl: 
   Strings:
+    Kicker: BetaHub
     Title: Report a bug
+    Subtitle: Goes straight to the developers
+    SubtitleSignedIn: Reporting as {0}
     ErrorTitle: Couldn't send
+    ErrorSubtitle: '{0} Your text is kept.'
     UnavailableTitle: Bug reporting unavailable
-    DescriptionPlaceholder: What went wrong, and what did you expect instead?
-    StepsPlaceholder: '1. Open the inventory
-
-      2. Drag the sword onto the shield
-
-      3.
-      Game freezes'
-    ScreenshotMeta: taken when you pressed {0}
-    ClipTitle: Last {0} s of play
-    ClipMeta: "video + audio \xB7 {0}"
-    LogMeta: "{0} \xB7 {1}"
+    UnavailableForPlayers: Bug reporting isn't available right now.
+    DescriptionLabel: What happened
+    DescriptionPrompt: Describe what happened
+    StepsLabel: Steps to reproduce
+    StepsPrompt: Add steps if you can. It helps a lot.
+    Required: required
+    Optional: optional
+    TermsLabel: Terms of bug reporting
+    TermsAccepted: Accepted
+    TermsNotAccepted: Not accepted
+    AttachmentsGroup: Sending along
+    AttachmentsCount: '{0} of {1}'
+    Included: Included
+    LeftOut: Left out
+    Queued: Queued
+    Sent: Sent
+    Failed: Failed
+    Percent: '{0}%'
+    ScreenshotCaption: "Your screenshot \xB7 this frame"
+    NoScreenshot: No screenshot this time
+    LatencyNote: Measured while this form is open
+    LocationNote: Looked up when you send, from one request to BetaHub. No GPS.
+    FileAddedBy: Added by the game
+    ClipNoFrames: Frames appear after a few seconds of play
+    PreviewCount: '{0} of {1}'
+    PreviewShot: "{0} \xD7 {1} \xB7 the frame under this form"
+    PreviewShotNoSize: The frame under this form
+    PreviewClip: "One frame every 10 s \xB7 ends when you opened this"
+    PreviewVideo: "Video file \xB7 sent as is"
+    PreviewLog: "Last lines \xB7 the full file is sent"
+    Write: Write
+    Close: Close
+    Done: Done
+    NextField: Next field
+    Include: Include
+    LeaveOut: Leave out
+    Accept: Accept
+    Withdraw: Withdraw
+    ReadTerms: Read terms
+    FullScreen: Full screen
+    Item: Item
+    BackToForm: Back to form
     SendReport: Send report
     Sending: "Sending\u2026"
-    Cancel: Cancel
-    UploadingTitle: Almost there
-    UploadingText: "Your report is saved. Uploading attachments\u2026"
-    SentTitle: Report sent
-    SentAnonymous: saved anonymously
-    SentSignedIn: under your BetaHub reports
-    EmailPlaceholder: you@example.com
-    EmailMeALink: Email me a link
-    EmailSaved: We'll email {0} when there's news.
-    EmailInvalid: That doesn't look like an email address.
-    EmailFailed: Couldn't save your email. Try again or just go back.
-    SentNote: We'll also tell you when it's fixed. Nothing else, no account.
-    SentSignedInNote: We'll notify you on BetaHub when it's fixed.
+    TryAgain: Try again
     BackToGame: Back to game
+    BackToGameUploading: "Back to game \xB7 the upload continues"
     CopyLink: Copy link
     LinkCopied: Link copied
+    EmailMeALink: Email me a link
+    UploadingTitle: Almost there
+    UploadingSubtitle: Your report is saved. Uploading attachments.
+    SentTitle: Report sent
+    SentAnonymous: "#{0} \xB7 saved anonymously"
+    SentSignedIn: "#{0} \xB7 under your BetaHub reports"
+    EmailLabel: Email me when it's fixed
+    EmailPrompt: you@example.com
+    EmailNote: One email when it's fixed. Nothing else, no account.
+    EmailSaved: We'll email {0} when it's fixed.
+    EmailInvalid: That doesn't look like an email address.
+    EmailFailed: Couldn't save your email. Try again or just go back.
+    SignedInNote: We'll notify you on BetaHub when it's fixed.
+    ReportLink: Report link
+    Copy: Copy
+    SentWith: Sent with this report
+    TextOnly: Text only
     ToastUploading: Uploading your report
-    ToastUploadingSub: the game continues
+    ToastUploadingSub: "{0}% \xB7 the game continues"
     ToastDone: Report sent
-    ToastDoneSub: thank you
-    TermsText: I accept the terms of bug reporting
-    HintClose: Esc  close
-    HintSend: Ctrl+Enter  send
+    ToastDoneSub: Thank you
+    ToastFailed: Report not sent
   OnBugReportWindowShown:
     m_PersistentCalls:
       m_Calls: []

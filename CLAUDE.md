@@ -80,7 +80,7 @@ The plugin comes pre-configured with demo project credentials (`DEMO_PROJECT_ID 
 `Tools~/EditTests/` is a dotnet SDK project that compiles `Runtime/Scripts` + `Tests/Editor` against Unity's DLLs and runs the plain-C# NUnit tests without launching Unity. Use it as the inner red/green loop:
 
 ```bash
-cd Tools~/EditTests && dotnet test --filter "FullyQualifiedName~BugReportSessionTests|FullyQualifiedName~ReportSubmissionTests|FullyQualifiedName~ReporterConfigurationTests|FullyQualifiedName~BugReportWidgetModelTests|FullyQualifiedName~AttachmentSetTests|FullyQualifiedName~ColorMathTests|FullyQualifiedName~ThemeRecipeTests"
+cd Tools~/EditTests && dotnet test --filter "FullyQualifiedName~BugReportSessionTests|FullyQualifiedName~ReportSubmissionTests|FullyQualifiedName~ReporterConfigurationTests|FullyQualifiedName~BugReportWidget|FullyQualifiedName~AttachmentSetTests|FullyQualifiedName~ColorMathTests|FullyQualifiedName~ThemeRecipeTests|FullyQualifiedName~ThemeUssWriterTests|FullyQualifiedName~ThumbnailRingTests"
 ```
 
 Add new pure-C# suites to the filter. Tests that touch the Unity runtime (e.g. `VideoEncoderCleanupTests`) only run in Unity. The NUnit adapter in that project silently drops `[TestCase]` methods with enum arguments; use a table inside a plain `[Test]` instead. Before finishing, confirm with the real Unity EditMode run:
@@ -97,13 +97,13 @@ If any Unity batchmode run exits 0 after only a few dozen log lines, check for `
 
 ## UI Toolkit Widget
 
-The shipped UI is `Runtime/Prefabs/BugReportWidget.prefab`: `UIDocument` + `BugReportWidget` view over `BetaHubReporter`, markup in `Runtime/UI/BugReportWidget.uxml` and `.uss`. The prefab, `Runtime/UI/BugReportPanelSettings.asset` and `Runtime/UI/BetaHubRuntimeTheme.tss` are generated, never hand-edited: menu **BetaHub > Build Widget Assets** or
+The shipped UI is `Runtime/Prefabs/BugReportWidget.prefab`: `UIDocument` + `BugReportWidget` view over `BetaHubReporter`, markup in `Runtime/UI/BugReportWidget.uxml` and layout in `.uss` (px at 1920x1080, panel matched on height). Colors are `--bh-*` variables from a theme stylesheet in `Runtime/UI/Themes/`, written by `ThemeUssWriter` from `BugReportThemeLibrary`. Rows, panes and prompts are built in `BugReportWidget.cs`; screen/prompt/row/focus decisions live in the pure `BugReportWidgetModel` and `WidgetFocus`. The prefab, `Runtime/UI/BugReportPanelSettings.asset`, `Runtime/UI/BetaHubRuntimeTheme.tss` and the theme stylesheets are generated, never hand-edited: menu **BetaHub > Build Widget Assets** or
 
 ```bash
 Unity -batchmode -nographics -quit -projectPath "<workspace>" -executeMethod BetaHub.Editor.BugReportWidgetAssetBuilder.Build -logFile /tmp/unity_build_assets.log
 ```
 
-Design review without Unity: `ruby Tools~/UxmlPreview/uxml2html.rb Runtime/UI/BugReportWidget.uxml /tmp/preview.html` (see its README for the mapping and known deviations). Rendering and smoke tests live in `Tests/Preview/` (PlayMode; run headless with `-batchmode`, `-testPlatform PlayMode`, `-testFilter "BetaHub.Tests.WidgetPreviewCapture;BetaHub.Tests.WidgetPrefabSmokeTests"`; set `BH_PREVIEW_OUT` to choose the PNG path). Element names (`bh-*`) and class names are shared between the UXML, the USS and `BugReportWidget.cs`; keep them in sync.
+Design review: `Tests/Preview/WidgetPreviewCapture` renders the prefab in every state, at 1920x1080 and Steam Deck 1280x800, to `widget-*.png` (PlayMode; run headless with `-batchmode`, `-testPlatform PlayMode`, `-testFilter "BetaHub.Tests.WidgetPreviewCapture;BetaHub.Tests.WidgetPrefabSmokeTests"`; set `BH_PREVIEW_OUT` to choose the folder). Compare against the design of record. `WidgetPrefabSmokeTests` walks every state with 3 and 9 attachments and drives focus with key events. `Tools~/UxmlPreview` only shows the static skeleton now, since rows and themes come from code. Element names (`bh-*`) and class names are shared between the UXML, the USS and `BugReportWidget.cs`; keep them in sync. UI Toolkit runtime traps: keyboard events go to the panel's own root when nothing has focus (listen there, not on the document root); `Focus()` fails on an element that was `display: none` until this frame (defer with `schedule.Execute`); renamed serialized fields keep their old prefab values (the builder resets `Strings`).
 
 ## Build Verification
 

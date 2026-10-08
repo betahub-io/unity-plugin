@@ -11,6 +11,10 @@
 - `BetaHubReporter.AddFile()` attaches any file (saves, dumps) and `RegisterAttachmentProvider()` adds rows computed at open time; Data rows are sent as a text file.
 - Per-attachment upload progress: `ReportSubmission.AttachmentUploadChanged`, `TryGetUploadState()` and `UploadProgress`, fed by `UnityWebRequest.uploadProgress`. A failed upload marks its row as Failed.
 - `BetaHubReporter.CaptureScreenshot()` replaces the previous capture instead of piling up a screenshot per opened form.
+- Widget redesign: a full-screen form sized for TVs and handhelds. What happened on the left, what gets sent on the right as settings-style rows (two columns from six), a preview pane that follows focus (screenshot, clip frames, log tail, data), a full-screen preview per attachment, and a prompt bar with key caps. Errors replace the title; upload progress shows per row and in an in-game toast.
+- Themes: six built-in theme stylesheets generated from `ThemeRecipe` (`Runtime/UI/Themes`), `BugReportWidget.Theme` and `SetTheme()`. Replaces `UseLightTheme`.
+- `GameRecorder.GetPreviewFrames()`: a small frame every 10 s of the recording for the clip preview (not on WebGL).
+- Fonts: Barlow, Barlow Semi Condensed and JetBrains Mono (SIL OFL) for the widget.
 
 ### Changed
 - Split `BugReportUI` into a headless `BetaHubReporter` component (configuration, attachments, custom fields, recording policy, submission) and a pure view. Custom UIs call `BetaHubReporter.Submit()` and follow the returned `ReportSubmission` handle instead of driving coroutines. `Issue` is now a thin HTTP client; publish/email sequencing lives in `ReportSubmission`.

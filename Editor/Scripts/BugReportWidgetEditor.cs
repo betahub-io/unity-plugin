@@ -1,5 +1,7 @@
+using System.IO;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.UIElements;
 
 namespace BetaHub.Editor
 {
@@ -11,11 +13,12 @@ namespace BetaHub.Editor
     public class BugReportWidgetEditor : UnityEditor.Editor
     {
         private const string PreviewHeader = "Preview (Game view, no Play mode needed)";
-        private const string SignedInLabel = "Preview as signed-in user";
         private const string ClearLabel = "Clear preview";
+        private static readonly int[] AttachmentCounts = { 3, 6, 9 };
+        private static readonly string[] AttachmentCountLabels = { "3", "6", "9" };
 
-        private WidgetPreviewState _state = WidgetPreviewState.None;
-        private bool _signedIn;
+        private WidgetPreviewOptions _options = new WidgetPreviewOptions { State = WidgetPreviewState.None, AttachmentCount = 3, FocusedAttachment = -1 };
+        private int _themeIndex;
 
         public override void OnInspectorGUI()
         {
@@ -26,13 +29,20 @@ namespace BetaHub.Editor
             var widget = (BugReportWidget)target;
 
             EditorGUI.BeginChangeCheck();
-            _signedIn = EditorGUILayout.Toggle(SignedInLabel, _signedIn);
-            var picked = (WidgetPreviewState)EditorGUILayout.EnumPopup("State", _state);
+            _options.State = (WidgetPreviewState)EditorGUILayout.EnumPopup("State", _options.State);
+            int countIndex = System.Array.IndexOf(AttachmentCounts, _options.AttachmentCount);
+            countIndex = EditorGUILayout.Popup("Attachments", countIndex < 0 ? 0 : countIndex, AttachmentCountLabels);
+            _options.AttachmentCount = AttachmentCounts[countIndex];
+            _options.SignedIn = EditorGUILayout.Toggle("Signed in", _options.SignedIn);
+            _options.Terms = EditorGUILayout.Toggle("Terms row", _options.Terms);
+            _options.FocusedAttachment = EditorGUILayout.IntSlider("Focused attachment", _options.FocusedAttachment, -1, _options.AttachmentCount - 1);
+            var themeNames = System.Array.ConvertAll(BugReportThemeLibrary.BuiltIns, s => s.Name);
+            _themeIndex = EditorGUILayout.Popup("Built-in theme", _themeIndex, themeNames);
             if (EditorGUI.EndChangeCheck())
             {
-                _state = picked;
-                widget.ApplyPreview(_state, _signedIn);
-                EditorApplication.QueuePlayerLoopUpdate();
+                var theme = LoadBuiltInTheme(widget, themeNames[_themeIndex]);
+                if (theme != null) widget.SetTheme(theme);
+                Apply(widget);
             }
 
             using (new EditorGUILayout.HorizontalScope())
@@ -40,21 +50,36 @@ namespace BetaHub.Editor
                 foreach (WidgetPreviewState state in System.Enum.GetValues(typeof(WidgetPreviewState)))
                 {
                     if (state == WidgetPreviewState.None) continue;
-                    if (GUILayout.Button(state.ToString()))
+                    if (GUILayout.Button(state.ToString(), EditorStyles.miniButton))
                     {
-                        _state = state;
-                        widget.ApplyPreview(_state, _signedIn);
-                        EditorApplication.QueuePlayerLoopUpdate();
+                        _options.State = state;
+                        Apply(widget);
                     }
                 }
             }
             if (GUILayout.Button(ClearLabel))
             {
-                _state = WidgetPreviewState.None;
-                widget.ApplyPreview(_state, _signedIn);
-                EditorApplication.QueuePlayerLoopUpdate();
+                _options.State = WidgetPreviewState.None;
+                Apply(widget);
             }
-            EditorGUILayout.HelpBox("Preview uses sample data. Theme, strings and layout are live; submission is not.", MessageType.None);
+            EditorGUILayout.HelpBox("Preview uses sample data. Theme, strings and layout are live; submission is not. " +
+                "\"Built-in theme\" swaps the stylesheet for this session only; assign Theme above to keep it.", MessageType.None);
+        }
+
+        private void Apply(BugReportWidget widget)
+        {
+            widget.ApplyPreview(_options);
+            EditorApplication.QueuePlayerLoopUpdate();
+        }
+
+        // The built-ins sit next to the shipped UXML, wherever the package lives.
+        private static StyleSheet LoadBuiltInTheme(BugReportWidget widget, string name)
+        {
+            var document = widget.GetComponent<UIDocument>();
+            if (document == null || document.visualTreeAsset == null) return null;
+            string uxmlPath = AssetDatabase.GetAssetPath(document.visualTreeAsset);
+            string path = Path.GetDirectoryName(uxmlPath).Replace('\\', '/') + "/Themes/" + ThemeUssWriter.FileNameFor(name);
+            return AssetDatabase.LoadAssetAtPath<StyleSheet>(path);
         }
     }
 }

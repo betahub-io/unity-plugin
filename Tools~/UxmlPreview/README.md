@@ -1,5 +1,10 @@
 # UxmlPreview
 
+> The shipped widget now builds its rows, panes and prompts in code and takes its colors from a
+> separate theme stylesheet, so this converter shows only the static skeleton. For design review of
+> the real widget, use the PNGs from `Tests/Preview/WidgetPreviewCapture`. The converter stays useful
+> for static UXML screens.
+
 Converts a UI Toolkit `.uxml` (and the `.uss` it references) into a standalone HTML page that
 approximates Unity's rendering, so a screen can be reviewed in a browser without opening Unity.
 

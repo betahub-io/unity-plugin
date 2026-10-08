@@ -237,6 +237,19 @@ namespace BetaHub
             return _session.CollectAttachments(sources);
         }
 
+        /// <summary>Latency measured so far while the form is open, one entry per host. Empty without a LatencyProvider.</summary>
+        public IReadOnlyList<KeyValuePair<string, string>> LatencyPreview()
+        {
+            var result = new List<KeyValuePair<string, string>>();
+            var data = latencyProvider != null && latencyProvider.EnableLatency ? latencyProvider.GetCurrentLatencyData() : null;
+            if (data?.hostResults == null) return result;
+            foreach (var host in data.hostResults)
+            {
+                result.Add(new KeyValuePair<string, string>(host.Key, host.Value.GetFormattedLatency()));
+            }
+            return result;
+        }
+
         /// <summary>Adds a screenshot to the next report as its own row.</summary>
         public void AddScreenshot(string path, bool removeAfterUpload) => _session.AddScreenshot(path, removeAfterUpload);
         public void AddLogFile(string path, bool removeAfterUpload) => _session.AddLogFile(path, removeAfterUpload);
