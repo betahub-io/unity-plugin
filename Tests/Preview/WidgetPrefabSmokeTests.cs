@@ -19,6 +19,7 @@ namespace BetaHub.Tests
     public class WidgetPrefabSmokeTests
     {
         private const string PrefabPath = "Assets/Runtime/Prefabs/BugReportWidget.prefab";
+        private const string LightThemePath = "Assets/Runtime/UI/Themes/BugReportTheme-Light.uss";
         private const int SettleFrames = 3;
         private const string RowFocusedClass = "bh-row--focused";
         private const string FieldFocusedClass = "bh-fld--focused";
@@ -223,6 +224,49 @@ namespace BetaHub.Tests
             public void Done(string text) => _done(text);
         }
 #endif
+
+        [UnityTest]
+        public IEnumerator Fields_StopAtTheirLimits_AndLockWhileSending()
+        {
+            Assert.AreEqual(BugReportWidgetModel.DescriptionLimit, _root.Q<TextField>("bh-description").maxLength);
+            Assert.AreEqual(BugReportWidgetModel.StepsLimit, _root.Q<TextField>("bh-steps").maxLength);
+            Assert.AreEqual(BugReportWidgetModel.EmailLimit, _root.Q<TextField>("bh-email").maxLength);
+
+            _widget.ApplyPreview(new WidgetPreviewOptions { State = WidgetPreviewState.Sending, AttachmentCount = 3, FocusedAttachment = -1 });
+            yield return null;
+            Assert.IsFalse(_root.Q<TextField>("bh-description").focusable, "no typing into a report already on its way");
+            _widget.ApplyPreview(new WidgetPreviewOptions { State = WidgetPreviewState.Compose, AttachmentCount = 3, FocusedAttachment = -1 });
+            yield return null;
+            Assert.IsTrue(_root.Q<TextField>("bh-description").focusable);
+        }
+
+        [UnityTest]
+        public IEnumerator Preview_LeavesTheConfiguredThemeAndTermsAlone()
+        {
+            var assigned = _widget.Theme;
+            var other = AssetDatabase.LoadAssetAtPath<StyleSheet>(LightThemePath);
+            Assert.IsNotNull(other, LightThemePath);
+            _widget.ApplyPreview(new WidgetPreviewOptions { State = WidgetPreviewState.Compose, AttachmentCount = 3, FocusedAttachment = -1, Terms = true, Theme = other });
+            yield return null;
+
+            Assert.IsFalse(_root.Q("bh-terms").ClassListContains("bh-hidden"), "the preview shows the terms row");
+            Assert.IsFalse(_widget.RequireTermsAcceptance, "without turning the setting on");
+            Assert.AreSame(assigned, _widget.Theme, "and without replacing the assigned theme");
+        }
+
+        [UnityTest]
+        public IEnumerator DisablingWhileOpen_ClosesTheWindowForTheGame()
+        {
+            int hidden = 0;
+            _widget.OnBugReportWindowHidden.AddListener(() => hidden++);
+            _widget.ApplyPreview(new WidgetPreviewOptions { State = WidgetPreviewState.Compose, AttachmentCount = 3, FocusedAttachment = -1 });
+            yield return null;
+            yield return null;
+
+            _instance.SetActive(false);
+            yield return null;
+            Assert.AreEqual(1, hidden, "recording resumes and the cursor comes back");
+        }
 
         [UnityTest]
         public IEnumerator TypingGlow_SitsBehindTheFieldBox()

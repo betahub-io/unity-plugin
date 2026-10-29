@@ -44,6 +44,8 @@ namespace BetaHub
         public bool Typing;
         /// <summary>Whose buttons the prompt bar shows.</summary>
         public GlyphSet Glyphs;
+        /// <summary>A stylesheet to preview instead of the assigned one; null shows the assigned one. The Theme field is left alone.</summary>
+        public StyleSheet Theme;
     }
 
     /// <summary>
@@ -56,7 +58,8 @@ namespace BetaHub
     [AddComponentMenu("BetaHub/Bug Report Widget")]
     public class BugReportWidget : MonoBehaviour
     {
-        private const long MaxLogBytesForPreview = 4L * 1024 * 1024;
+        // enough for the tail lines, even with stack traces; the whole file is sent, not read here
+        private const long MaxLogBytesForPreview = 64L * 1024;
         private const int ToastDoneMilliseconds = 4000;
         private const int SpinnerIntervalMs = 16;
         private const float SpinnerDegreesPerTick = 6f;
@@ -248,7 +251,10 @@ namespace BetaHub
         private bool _sample;
         private bool _sampleSignedIn;
         private bool _sampleUnconfigured;
+        private bool _sampleTerms;
         private Texture2D _sampleTexture;
+        // the theme in the tree: Theme, or the editor preview's pick
+        private StyleSheet _appliedSheet;
 
         private bool _wasVisible;
         private bool _cursorStateChanged;
@@ -302,6 +308,18 @@ namespace BetaHub
             ShortcutAction.performed -= OnShortcutPerformed;
             ShortcutAction.Disable();
     #endif
+            // Update stops with the object, so close the window here: the report waiting for an email goes
+            // out, recording resumes and the cursor comes back. Re-enabling rebuilds a hidden tree.
+            if (_bound)
+            {
+                SetOverlayVisible(false);
+                PublishIfWaiting(_active);
+            }
+            if (_wasVisible)
+            {
+                _wasVisible = false;
+                NotifyWindowHidden();
+            }
         }
 
         void Start()
@@ -324,9 +342,7 @@ namespace BetaHub
             }
             else if (!visible && _wasVisible)
             {
-                OnBugReportWindowHidden?.Invoke();
-                _reporter.NotifyReportWindowHidden();
-                RestoreCursorState();
+                NotifyWindowHidden();
             }
             _wasVisible = visible;
 
@@ -361,16 +377,13 @@ namespace BetaHub
             StartCoroutine(CaptureAndShow());
         }
 
-        /// <summary>Closes the form. A report awaiting publish is published without an email.</summary>
+        /// <summary>Closes the form. A report still waiting for the email step, or for its media first, is published without an email.</summary>
         public void Hide()
         {
             if (!_bound) return;
-            if (_active != null && _active.State == ReportSubmissionState.AwaitingPublish)
-            {
-                _active.Publish(false);
-            }
             StopTyping();
             SetOverlayVisible(false);
+            PublishIfWaiting(_active);
             RefreshToast();
         }
 
@@ -378,9 +391,16 @@ namespace BetaHub
         public void SetTheme(StyleSheet theme)
         {
             if (theme == null) throw new ArgumentNullException(nameof(theme));
-            if (_bound && Theme != null) _layer.styleSheets.Remove(Theme);
             Theme = theme;
-            if (_bound) _layer.styleSheets.Add(theme);
+            if (_bound) ApplyStyleSheet(theme);
+        }
+
+        private void ApplyStyleSheet(StyleSheet sheet)
+        {
+            if (_appliedSheet == sheet) return;
+            if (_appliedSheet != null) _layer.styleSheets.Remove(_appliedSheet);
+            _layer.styleSheets.Add(sheet);
+            _appliedSheet = sheet;
         }
 
         /// <summary>Editor preview: one state with sample data and three sample attachments.</summary>
@@ -398,6 +418,7 @@ namespace BetaHub
             if (options.State == WidgetPreviewState.None)
             {
                 _sample = false;
+                ApplyStyleSheet(Theme);
                 SetOverlayVisible(false);
                 return;
             }
@@ -406,7 +427,8 @@ namespace BetaHub
             _glyphs = options.Glyphs;
             _sampleSignedIn = options.SignedIn;
             _sampleUnconfigured = options.State == WidgetPreviewState.Unavailable;
-            RequireTermsAcceptance = options.Terms;
+            _sampleTerms = options.Terms;
+            ApplyStyleSheet(options.Theme != null ? options.Theme : Theme);
             _active = null;
             _typing = null;
             _termsAccepted = false;
@@ -506,7 +528,8 @@ namespace BetaHub
                 Debug.LogError(UnityBetaHubLog.Prefix + "BugReportWidget has no Theme stylesheet. Assign one from Runtime/UI/Themes, e.g. BugReportTheme-Dark.uss.", this);
                 return false;
             }
-            _layer.styleSheets.Add(Theme);
+            _appliedSheet = null;
+            ApplyStyleSheet(Theme);
 
             _termsLabel = _terms.Q<Label>(className: NameClass);
             _termsValue = _terms.Q<VisualElement>(className: ValueClass);
@@ -518,6 +541,11 @@ namespace BetaHub
 
             _pane.RegisterCallback<GeometryChangedEvent>(e => KeepAspect(_pane, e.newRect.width));
             ListenForKeys(root.panel != null ? root.panel.visualTree : root);
+
+            // CanSend refuses longer text, so the fields stop there instead of greying out Send unexplained.
+            _description.Input.maxLength = BugReportWidgetModel.DescriptionLimit;
+            _steps.Input.maxLength = BugReportWidgetModel.StepsLimit;
+            _email.Input.maxLength = BugReportWidgetModel.EmailLimit;
 
             foreach (var field in new[] { _description, _steps, _email })
             {
@@ -576,6 +604,7 @@ namespace BetaHub
             yield return _reporter.CaptureScreenshot();
 
             _sample = false;
+            ApplyStyleSheet(Theme);
             _captureTime = DateTime.Now;
             _description.Input.SetValueWithoutNotify("");
             _steps.Input.SetValueWithoutNotify("");
@@ -584,6 +613,7 @@ namespace BetaHub
             _submissionError = null;
             _pendingEmail = null;
             _emailNote = null;
+            PublishIfWaiting(_active);
             if (_active != null && _active.IsUploadInProgress)
             {
                 Detach(_background);
@@ -622,7 +652,9 @@ namespace BetaHub
             _paneKey = _previewPaneKey = null;
         }
 
-        private int FieldCount => RequireTermsAcceptance ? 3 : 2;
+        // the editor preview shows a terms row without turning the setting on
+        private bool TermsRequired => _sample ? _sampleTerms : RequireTermsAcceptance;
+        private int FieldCount => TermsRequired ? 3 : 2;
 
         private static void BuildRows(VisualElement container, List<RowView> views, AttachmentSet attachments, bool compact)
         {
@@ -672,7 +704,7 @@ namespace BetaHub
         private bool CanSendNow()
         {
             return _screen == WidgetScreen.Compose
-                && BugReportWidgetModel.CanSend(_description.Input.value, RequireTermsAcceptance, _termsAccepted, Configured);
+                && BugReportWidgetModel.CanSend(_description.Input.value, TermsRequired, _termsAccepted, Configured);
         }
 
         private WidgetFocusKind FocusKind
@@ -680,7 +712,7 @@ namespace BetaHub
             get
             {
                 if (_focus.OnAttachment) return WidgetFocusKind.Attachment;
-                return RequireTermsAcceptance && _focus.Index == 2 ? WidgetFocusKind.Terms : WidgetFocusKind.Field;
+                return TermsRequired && _focus.Index == 2 ? WidgetFocusKind.Terms : WidgetFocusKind.Field;
             }
         }
 
@@ -689,6 +721,9 @@ namespace BetaHub
             if (!_bound) return;
             bool locked = _screen == WidgetScreen.Sending || _screen == WidgetScreen.Uploading || (_screen == WidgetScreen.Compose && !Configured);
             _overlay.EnableInClassList(LockedClass, locked);
+            // a report on its way can't change, so the lock is more than a look
+            _description.Input.focusable = !locked;
+            _steps.Input.focusable = !locked;
 
             RenderHeader();
             bool sent = _screen == WidgetScreen.Sent;
@@ -728,7 +763,7 @@ namespace BetaHub
             RenderField(_description, Strings.DescriptionLabel, Strings.Required, Strings.DescriptionPrompt, focusVisible && FocusKind == WidgetFocusKind.Field && _focus.Index == 0);
             RenderField(_steps, Strings.StepsLabel, Strings.Optional, Strings.StepsPrompt, focusVisible && FocusKind == WidgetFocusKind.Field && _focus.Index == 1);
 
-            _terms.EnableInClassList(HiddenClass, !RequireTermsAcceptance);
+            _terms.EnableInClassList(HiddenClass, !TermsRequired);
             _terms.EnableInClassList(RowFocusedClass, focusVisible && FocusKind == WidgetFocusKind.Terms);
             _termsLabel.text = Strings.TermsLabel;
             SetValue(_termsValue, Caps(_termsAccepted ? Strings.TermsAccepted : Strings.TermsNotAccepted), _termsAccepted ? RowTone.Accent : RowTone.Muted, -1f);
@@ -1582,10 +1617,29 @@ namespace BetaHub
                     break;
                 default:
                     _screen = BugReportWidgetModel.ScreenFor(submission.State);
-                    if (!IsVisible) RefreshToast();
+                    if (!IsVisible)
+                    {
+                        PublishIfWaiting(submission);
+                        RefreshToast();
+                    }
                     break;
             }
             Render();
+        }
+
+        private void PublishIfWaiting(ReportSubmission submission)
+        {
+            if (submission != null && BugReportWidgetModel.ShouldPublishWithoutEmail(submission.State, IsVisible))
+            {
+                submission.Publish(false);
+            }
+        }
+
+        private void NotifyWindowHidden()
+        {
+            OnBugReportWindowHidden?.Invoke();
+            if (_reporter != null) _reporter.NotifyReportWindowHidden();
+            RestoreCursorState();
         }
 
         private void FinishInBackground(ReportSubmission submission)
@@ -1765,12 +1819,8 @@ namespace BetaHub
         {
             try
             {
-                var logger = BetaHubReporter.Logger;
-                if (item.Id == BuiltInAttachments.PlayerLog && logger != null)
-                {
-                    var bytes = logger.ReadLogFileBytes();
-                    return bytes == null ? "" : TailOf(bytes);
-                }
+                // the logger keeps recent lines in memory; the tail below reads the file it shares
+                if (item.Id == BuiltInAttachments.PlayerLog) BetaHubReporter.Logger?.ForceFlush();
                 if (string.IsNullOrEmpty(item.FilePath) || !File.Exists(item.FilePath)) return "";
                 using (var stream = new FileStream(item.FilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
                 {
@@ -1786,12 +1836,6 @@ namespace BetaHub
                 Debug.LogWarning(UnityBetaHubLog.Prefix + "Log preview unavailable: " + ex.Message, this);
                 return "";
             }
-        }
-
-        private static string TailOf(byte[] bytes)
-        {
-            int start = (int)Math.Max(0, bytes.Length - MaxLogBytesForPreview);
-            return Encoding.UTF8.GetString(bytes, start, bytes.Length - start);
         }
 
         // ------------------------------------------------------------------ sample data

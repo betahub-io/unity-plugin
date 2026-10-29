@@ -10,6 +10,18 @@ namespace BetaHub.Tests
 
         // --- which screen for which submission state ---
 
+        // Nobody can type an email into a closed form, so a report waiting for one goes out without it.
+        [Test]
+        public void ShouldPublishWithoutEmail_OnlyWhenTheFormIsClosedAndTheReportWaits()
+        {
+            foreach (ReportSubmissionState state in System.Enum.GetValues(typeof(ReportSubmissionState)))
+            {
+                bool waits = state == ReportSubmissionState.UploadingMedia || state == ReportSubmissionState.AwaitingPublish;
+                Assert.AreEqual(waits, BugReportWidgetModel.ShouldPublishWithoutEmail(state, formVisible: false), state + " closed");
+                Assert.IsFalse(BugReportWidgetModel.ShouldPublishWithoutEmail(state, formVisible: true), state + " open");
+            }
+        }
+
         // A plain test with a table: NUnit3TestAdapter 3.11 drops [TestCase] methods with enum arguments.
         [Test]
         public void ScreenFor_MapsEverySubmissionState()

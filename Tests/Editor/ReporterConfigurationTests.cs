@@ -10,6 +10,23 @@ namespace BetaHub.Tests
         private const string ProjectId = "pr-1";
         private const string ValidToken = "tkn-abc";
 
+        // 1.x kept the project settings on BugReportUI; an upgraded scene still carries them there.
+        [Test]
+        public void LegacySettings_WinOverTheDemoProject_OrAnEmptyOne()
+        {
+            Assert.IsTrue(ReporterConfiguration.ShouldAdoptLegacySettings("pr-studio", BetaHubReporter.DEMO_PROJECT_ID));
+            Assert.IsTrue(ReporterConfiguration.ShouldAdoptLegacySettings("pr-studio", ""));
+        }
+
+        [Test]
+        public void LegacySettings_NeverOverrideTheStudiosOwnProject()
+        {
+            Assert.IsFalse(ReporterConfiguration.ShouldAdoptLegacySettings("pr-old", "pr-new"));
+            Assert.IsFalse(ReporterConfiguration.ShouldAdoptLegacySettings("", BetaHubReporter.DEMO_PROJECT_ID));
+            Assert.IsFalse(ReporterConfiguration.ShouldAdoptLegacySettings(null, BetaHubReporter.DEMO_PROJECT_ID));
+            Assert.IsFalse(ReporterConfiguration.ShouldAdoptLegacySettings(BetaHubReporter.DEMO_PROJECT_ID, BetaHubReporter.DEMO_PROJECT_ID));
+        }
+
         [Test]
         public void Validate_AllGood_ReturnsNoDiagnostics()
         {

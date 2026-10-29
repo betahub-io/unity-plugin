@@ -72,6 +72,17 @@ namespace BetaHub
             return diagnostics;
         }
 
+        /// <summary>
+        /// 1.x kept the project settings on BugReportUI, and an upgraded scene still carries them there.
+        /// They win while the reporter has no project or the demo one, so an upgrade never sends a
+        /// studio's reports to the demo project; a project set on the reporter is never overridden.
+        /// </summary>
+        public static bool ShouldAdoptLegacySettings(string legacyProjectId, string reporterProjectId)
+        {
+            return !string.IsNullOrEmpty(legacyProjectId) && legacyProjectId != reporterProjectId
+                && (string.IsNullOrEmpty(reporterProjectId) || reporterProjectId == BetaHubReporter.DEMO_PROJECT_ID);
+        }
+
         /// <returns>The first error message, or null when the configuration is usable.</returns>
         public static string FirstError(IEnumerable<ReporterDiagnostic> diagnostics)
         {

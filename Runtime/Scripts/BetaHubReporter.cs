@@ -82,7 +82,7 @@ namespace BetaHub
         private BugReportSession _session;
         private GameRecorder _recorder;
         private CustomFieldValidator _customFieldValidator;
-        private string _configurationError;
+        private bool _duplicate;
         private bool _reportWindowVisible;
         private readonly List<ReportSubmission> _submissions = new List<ReportSubmission>();
 
@@ -98,9 +98,10 @@ namespace BetaHub
         public GameRecorder Recorder => _recorder;
         public bool IsReportWindowVisible => _reportWindowVisible;
         public bool HasActiveUploads => _submissions.Exists(s => s.IsUploadInProgress);
-        public bool IsConfigured => _configurationError == null;
-        /// <summary>First fatal configuration problem found at startup, or null.</summary>
-        public string ConfigurationError => _configurationError;
+        public bool IsConfigured => ConfigurationError == null;
+        /// <summary>First fatal configuration problem as the settings stand now, or null.</summary>
+        public string ConfigurationError => ReporterConfiguration.FirstError(ValidateConfiguration());
+        public DeviceAuthManager DeviceAuthManager => deviceAuthManager;
         /// <summary>Display name of the signed-in user, or null when anonymous.</summary>
         public string UserDisplayName => IsUserAuthenticated ? deviceAuthManager.UserDisplayName : null;
 
@@ -130,35 +131,46 @@ namespace BetaHub
         {
             if (_instance != null && _instance != this)
             {
+                _duplicate = true;
                 Destroy(gameObject);
                 return;
             }
             _instance = this;
-            _log = new UnityBetaHubLog(this);
-            _session = new BugReportSession(_log);
+            EnsureSession();
         }
 
         void Start()
         {
-            if (_session == null) return; // duplicate instance scheduled for destruction in Awake
+            if (_duplicate) return;
 
             _recorder = GetComponent<GameRecorder>();
             _customFieldValidator = GetComponent<CustomFieldValidator>();
 
-            var diagnostics = ReporterConfiguration.Validate(SubmitEndpoint, ProjectID, AuthToken,
-                hasDeviceAuth: deviceAuthManager != null, hasRecorder: _recorder != null);
-            foreach (var diagnostic in diagnostics)
+            // Logged once; Submit checks again, so settings assigned later from code still count.
+            foreach (var diagnostic in ValidateConfiguration())
             {
                 Report(diagnostic);
             }
-            _configurationError = ReporterConfiguration.FirstError(diagnostics);
 
 #if DISABLE_BETAHUB_LOGGER
-            _log.Warning("DISABLE_BETAHUB_LOGGER is defined. Player logs will not be captured for bug reports. Remove the scripting define symbol to enable logging.");
+            Log.Warning("DISABLE_BETAHUB_LOGGER is defined. Player logs will not be captured for bug reports. Remove the scripting define symbol to enable logging.");
 #endif
 
             ValidateProviderCustomFields();
             DontDestroyOnLoad(gameObject);
+        }
+
+        // A second prefab after a scene load destroys itself in Awake; scripts holding it still reach the one that stays.
+        // The session is made on first use, so calls from another component's Awake work too.
+        private BugReportSession Session => (_instance != null && _instance != this ? _instance : this).EnsureSession();
+        private IBetaHubLog Log => _log ??= new UnityBetaHubLog(this);
+
+        private BugReportSession EnsureSession() => _session ??= new BugReportSession(Log);
+
+        private List<ReporterDiagnostic> ValidateConfiguration()
+        {
+            return ReporterConfiguration.Validate(SubmitEndpoint, ProjectID, AuthToken,
+                hasDeviceAuth: deviceAuthManager != null, hasRecorder: _recorder != null);
         }
 
         void Update()
@@ -211,11 +223,11 @@ namespace BetaHub
 
             if (!File.Exists(path))
             {
-                _log.Warning("Screenshot capture produced no file at " + path + ". The report goes without it.");
+                Log.Warning("Screenshot capture produced no file at " + path + ". The report goes without it.");
                 path = null;
             }
             ScreenshotPath = path;
-            _session.SetFrameScreenshot(path);
+            Session.SetFrameScreenshot(path);
         }
 
         /// <summary>
@@ -234,7 +246,7 @@ namespace BetaHub
                 Latency = latencyProvider != null && latencyProvider.EnableLatency,
                 FileSize = FileSizeOrUnknown,
             };
-            return _session.CollectAttachments(sources);
+            return Session.CollectAttachments(sources);
         }
 
         /// <summary>Latency measured so far while the form is open, one entry per host. Empty without a LatencyProvider.</summary>
@@ -251,25 +263,25 @@ namespace BetaHub
         }
 
         /// <summary>Adds a screenshot to the next report as its own row.</summary>
-        public void AddScreenshot(string path, bool removeAfterUpload) => _session.AddScreenshot(path, removeAfterUpload);
-        public void AddLogFile(string path, bool removeAfterUpload) => _session.AddLogFile(path, removeAfterUpload);
+        public void AddScreenshot(string path, bool removeAfterUpload) => Session.AddScreenshot(path, removeAfterUpload);
+        public void AddLogFile(string path, bool removeAfterUpload) => Session.AddLogFile(path, removeAfterUpload);
         /// <summary>Adds a video to the next report as its own row, separate from the gameplay recording.</summary>
-        public void AddVideo(string path, bool removeAfterUpload) => _session.AddVideo(path, removeAfterUpload);
+        public void AddVideo(string path, bool removeAfterUpload) => Session.AddVideo(path, removeAfterUpload);
         /// <summary>Adds any file, such as a save, to the next report. Up to 50 MB; <paramref name="name"/> defaults to the file name.</summary>
-        public void AddFile(string path, string name = null, bool removeAfterUpload = false) => _session.AddFile(path, name, removeAfterUpload);
+        public void AddFile(string path, string name = null, bool removeAfterUpload = false) => Session.AddFile(path, name, removeAfterUpload);
         /// <summary>Forgets added files and the captured screenshot. Happens on its own once a report is created.</summary>
-        public void ClearAttachments() => _session.ClearAttachments();
+        public void ClearAttachments() => Session.ClearAttachments();
 
         /// <summary>Asked for rows each time <see cref="CollectAttachments"/> runs.</summary>
-        public void RegisterAttachmentProvider(IAttachmentProvider provider) => _session.RegisterAttachmentProvider(provider);
-        public void UnregisterAttachmentProvider(IAttachmentProvider provider) => _session.UnregisterAttachmentProvider(provider);
+        public void RegisterAttachmentProvider(IAttachmentProvider provider) => Session.RegisterAttachmentProvider(provider);
+        public void UnregisterAttachmentProvider(IAttachmentProvider provider) => Session.UnregisterAttachmentProvider(provider);
 
         /// <summary>Static custom field included in every report. Must be tester_settable in your project.</summary>
-        public void SetCustomField(string name, string value) => _session.SetCustomField(name, value);
-        public void RemoveCustomField(string name) => _session.RemoveCustomField(name);
+        public void SetCustomField(string name, string value) => Session.SetCustomField(name, value);
+        public void RemoveCustomField(string name) => Session.RemoveCustomField(name);
         /// <summary>Custom field evaluated at submit time. Overrides a static field of the same name.</summary>
-        public void RegisterCustomFieldProvider(string name, Func<string> valueGetter) => _session.RegisterCustomFieldProvider(name, valueGetter);
-        public void UnregisterCustomFieldProvider(string name) => _session.UnregisterCustomFieldProvider(name);
+        public void RegisterCustomFieldProvider(string name, Func<string> valueGetter) => Session.RegisterCustomFieldProvider(name, valueGetter);
+        public void UnregisterCustomFieldProvider(string name) => Session.UnregisterCustomFieldProvider(name);
 
         // --- providers ---
 
@@ -300,26 +312,27 @@ namespace BetaHub
         {
             if (attachments == null) throw new ArgumentNullException(nameof(attachments));
 
-            if (_configurationError != null)
+            string configurationError = ConfigurationError;
+            if (configurationError != null)
             {
-                return ReportSubmission.CreateFailed(_configurationError, _log);
+                return ReportSubmission.CreateFailed(configurationError, Log);
             }
 
             string authToken = GetEffectiveAuthToken();
             if (string.IsNullOrEmpty(authToken))
             {
                 return ReportSubmission.CreateFailed(
-                    "No auth token available. Set Auth Token on the BetaHubReporter component or sign the user in through device authentication.", _log);
+                    "No auth token available. Set Auth Token on the BetaHubReporter component or sign the user in through device authentication.", Log);
             }
 
             if (HasActiveUploads)
             {
-                _log.Info("A previous report is still uploading. Recording stays paused until it finishes.");
+                Log.Info("A previous report is still uploading. Recording stays paused until it finishes.");
             }
 
             var client = new Issue(SubmitEndpoint, ProjectID, authToken, _recorder);
-            var submission = new ReportSubmission(client, this, _log);
-            submission.DraftCreated += _ => _session.ClearAttachments();
+            var submission = new ReportSubmission(client, this, Log);
+            submission.DraftCreated += _ => Session.ClearAttachments();
             _submissions.Add(submission);
             _submissions.RemoveAll(s => s.IsFinished);
 
@@ -340,7 +353,7 @@ namespace BetaHub
             BugReportDraft draft;
             try
             {
-                draft = _session.BuildReport(description, steps, attachments, extraFields);
+                draft = Session.BuildReport(description, steps, attachments, extraFields);
             }
             catch (Exception ex)
             {
@@ -350,7 +363,7 @@ namespace BetaHub
 
             if (draft.CustomFields.Count > 0)
             {
-                _log.Info("Custom fields: " + string.Join(", ", FormatFields(draft.CustomFields)));
+                Log.Info("Custom fields: " + string.Join(", ", FormatFields(draft.CustomFields)));
             }
 
             var release = new ReleaseTarget { Id = ReleaseId, Label = ReleaseLabel };
@@ -406,7 +419,7 @@ namespace BetaHub
                 },
                 error =>
                 {
-                    _log.Warning("Location/ASN data unavailable, report continues without it: " + error);
+                    Log.Warning("Location/ASN data unavailable, report continues without it: " + error);
                     done = true;
                 });
 
@@ -430,7 +443,7 @@ namespace BetaHub
             }
             else
             {
-                _log.Warning("No latency data available, report continues without it.");
+                Log.Warning("No latency data available, report continues without it.");
             }
         }
 
@@ -449,7 +462,7 @@ namespace BetaHub
 
         private void ValidateProviderCustomFields()
         {
-            if (_configurationError != null || _customFieldValidator == null) return;
+            if (!IsConfigured || _customFieldValidator == null) return;
 
             string authToken = GetEffectiveAuthToken();
             if (string.IsNullOrEmpty(authToken)) return;
@@ -474,9 +487,9 @@ namespace BetaHub
         {
             switch (diagnostic.Severity)
             {
-                case DiagnosticSeverity.Error: _log.Error(diagnostic.Message); break;
-                case DiagnosticSeverity.Warning: _log.Warning(diagnostic.Message); break;
-                default: _log.Info(diagnostic.Message); break;
+                case DiagnosticSeverity.Error: Log.Error(diagnostic.Message); break;
+                case DiagnosticSeverity.Warning: Log.Warning(diagnostic.Message); break;
+                default: Log.Info(diagnostic.Message); break;
             }
         }
 

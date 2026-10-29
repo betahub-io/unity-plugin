@@ -71,7 +71,8 @@ namespace BetaHub
 
         private void OnSubmissionStateChanged(ReportSubmission submission)
         {
-            if (submission.IsFinished)
+            // Publishing waits for the background upload; the player is done here once it is requested.
+            if (submission.State == ReportSubmissionState.Publishing || submission.IsFinished)
             {
                 Detach();
                 Hide();

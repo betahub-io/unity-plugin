@@ -14,6 +14,7 @@ namespace BetaHub.Editor
     {
         private const string PreviewHeader = "Preview (Game view, no Play mode needed)";
         private const string ClearLabel = "Clear preview";
+        private const string AssignedThemeLabel = "Assigned (Theme field)";
         private static readonly int[] AttachmentCounts = { 3, 6, 9 };
         private static readonly string[] AttachmentCountLabels = { "3", "6", "9" };
 
@@ -39,11 +40,13 @@ namespace BetaHub.Editor
             _options.Typing = EditorGUILayout.Toggle("Typing", _options.Typing);
             _options.Glyphs = (GlyphSet)EditorGUILayout.EnumPopup("Glyphs", _options.Glyphs);
             var themeNames = System.Array.ConvertAll(BugReportThemeLibrary.BuiltIns, s => s.Name);
-            _themeIndex = EditorGUILayout.Popup("Built-in theme", _themeIndex, themeNames);
+            var themeLabels = new string[themeNames.Length + 1];
+            themeLabels[0] = AssignedThemeLabel;
+            System.Array.Copy(themeNames, 0, themeLabels, 1, themeNames.Length);
+            _themeIndex = EditorGUILayout.Popup("Theme", _themeIndex, themeLabels);
             if (EditorGUI.EndChangeCheck())
             {
-                var theme = LoadBuiltInTheme(widget, themeNames[_themeIndex]);
-                if (theme != null) widget.SetTheme(theme);
+                _options.Theme = _themeIndex == 0 ? null : LoadBuiltInTheme(widget, themeNames[_themeIndex - 1]);
                 Apply(widget);
             }
 
@@ -65,7 +68,7 @@ namespace BetaHub.Editor
                 Apply(widget);
             }
             EditorGUILayout.HelpBox("Preview uses sample data. Theme, strings and layout are live; submission is not. " +
-                "\"Built-in theme\" swaps the stylesheet for this session only; assign Theme above to keep it.", MessageType.None);
+                "The preview's Theme and Terms row only change the preview, never the settings above.", MessageType.None);
         }
 
         private void Apply(BugReportWidget widget)

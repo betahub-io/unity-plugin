@@ -62,12 +62,44 @@ namespace BetaHub
         public UnityEvent OnBugReportWindowShown;
         public UnityEvent OnBugReportWindowHidden;
 
+        // 1.x kept these on BugReportUI. Hidden fields under the old names still load an upgraded scene's
+        // values, which Awake hands to the reporter so its reports don't go to the demo project.
+        [SerializeField, HideInInspector] private string SubmitEndpoint;
+        [SerializeField, HideInInspector] private string ProjectID;
+        [SerializeField, HideInInspector] private string AuthToken;
+        [SerializeField, HideInInspector] private DeviceAuthManager deviceAuthManager;
+
         private BetaHubReporter _reporter;
         private ReportSubmission _activeSubmission;
         private TMP_Text _submitButtonLabel;
         private bool _uiWasVisible;
         private bool _cursorStateChanged;
         private CursorLockMode _previousCursorLockMode;
+
+        void Awake()
+        {
+            // before the reporter's Start validates its settings
+            var reporter = GetComponent<BetaHubReporter>();
+            if (reporter != null) AdoptLegacySettings(reporter);
+        }
+
+        private void AdoptLegacySettings(BetaHubReporter reporter)
+        {
+            if (ReporterConfiguration.ShouldAdoptLegacySettings(ProjectID, reporter.ProjectID))
+            {
+                reporter.ProjectID = ProjectID;
+                reporter.AuthToken = AuthToken;
+                if (!string.IsNullOrEmpty(SubmitEndpoint)) reporter.SubmitEndpoint = SubmitEndpoint;
+                Debug.LogWarning(UnityBetaHubLog.Prefix + "Project ID, Auth Token and Submit Endpoint moved from BugReportUI to BetaHubReporter in 2.0. " +
+                    "Using the values still stored on BugReportUI; set them on BetaHubReporter and save the scene.", this);
+            }
+            if (deviceAuthManager != null && reporter.DeviceAuthManager == null)
+            {
+                reporter.SetDeviceAuthManager(deviceAuthManager);
+                Debug.LogWarning(UnityBetaHubLog.Prefix + "The Device Auth Manager moved from BugReportUI to BetaHubReporter in 2.0. " +
+                    "Using the one still assigned on BugReportUI; assign it on BetaHubReporter and save the scene.", this);
+            }
+        }
 
         void OnEnable()
         {
@@ -214,9 +246,10 @@ namespace BetaHub
 
         void SubmitBugReport()
         {
-            if (_activeSubmission != null && !_activeSubmission.IsFinished)
+            // Only a report still being created blocks a new one; one uploading in the background does not.
+            if (_activeSubmission != null && IsBeingCreated(_activeSubmission.State))
             {
-                Debug.LogWarning(UnityBetaHubLog.Prefix + "Submit ignored: the previous report is still in progress.", this);
+                Debug.LogWarning(UnityBetaHubLog.Prefix + "Submit ignored: the previous report is still being created.", this);
                 return;
             }
 
@@ -279,6 +312,11 @@ namespace BetaHub
         private void OnReporterEmailFailed(string error)
         {
             MessagePanelUI.ShowMessagePanel("Error", "Could not save your email address: " + error);
+        }
+
+        private static bool IsBeingCreated(ReportSubmissionState state)
+        {
+            return state == ReportSubmissionState.Preparing || state == ReportSubmissionState.CreatingDraft || state == ReportSubmissionState.UploadingMedia;
         }
 
         private void Detach(ReportSubmission submission)

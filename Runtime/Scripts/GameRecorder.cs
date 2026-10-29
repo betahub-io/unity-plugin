@@ -363,6 +363,8 @@ namespace BetaHub
             }
 
             IsRecording = false;
+            // The clip restarts empty, so the preview frames of this one must not show in the next form.
+            _previewRing.Clear();
 
             // Stop video first so segments are finalized
             _videoEncoder.FinalizeRecording();

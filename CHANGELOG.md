@@ -23,6 +23,7 @@
 ### Changed
 - Split `BugReportUI` into a headless `BetaHubReporter` component (configuration, attachments, custom fields, recording policy, submission) and a pure view. Custom UIs call `BetaHubReporter.Submit()` and follow the returned `ReportSubmission` handle instead of driving coroutines. `Issue` is now a thin HTTP client; publish/email sequencing lives in `ReportSubmission`.
 - Breaking: `ProjectID`, `AuthToken`, `SubmitEndpoint`, release, upload mode, include flags, `DefaultEmailAddress`, provider references and the attachment/custom field API moved from `BugReportUI` to `BetaHubReporter`. `GeolocationProvider` and `LatencyProvider` auto-attach to `BetaHubReporter`. `ReportSubmittedUI.Show` takes a `ReportSubmission`.
+- Upgraded scenes that still store Project ID, Auth Token, Submit Endpoint or the Device Auth Manager on `BugReportUI` keep their values: `BugReportUI` hands them to `BetaHubReporter` at startup, instead of the reporter falling back to the demo project, and logs a warning to move them.
 
 ### Improved
 - Startup configuration checks log actionable `BetaHub:`-prefixed errors and hints; a misconfigured reporter returns an already failed submission instead of throwing.

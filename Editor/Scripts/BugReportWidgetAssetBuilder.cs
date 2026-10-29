@@ -120,11 +120,14 @@ namespace BetaHub.Editor
             var existing = AssetDatabase.LoadAssetAtPath<GameObject>(path);
             var go = existing != null ? PrefabUtility.LoadPrefabContents(path) : new GameObject(PrefabObjectName);
 
-            var document = go.GetComponent<UIDocument>() ?? go.AddComponent<UIDocument>();
+            // In the editor a missing component is a "fake null" that ?? doesn't see; compare with == null.
+            var document = go.GetComponent<UIDocument>();
+            if (document == null) document = go.AddComponent<UIDocument>();
             document.panelSettings = panelSettings;
             document.visualTreeAsset = tree;
 
-            var reporter = go.GetComponent<BetaHubReporter>() ?? go.AddComponent<BetaHubReporter>();
+            var reporter = go.GetComponent<BetaHubReporter>();
+            if (reporter == null) reporter = go.AddComponent<BetaHubReporter>();
             if (string.IsNullOrEmpty(reporter.ProjectID))
             {
                 reporter.ProjectID = DemoProjectId;
@@ -132,7 +135,8 @@ namespace BetaHub.Editor
             }
             if (go.GetComponent<CustomFieldValidator>() == null) go.AddComponent<CustomFieldValidator>();
             if (go.GetComponent<GameRecorder>() == null) go.AddComponent<GameRecorder>();
-            var widget = go.GetComponent<BugReportWidget>() ?? go.AddComponent<BugReportWidget>();
+            var widget = go.GetComponent<BugReportWidget>();
+            if (widget == null) widget = go.AddComponent<BugReportWidget>();
             if (widget.Theme == null) widget.Theme = widgetTheme;
             // The shipped prefab carries the default copy; serialized values from older versions would
             // otherwise survive field renames. Studios edit strings on their own instance or variant.

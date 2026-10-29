@@ -19,20 +19,28 @@ namespace BetaHub.Editor
         private const float SwatchHeight = 18f;
         private const float SwatchWidth = 44f;
 
+        // what this inspector last wrote; Undo changes the asset without a GUI change, so compare content
+        private string _written;
+
         private void OnEnable()
         {
             // A renamed asset or a pulled change gets its stylesheet on first view.
-            if (target != null && IsSaved((BugReportThemeAsset)target)) WriteStylesheet((BugReportThemeAsset)target);
+            if (target != null && IsSaved((BugReportThemeAsset)target)) _written = File.ReadAllText(WriteStylesheet((BugReportThemeAsset)target));
         }
 
         public override void OnInspectorGUI()
         {
             var asset = (BugReportThemeAsset)target;
-            bool changed = DrawDefaultInspector();
+            DrawDefaultInspector();
             // still being named in the Project window
             if (!IsSaved(asset)) return;
             string path = BugReportThemeAsset.StylesheetPathFor(AssetDatabase.GetAssetPath(asset));
-            if (changed || !File.Exists(path)) WriteStylesheet(asset);
+            string uss = ThemeUssWriter.Write(asset.ToSpec());
+            if (uss != _written || !File.Exists(path))
+            {
+                WriteStylesheet(asset);
+                _written = uss;
+            }
             using (new EditorGUI.DisabledScope(true))
             {
                 EditorGUILayout.ObjectField(StylesheetLabel, AssetDatabase.LoadAssetAtPath<StyleSheet>(path), typeof(StyleSheet), false);

@@ -116,6 +116,15 @@ namespace BetaHub
 
         public static int ColumnCountFor(int itemCount) => itemCount >= TwoColumnThreshold ? 2 : 1;
 
+        /// <summary>
+        /// A report waiting for the player's email (or for media before that) when the form is closed:
+        /// nobody can type one any more, so it publishes without it instead of staying a draft.
+        /// </summary>
+        public static bool ShouldPublishWithoutEmail(ReportSubmissionState state, bool formVisible)
+        {
+            return !formVisible && (state == ReportSubmissionState.UploadingMedia || state == ReportSubmissionState.AwaitingPublish);
+        }
+
         public static WidgetScreen ScreenFor(ReportSubmissionState state)
         {
             switch (state)
