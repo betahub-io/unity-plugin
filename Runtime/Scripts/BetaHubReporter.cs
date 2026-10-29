@@ -363,6 +363,8 @@ namespace BetaHub
             {
                 return null;
             }
+            // The logger holds recent lines in memory; without a flush a quiet game reports 0 B.
+            _logger.ForceFlush();
             return new PlayerLogSource(_logger.LogPath, new FileInfo(_logger.LogPath).Length);
         }
 

@@ -18,6 +18,8 @@ namespace BetaHub.Tests
         private const string RowFocusedClass = "bh-row--focused";
         private const string FieldFocusedClass = "bh-fld--focused";
         private const string RowsTwoClass = "bh-rows--two";
+        private const string GlowClass = "bh-glow";
+        private const string BoxClass = "bh-box";
 
         private GameObject _instance;
         private BugReportWidget _widget;
@@ -108,6 +110,21 @@ namespace BetaHub.Tests
             yield return null;
             Assert.IsTrue(_root.Q("bh-preview").ClassListContains("bh-hidden"), "Esc returns to the form");
             Assert.IsTrue(_widget.IsVisible);
+        }
+
+        [UnityTest]
+        public IEnumerator TypingGlow_SitsBehindTheFieldBox()
+        {
+            var glows = _root.Query<VisualElement>(className: GlowClass).ToList();
+            Assert.AreEqual(3, glows.Count, "description, steps and email");
+            foreach (var glow in glows)
+            {
+                var parent = glow.parent;
+                Assert.IsFalse(parent.ClassListContains(BoxClass), "a glow inside the box is drawn over the field");
+                int next = parent.IndexOf(glow) + 1;
+                Assert.IsTrue(next < parent.childCount && parent[next].ClassListContains(BoxClass), "the glow comes right before its box");
+            }
+            yield return null;
         }
 
         [UnityTest]

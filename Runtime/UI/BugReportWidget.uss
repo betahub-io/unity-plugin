@@ -33,7 +33,8 @@ TextField { margin: 0; padding: 0; }
   position: absolute; left: 96px; right: 96px; top: 54px; bottom: 144px;
   flex-direction: row; justify-content: space-between;
 }
-.bh-left { width: 47.8%; flex-direction: column; overflow: hidden; }
+/* the 7px side gutter keeps the field glow inside the clip; content still lines up at 96px */
+.bh-left { width: 47.8%; margin-left: -7px; padding: 0 7px; flex-direction: column; overflow: hidden; }
 .bh-right { width: 44.4%; flex-direction: column; overflow: hidden; }
 
 .bh-head { margin-bottom: 29px; }
@@ -66,6 +67,7 @@ TextField { margin: 0; padding: 0; }
 }
 .bh-box--multi { min-height: 146px; }
 .bh-fld--focused .bh-box { border-width: 5px; border-color: var(--bh-accent); background-color: var(--bh-field-hi); padding: 12px 15px; }
+/* the glow is the box's previous sibling so it is drawn behind the field, as a ring around it */
 .bh-glow { position: absolute; left: -7px; top: -7px; right: -7px; bottom: -7px; border-radius: var(--bh-radius); background-color: var(--bh-accent); opacity: 0.24; display: none; }
 .bh-fld--editing .bh-glow { display: flex; }
 
@@ -119,13 +121,18 @@ TextField { margin: 0; padding: 0; }
   border-width: 3px; border-color: var(--bh-line);
   border-radius: var(--bh-radius);
 }
-.bh-pane-image { position: absolute; left: 0; top: 0; right: 0; bottom: 0; -unity-background-scale-mode: scale-and-crop; }
+/* scale-to-fit: a game that isn't 16:9 shows its whole frame, with bars, instead of a cropped one */
+.bh-pane-image { position: absolute; left: 0; top: 0; right: 0; bottom: 0; -unity-background-scale-mode: scale-to-fit; }
 .bh-pane-empty { position: absolute; left: 0; top: 0; right: 0; bottom: 0; -unity-text-align: middle-center; font-size: 24px; color: var(--bh-muted); }
 .bh-pane-frames { position: absolute; left: 12px; top: 12px; right: 12px; bottom: 12px; justify-content: space-between; }
 .bh-frame-row { height: 49%; flex-direction: row; justify-content: space-between; }
 .bh-frame { width: 32.6%; -unity-background-scale-mode: scale-and-crop; opacity: 0.85; justify-content: flex-end; padding: 6px 8px; background-color: var(--bh-surface); }
 .bh-frame--last { opacity: 1; border-width: 3px; border-color: var(--bh-accent); }
-.bh-frame > Label { -unity-font-definition: url("Fonts/JetBrainsMono-Regular.ttf"); font-size: 17px; color: #ffffff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9); }
+/* thumbnails fill their cells; full screen shows each whole frame */
+.bh-preview-main .bh-frame { -unity-background-scale-mode: scale-to-fit; }
+.bh-frame--empty { visibility: hidden; }
+/* a dark chip: the time stays readable over a bright floor or sky */
+.bh-frame > Label { -unity-font-definition: url("Fonts/JetBrainsMono-Regular.ttf"); font-size: 17px; color: #ffffff; align-self: flex-start; padding: 1px 6px; border-radius: 4px; background-color: rgba(0, 0, 0, 0.62); }
 .bh-pane-log { position: absolute; left: 0; top: 0; right: 0; bottom: 0; padding: 19px 23px; overflow: hidden; }
 .bh-pane-log > Label { -unity-font-definition: url("Fonts/JetBrainsMono-Regular.ttf"); font-size: 20px; color: var(--bh-muted); white-space: nowrap; overflow: hidden; margin-bottom: 3px; }
 .bh-pane-log > .bh-log--warn { color: var(--bh-warn); }
@@ -183,7 +190,7 @@ TextField { margin: 0; padding: 0; }
   color: #14161c; background-color: #e7e8ec;
   border-width: 1px; border-bottom-width: 4px; border-color: #a9adb8; border-radius: 6px;
 }
-.bh-key:last-child { margin-right: 0; }
+.bh-key--last { margin-right: 0; }
 .bh-spin { width: 31px; height: 31px; flex-grow: 0; }
 .bh-arc { color: var(--bh-accent); border-color: var(--bh-line); }
 

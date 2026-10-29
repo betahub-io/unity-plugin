@@ -36,6 +36,7 @@ namespace BetaHub.Editor
             _options.SignedIn = EditorGUILayout.Toggle("Signed in", _options.SignedIn);
             _options.Terms = EditorGUILayout.Toggle("Terms row", _options.Terms);
             _options.FocusedAttachment = EditorGUILayout.IntSlider("Focused attachment", _options.FocusedAttachment, -1, _options.AttachmentCount - 1);
+            _options.Typing = EditorGUILayout.Toggle("Typing", _options.Typing);
             var themeNames = System.Array.ConvertAll(BugReportThemeLibrary.BuiltIns, s => s.Name);
             _themeIndex = EditorGUILayout.Popup("Built-in theme", _themeIndex, themeNames);
             if (EditorGUI.EndChangeCheck())

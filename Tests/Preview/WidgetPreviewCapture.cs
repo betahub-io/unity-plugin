@@ -33,19 +33,20 @@ namespace BetaHub.Tests
             public string Theme;
         }
 
-        private static Shot S(string name, WidgetPreviewState state, int attachments = 3, int focus = -1, bool signedIn = false, bool terms = false, string theme = "Dark")
+        private static Shot S(string name, WidgetPreviewState state, int attachments = 3, int focus = -1, bool signedIn = false, bool terms = false, bool typing = false, string theme = "Dark")
         {
             return new Shot
             {
                 Name = name,
                 Theme = theme,
-                Options = new WidgetPreviewOptions { State = state, AttachmentCount = attachments, FocusedAttachment = focus, SignedIn = signedIn, Terms = terms },
+                Options = new WidgetPreviewOptions { State = state, AttachmentCount = attachments, FocusedAttachment = focus, SignedIn = signedIn, Terms = terms, Typing = typing },
             };
         }
 
         private static readonly Shot[] Shots =
         {
             S("compose-3", WidgetPreviewState.Compose),
+            S("compose-typing", WidgetPreviewState.Compose, typing: true),
             S("compose-6-terms", WidgetPreviewState.Compose, attachments: 6, terms: true),
             S("compose-9-log-focused", WidgetPreviewState.Compose, attachments: 9, focus: 2),
             S("compose-9-data-focused", WidgetPreviewState.Compose, attachments: 9, focus: 5),

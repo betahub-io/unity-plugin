@@ -36,6 +36,8 @@ namespace BetaHub
         public bool Terms;
         /// <summary>Compose only: which attachment has focus, or -1 for the description.</summary>
         public int FocusedAttachment;
+        /// <summary>Compose only: the description is being typed in.</summary>
+        public bool Typing;
     }
 
     /// <summary>
@@ -134,6 +136,7 @@ namespace BetaHub
         private const string FrameClass = "bh-frame";
         private const int FramesPerRow = 3;
         private const string FrameLastClass = "bh-frame--last";
+        private const string FrameEmptyClass = "bh-frame--empty";
         private const string PaneLogClass = "bh-pane-log";
         private const string LogWarnClass = "bh-log--warn";
         private const string LogErrorClass = "bh-log--err";
@@ -148,6 +151,7 @@ namespace BetaHub
         private const string PromptLabelClass = "bh-p-label";
         private const string GlyphClass = "bh-glyph";
         private const string KeyClass = "bh-key";
+        private const string KeyLastClass = "bh-key--last";
         private const string SpinClass = "bh-spin";
         private const string ArcClass = "bh-arc";
         private const string NoteErrorClass = "bh-note--error";
@@ -385,6 +389,7 @@ namespace BetaHub
                 case WidgetPreviewState.Sent: _screen = WidgetScreen.Sent; break;
                 default: _screen = WidgetScreen.Compose; break;
             }
+            if (options.Typing && _screen == WidgetScreen.Compose && options.FocusedAttachment < 0) _typing = _description;
 
             if (options.State == WidgetPreviewState.Toast)
             {
@@ -943,6 +948,14 @@ namespace BetaHub
                 cell.Add(new Label(frames[i].label));
                 row.Add(cell);
             }
+            // Fewer frames than a full row (under a minute of play): pad so they stay on the grid.
+            while (row.childCount < FramesPerRow)
+            {
+                var spacer = new VisualElement();
+                spacer.AddToClassList(FrameClass);
+                spacer.AddToClassList(FrameEmptyClass);
+                row.Add(spacer);
+            }
             pane.Add(grid);
         }
 
@@ -1060,6 +1073,8 @@ namespace BetaHub
                 cap.AddToClassList(KeyClass);
                 glyph.Add(cap);
             }
+            // UI Toolkit has no :last-child
+            if (glyph.childCount > 0) glyph[glyph.childCount - 1].AddToClassList(KeyLastClass);
             return glyph;
         }
 

@@ -26,10 +26,12 @@
                 <ui:Label name="bh-description-label" text="WHAT HAPPENED" />
                 <ui:Label name="bh-description-tag" class="bh-tag" text="required" />
               </ui:VisualElement>
-              <ui:VisualElement class="bh-box bh-box--multi">
+              <ui:VisualElement class="bh-box-wrap">
                 <ui:VisualElement class="bh-glow" picking-mode="Ignore" />
-                <ui:TextField name="bh-description" multiline="true" class="bh-input bh-input--multi" />
-                <ui:Label name="bh-description-prompt" class="bh-prompt" picking-mode="Ignore" text="Describe what happened" />
+                <ui:VisualElement class="bh-box bh-box--multi">
+                  <ui:TextField name="bh-description" multiline="true" class="bh-input bh-input--multi" />
+                  <ui:Label name="bh-description-prompt" class="bh-prompt" picking-mode="Ignore" text="Describe what happened" />
+                </ui:VisualElement>
               </ui:VisualElement>
             </ui:VisualElement>
 
@@ -38,10 +40,12 @@
                 <ui:Label name="bh-steps-label" text="STEPS TO REPRODUCE" />
                 <ui:Label name="bh-steps-tag" class="bh-tag" text="optional" />
               </ui:VisualElement>
-              <ui:VisualElement class="bh-box">
+              <ui:VisualElement class="bh-box-wrap">
                 <ui:VisualElement class="bh-glow" picking-mode="Ignore" />
-                <ui:TextField name="bh-steps" multiline="true" class="bh-input" />
-                <ui:Label name="bh-steps-prompt" class="bh-prompt" picking-mode="Ignore" text="Add steps if you can. It helps a lot." />
+                <ui:VisualElement class="bh-box">
+                  <ui:TextField name="bh-steps" multiline="true" class="bh-input" />
+                  <ui:Label name="bh-steps-prompt" class="bh-prompt" picking-mode="Ignore" text="Add steps if you can. It helps a lot." />
+                </ui:VisualElement>
               </ui:VisualElement>
             </ui:VisualElement>
 
@@ -58,10 +62,12 @@
                 <ui:Label name="bh-email-label" text="EMAIL ME WHEN IT'S FIXED" />
                 <ui:Label name="bh-email-tag" class="bh-tag" text="optional" />
               </ui:VisualElement>
-              <ui:VisualElement class="bh-box">
+              <ui:VisualElement class="bh-box-wrap">
                 <ui:VisualElement class="bh-glow" picking-mode="Ignore" />
-                <ui:TextField name="bh-email" class="bh-input" />
-                <ui:Label name="bh-email-prompt" class="bh-prompt" picking-mode="Ignore" text="you@example.com" />
+                <ui:VisualElement class="bh-box">
+                  <ui:TextField name="bh-email" class="bh-input" />
+                  <ui:Label name="bh-email-prompt" class="bh-prompt" picking-mode="Ignore" text="you@example.com" />
+                </ui:VisualElement>
               </ui:VisualElement>
             </ui:VisualElement>
             <ui:Label name="bh-sent-note" class="bh-note" text="One email when it's fixed. Nothing else, no account." />

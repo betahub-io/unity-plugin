@@ -50,7 +50,6 @@ namespace BetaHub
         /// <summary>Preview frames kept for the report form: one every interval over the recording window.</summary>
         public const int PreviewFrameCount = 6;
         public const float PreviewFrameInterval = 10f;
-        private const int PreviewFrameWidth = 320;
         private const int PreviewFrameHeight = 180;
 
         public struct PreviewFrame
@@ -58,6 +57,15 @@ namespace BetaHub
             public Texture Texture;
             /// <summary>Seconds between this frame and the newest one.</summary>
             public float SecondsBeforeNewest;
+        }
+
+        /// <summary>Preview frame size for a capture of the given size: a fixed height, the game's aspect.</summary>
+        public static Vector2Int PreviewFrameSize(int sourceWidth, int sourceHeight)
+        {
+            if (sourceWidth <= 0) throw new System.ArgumentOutOfRangeException(nameof(sourceWidth), sourceWidth, "Capture width must be positive.");
+            if (sourceHeight <= 0) throw new System.ArgumentOutOfRangeException(nameof(sourceHeight), sourceHeight, "Capture height must be positive.");
+            int width = Mathf.Max(1, Mathf.RoundToInt(PreviewFrameHeight * (float)sourceWidth / sourceHeight));
+            return new Vector2Int(width, PreviewFrameHeight);
         }
 
 #if !UNITY_WEBGL || UNITY_EDITOR
@@ -72,6 +80,8 @@ namespace BetaHub
 
         private RenderTexture[] _previewFrames;
         private readonly ThumbnailRing _previewRing = new ThumbnailRing(PreviewFrameCount, PreviewFrameInterval);
+        private static readonly Vector2 PreviewFlipScale = new Vector2(1f, -1f);
+        private static readonly Vector2 PreviewFlipOffset = new Vector2(0f, 1f);
 #endif
 
         public bool IsRecording { get; private set; }
@@ -480,11 +490,17 @@ namespace BetaHub
                 _previewFrames = new RenderTexture[PreviewFrameCount];
             }
             int slot = _previewRing.Claim(Time.unscaledTime);
-            if (_previewFrames[slot] == null)
+            var size = PreviewFrameSize(source.width, source.height);
+            var frame = _previewFrames[slot];
+            if (frame == null || frame.width != size.x || frame.height != size.y)
             {
-                _previewFrames[slot] = new RenderTexture(PreviewFrameWidth, PreviewFrameHeight, 0, RenderTextureFormat.ARGB32);
+                if (frame != null) frame.Release();
+                frame = _previewFrames[slot] = new RenderTexture(size.x, size.y, 0, RenderTextureFormat.ARGB32);
             }
-            Graphics.Blit(source, _previewFrames[slot]);
+            // The capture holds the top row first, the order FFmpeg reads, so as a texture it is upside down.
+            // MirrorVertically means it is not, and the encoder flips it instead.
+            if (MirrorVertically) Graphics.Blit(source, frame);
+            else Graphics.Blit(source, frame, PreviewFlipScale, PreviewFlipOffset);
         }
 
         private void ReleasePreviewFrames()
