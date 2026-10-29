@@ -15,6 +15,7 @@
 - Themes: six built-in theme stylesheets generated from `ThemeRecipe` (`Runtime/UI/Themes`), `BugReportWidget.Theme` and `SetTheme()`. Replaces `UseLightTheme`.
 - `GameRecorder.GetPreviewFrames()`: a small frame every 10 s of the recording for the clip preview (not on WebGL).
 - Fonts: Barlow, Barlow Semi Condensed and JetBrains Mono (SIL OFL) for the widget.
+- Controllers: with the Input System package the widget takes a gamepad (d-pad or stick with repeat, face buttons per the prompt bar) and draws the last-used device's buttons: key caps, Xbox, PlayStation or Switch (A confirms). `ITextEntryProvider` plugs in a platform keyboard for controller players, such as Steam Deck's floating keyboard or a console's text entry.
 
 ### Changed
 - Split `BugReportUI` into a headless `BetaHubReporter` component (configuration, attachments, custom fields, recording policy, submission) and a pure view. Custom UIs call `BetaHubReporter.Submit()` and follow the returned `ReportSubmission` handle instead of driving coroutines. `Issue` is now a thin HTTP client; publish/email sequencing lives in `ReportSubmission`.

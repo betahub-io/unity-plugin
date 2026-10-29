@@ -5,6 +5,10 @@ using UnityEditor;
 using UnityEngine;
 using UnityEngine.TestTools;
 using UnityEngine.UIElements;
+#if ENABLE_INPUT_SYSTEM
+using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.LowLevel;
+#endif
 
 namespace BetaHub.Tests
 {
@@ -18,6 +22,8 @@ namespace BetaHub.Tests
         private const string RowFocusedClass = "bh-row--focused";
         private const string FieldFocusedClass = "bh-fld--focused";
         private const string RowsTwoClass = "bh-rows--two";
+        private const string KeyCapClass = "bh-key";
+        private const string XboxPadClass = "bh-pad--xbox";
         private const string GlowClass = "bh-glow";
         private const string BoxClass = "bh-box";
 
@@ -39,6 +45,10 @@ namespace BetaHub.Tests
         [UnityTearDown]
         public IEnumerator TearDown()
         {
+#if ENABLE_INPUT_SYSTEM
+            if (_pad != null) InputSystem.RemoveDevice(_pad);
+            _pad = null;
+#endif
             Object.Destroy(_instance);
             yield return null;
         }
@@ -111,6 +121,90 @@ namespace BetaHub.Tests
             Assert.IsTrue(_root.Q("bh-preview").ClassListContains("bh-hidden"), "Esc returns to the form");
             Assert.IsTrue(_widget.IsVisible);
         }
+
+#if ENABLE_INPUT_SYSTEM
+        [UnityTest]
+        public IEnumerator Gamepad_DrivesTheForm_AndSwapsTheGlyphs()
+        {
+            _widget.ApplyPreview(new WidgetPreviewOptions { State = WidgetPreviewState.Compose, AttachmentCount = 9, FocusedAttachment = -1 });
+            yield return null;
+            Assert.IsNotNull(PromptsLeft.Q(className: KeyCapClass), "keyboard glyphs until a pad is used");
+
+            _pad = InputSystem.AddDevice<Gamepad>();
+            yield return Tap(GamepadButton.DpadDown);
+            Assert.AreEqual("steps", FocusedName());
+            Assert.IsNotNull(PromptsLeft.Q(className: XboxPadClass), "a generic pad gets Xbox letters");
+            Assert.IsNull(PromptsLeft.Q(className: KeyCapClass));
+
+            yield return Tap(GamepadButton.DpadRight);
+            Assert.AreEqual("row0", FocusedName());
+            yield return Tap(GamepadButton.South);
+            StringAssert.Contains("8 OF 9", _root.Q<Label>("bh-group-count").text, "A leaves it out");
+            yield return Tap(GamepadButton.West);
+            Assert.IsFalse(_root.Q("bh-preview").ClassListContains("bh-hidden"), "X opens the full-screen preview");
+            yield return Tap(GamepadButton.East);
+            Assert.IsTrue(_root.Q("bh-preview").ClassListContains("bh-hidden"), "B returns to the form");
+            Assert.IsTrue(_widget.IsVisible);
+
+            Press(KeyCode.UpArrow);
+            yield return null;
+            Assert.IsNotNull(PromptsLeft.Q(className: KeyCapClass), "a key press brings the keyboard glyphs back");
+        }
+
+        [UnityTest]
+        public IEnumerator Gamepad_WritesThroughThePlatformKeyboard()
+        {
+            var keyboard = new FakeTextEntry();
+            _widget.TextEntry = keyboard;
+            _widget.ApplyPreview(new WidgetPreviewOptions { State = WidgetPreviewState.Compose, AttachmentCount = 3, FocusedAttachment = -1 });
+            yield return null;
+
+            _pad = InputSystem.AddDevice<Gamepad>();
+            yield return Tap(GamepadButton.South);
+            yield return null;
+            Assert.AreEqual(1, keyboard.Opened, "A on a field opens the platform keyboard");
+            Assert.AreEqual("What happened", keyboard.Request.Label);
+            Assert.IsTrue(keyboard.Request.Multiline);
+            Assert.AreEqual(BugReportWidgetModel.DescriptionLimit, keyboard.Request.MaxLength);
+            Assert.Greater(keyboard.Request.FieldRect.width, 0f, "the field's place on screen");
+
+            keyboard.Done("Typed on the platform keyboard");
+            yield return null;
+            Assert.AreEqual("Typed on the platform keyboard", _root.Q<TextField>("bh-description").value);
+            Assert.IsFalse(_root.Q("bh-fld-description").ClassListContains("bh-fld--editing"), "back to browsing");
+            Assert.AreEqual(0, keyboard.Closed, "it closed itself");
+        }
+
+        private InputDevice _pad;
+        private VisualElement PromptsLeft => _root.Q("bh-prompts-left");
+
+        private IEnumerator Tap(GamepadButton button)
+        {
+            InputSystem.QueueStateEvent(_pad, new GamepadState().WithButton(button));
+            yield return null;
+            yield return null;
+            InputSystem.QueueStateEvent(_pad, new GamepadState());
+            yield return null;
+        }
+
+        private sealed class FakeTextEntry : ITextEntryProvider
+        {
+            public int Opened, Closed;
+            public TextEntryRequest Request;
+            private System.Action<string> _done;
+
+            public bool Open(TextEntryRequest request, System.Action<string> done)
+            {
+                Opened++;
+                Request = request;
+                _done = done;
+                return true;
+            }
+
+            public void Close() => Closed++;
+            public void Done(string text) => _done(text);
+        }
+#endif
 
         [UnityTest]
         public IEnumerator TypingGlow_SitsBehindTheFieldBox()

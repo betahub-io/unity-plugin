@@ -38,6 +38,8 @@ namespace BetaHub
         public int FocusedAttachment;
         /// <summary>Compose only: the description is being typed in.</summary>
         public bool Typing;
+        /// <summary>Whose buttons the prompt bar shows.</summary>
+        public GlyphSet Glyphs;
     }
 
     /// <summary>
@@ -152,6 +154,14 @@ namespace BetaHub
         private const string GlyphClass = "bh-glyph";
         private const string KeyClass = "bh-key";
         private const string KeyLastClass = "bh-key--last";
+        private const string DpadClass = "bh-dpad";
+        private const string PadClass = "bh-pad";
+        private const string PadClassPrefix = "bh-pad--";
+        // indexed by GlyphSet and PadButton: bh-pad--xbox, bh-pad--xbox-south
+        private static readonly string[] GlyphSetClassNames = { "keyboard", "xbox", "ps", "switch" };
+        private static readonly string[] PadButtonClassNames = { "south", "east", "west", "north" };
+        // a nudge of the mouse is not a switch from the controller
+        private const float MouseMoveThreshold = 6f;
         private const string SpinClass = "bh-spin";
         private const string ArcClass = "bh-arc";
         private const string NoteErrorClass = "bh-note--error";
@@ -240,7 +250,26 @@ namespace BetaHub
         private bool _cursorStateChanged;
         private CursorLockMode _previousCursorLockMode;
 
+        private GlyphSet _glyphs = GlyphSet.Keyboard;
+        private bool _textEntryOpen;
+    #if ENABLE_INPUT_SYSTEM
+        private static readonly PadButton[] FaceButtons = { PadButton.South, PadButton.East, PadButton.West, PadButton.North };
+        private readonly bool[] _faceHeld = new bool[FaceButtons.Length];
+        private readonly NavRepeat _padRepeat = new NavRepeat();
+        private Gamepad _lastPad;
+        private GlyphSet _lastPadGlyphs;
+    #endif
+
         public bool IsVisible => _overlay != null && !_overlay.ClassListContains(HiddenClass);
+
+        /// <summary>The glyphs the prompt bar shows: the device the player used last.</summary>
+        public GlyphSet Glyphs => _glyphs;
+
+        /// <summary>
+        /// The platform keyboard for controller players. Defaults to a component on this GameObject that
+        /// implements <see cref="ITextEntryProvider"/>.
+        /// </summary>
+        public ITextEntryProvider TextEntry { get; set; }
 
         // ------------------------------------------------------------------ lifecycle
 
@@ -297,6 +326,8 @@ namespace BetaHub
             {
                 Show();
             }
+    #else
+            if (visible) PollGamepad();
     #endif
         }
 
@@ -351,6 +382,7 @@ namespace BetaHub
         {
             if (!EnsureBound()) return;
             HideToast();
+            CloseTextEntry();
             if (options.State == WidgetPreviewState.None)
             {
                 _sample = false;
@@ -359,6 +391,7 @@ namespace BetaHub
             }
 
             _sample = true;
+            _glyphs = options.Glyphs;
             _sampleSignedIn = options.SignedIn;
             _sampleUnconfigured = options.State == WidgetPreviewState.Unavailable;
             RequireTermsAcceptance = options.Terms;
@@ -484,6 +517,9 @@ namespace BetaHub
             }
             _terms.RegisterCallback<ClickEvent>(_ => OnTermsClicked());
             _link.RegisterCallback<ClickEvent>(_ => Act(PromptAction.Alt));
+            _overlay.RegisterCallback<PointerDownEvent>(OnPointerUsed, TrickleDown.TrickleDown);
+            _overlay.RegisterCallback<PointerMoveEvent>(OnPointerUsed, TrickleDown.TrickleDown);
+            if (TextEntry == null) TextEntry = GetComponent<ITextEntryProvider>();
 
             _bound = true;
             return true;
@@ -1017,7 +1053,7 @@ namespace BetaHub
                 Screen = _screen,
                 Focus = FocusKind,
                 Typing = _typing != null,
-                Gamepad = false,
+                Gamepad = _glyphs != GlyphSet.Keyboard,
                 FocusedIncluded = _screen == WidgetScreen.Preview
                     ? _attachments.Items.Count > 0 && _attachments.IsIncluded(_attachments.Items[Mathf.Clamp(_previewIndex, 0, _attachments.Items.Count - 1)].Id)
                     : _focus.OnAttachment && _attachments.IsIncluded(_attachments.Items[_focus.Index].Id),
@@ -1063,14 +1099,28 @@ namespace BetaHub
             }
         }
 
-        private static VisualElement Glyph(PromptAction action)
+        private VisualElement Glyph(PromptAction action)
         {
             var glyph = new VisualElement();
             glyph.AddToClassList(GlyphClass);
-            foreach (var key in PromptGlyphs.Keyboard(action))
+            foreach (var part in PromptGlyphs.For(_glyphs, action))
             {
-                var cap = new Label(key);
-                cap.AddToClassList(KeyClass);
+                var cap = new Label(part.Text);
+                switch (part.Kind)
+                {
+                    case GlyphPartKind.Key:
+                        cap.AddToClassList(KeyClass);
+                        break;
+                    case GlyphPartKind.Dpad:
+                        cap.AddToClassList(DpadClass);
+                        break;
+                    case GlyphPartKind.Face:
+                        string set = PadClassPrefix + GlyphSetClassNames[(int)_glyphs];
+                        cap.AddToClassList(PadClass);
+                        cap.AddToClassList(set);
+                        cap.AddToClassList(set + "-" + PadButtonClassNames[(int)part.Button]);
+                        break;
+                }
                 glyph.Add(cap);
             }
             // UI Toolkit has no :last-child
@@ -1091,6 +1141,8 @@ namespace BetaHub
         private void OnKeyDown(KeyDownEvent evt)
         {
             if (!IsVisible || evt.keyCode == KeyCode.None) return;
+            // a floating platform keyboard types through key events; the player still holds the controller
+            if (!_textEntryOpen) UseGlyphs(GlyphSet.Keyboard);
             bool send = (evt.keyCode == KeyCode.Return || evt.keyCode == KeyCode.KeypadEnter) && (evt.ctrlKey || evt.commandKey);
             bool handled = true;
 
@@ -1140,6 +1192,114 @@ namespace BetaHub
                     return true;
                 default:
                     return false;
+            }
+        }
+
+        private void OnPointerUsed(IPointerEvent evt)
+        {
+            if (!IsVisible || evt.pointerType != UnityEngine.UIElements.PointerType.mouse) return;
+            if (evt is PointerMoveEvent && evt.deltaPosition.sqrMagnitude < MouseMoveThreshold * MouseMoveThreshold) return;
+            UseGlyphs(GlyphSet.Keyboard);
+        }
+
+        private void OnPointerUsed(PointerDownEvent evt) => OnPointerUsed((IPointerEvent)evt);
+        private void OnPointerUsed(PointerMoveEvent evt) => OnPointerUsed((IPointerEvent)evt);
+
+        private void UseGlyphs(GlyphSet glyphs)
+        {
+            if (_glyphs == glyphs) return;
+            _glyphs = glyphs;
+            if (IsVisible) Render();
+        }
+
+    #if ENABLE_INPUT_SYSTEM
+        private void PollGamepad()
+        {
+            var pad = Gamepad.current;
+            if (pad == null) return;
+            if (pad != _lastPad)
+            {
+                _lastPad = pad;
+                _lastPadGlyphs = GlyphSetOf(pad);
+            }
+
+            for (int i = 0; i < FaceButtons.Length; i++)
+            {
+                bool down = FaceControl(pad, FaceButtons[i]).isPressed;
+                bool pressed = down && !_faceHeld[i];
+                _faceHeld[i] = down;
+                // the platform keyboard owns the controller while it is up
+                if (!pressed || _textEntryOpen) continue;
+                UseGlyphs(_lastPadGlyphs);
+                OnPadButton(PadLayout.ActionFor(_lastPadGlyphs, FaceButtons[i]));
+                if (!IsVisible) return;
+            }
+
+            var direction = PadDirection(pad);
+            if (direction != null && !_textEntryOpen) UseGlyphs(_lastPadGlyphs);
+            var move = _padRepeat.Step(_textEntryOpen ? null : direction, Time.unscaledTime);
+            if (move != null) OnPadMove(move.Value);
+        }
+
+        // Buttons and sticks already held when the form opens (the menu press that opened it) wait for a release.
+        private void ResetPadInput()
+        {
+            var pad = Gamepad.current;
+            for (int i = 0; i < FaceButtons.Length; i++)
+            {
+                _faceHeld[i] = pad != null && FaceControl(pad, FaceButtons[i]).isPressed;
+            }
+            _padRepeat.Suppress(pad != null ? PadDirection(pad) : null);
+        }
+
+        private static FocusMove? PadDirection(Gamepad pad)
+        {
+            var dpad = pad.dpad.ReadValue();
+            var stick = pad.leftStick.ReadValue();
+            return PadNavigation.DirectionOf(dpad.x, dpad.y) ?? PadNavigation.DirectionOf(stick.x, stick.y);
+        }
+
+        private static UnityEngine.InputSystem.Controls.ButtonControl FaceControl(Gamepad pad, PadButton button)
+        {
+            switch (button)
+            {
+                case PadButton.South: return pad.buttonSouth;
+                case PadButton.East: return pad.buttonEast;
+                case PadButton.West: return pad.buttonWest;
+                case PadButton.North: return pad.buttonNorth;
+                default: throw new ArgumentOutOfRangeException(nameof(button), button, null);
+            }
+        }
+
+        private static GlyphSet GlyphSetOf(InputDevice device)
+        {
+            var layouts = new List<string>();
+            for (string layout = device.layout; !string.IsNullOrEmpty(layout); layout = InputSystem.GetNameOfBaseLayout(layout))
+            {
+                layouts.Add(layout);
+            }
+            return GlyphSets.ForLayouts(layouts);
+        }
+    #endif
+
+        private void OnPadButton(PromptAction action)
+        {
+            // while typing a controller only finishes or sends; the field keeps the rest
+            if (_typing != null && action != PromptAction.Back && action != PromptAction.Send) return;
+            Act(action);
+        }
+
+        private void OnPadMove(FocusMove move)
+        {
+            if (_typing != null) return;
+            if (_screen == WidgetScreen.Preview)
+            {
+                if (move == FocusMove.Up) MovePreview(-1);
+                else if (move == FocusMove.Down) MovePreview(1);
+            }
+            else
+            {
+                MoveFocus(move);
             }
         }
 
@@ -1301,17 +1461,64 @@ namespace BetaHub
             _typing = field;
             Render();
             // A field that was display:none until this frame cannot take focus before the next style pass.
-            field.Input.schedule.Execute(() => { if (_typing == field) field.Input.Focus(); });
+            field.Input.schedule.Execute(() =>
+            {
+                if (_typing != field) return;
+                field.Input.Focus();
+                OpenTextEntry(field);
+            });
         }
 
         private void StopTyping()
         {
+            CloseTextEntry();
             if (_typing == null) return;
             var field = _typing;
             _typing = null;
             field.Input.Blur();
             Render();
             FocusOverlay();
+        }
+
+        // Controller players get the platform keyboard; keyboard players already have one.
+        private void OpenTextEntry(FieldView field)
+        {
+            if (_glyphs == GlyphSet.Keyboard || TextEntry == null || _textEntryOpen) return;
+            var request = new TextEntryRequest
+            {
+                Label = field == _description ? Strings.DescriptionLabel : field == _steps ? Strings.StepsLabel : Strings.EmailLabel,
+                Text = field.Input.value,
+                Multiline = field.Input.multiline,
+                MaxLength = field == _description ? BugReportWidgetModel.DescriptionLimit
+                    : field == _steps ? BugReportWidgetModel.StepsLimit : BugReportWidgetModel.EmailLimit,
+                FieldRect = ScreenRect(field.Input),
+            };
+            _textEntryOpen = TextEntry.Open(request, text => OnTextEntryDone(field, text));
+        }
+
+        private void OnTextEntryDone(FieldView field, string text)
+        {
+            if (!_textEntryOpen) return;
+            _textEntryOpen = false;
+            // a modal keyboard's text counts even if the field lost focus meanwhile
+            if (text != null) field.Input.value = text;
+            if (_typing == field) StopTyping();
+        }
+
+        private void CloseTextEntry()
+        {
+            if (!_textEntryOpen) return;
+            _textEntryOpen = false;
+            TextEntry.Close();
+        }
+
+        // Panel coordinates to screen pixels, top-left origin.
+        private static Rect ScreenRect(VisualElement element)
+        {
+            var bound = element.worldBound;
+            var root = element.panel.visualTree.layout;
+            float x = Screen.width / root.width, y = Screen.height / root.height;
+            return new Rect(bound.x * x, bound.y * y, bound.width * x, bound.height * y);
         }
 
         private void FocusOverlay()
@@ -1463,7 +1670,11 @@ namespace BetaHub
         private void SetOverlayVisible(bool visible)
         {
             _overlay.EnableInClassList(HiddenClass, !visible);
-            if (visible) FocusOverlay();
+            if (!visible) return;
+            FocusOverlay();
+    #if ENABLE_INPUT_SYSTEM
+            ResetPadInput();
+    #endif
         }
 
         private static string Caps(string text) => text?.ToUpperInvariant() ?? "";
@@ -1644,6 +1855,7 @@ namespace BetaHub
     #if ENABLE_INPUT_SYSTEM
         private void OnShortcutPerformed(InputAction.CallbackContext context)
         {
+            UseGlyphs(context.control.device is Gamepad pad ? GlyphSetOf(pad) : GlyphSet.Keyboard);
             Show();
         }
     #endif

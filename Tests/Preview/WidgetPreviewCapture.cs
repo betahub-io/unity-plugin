@@ -33,13 +33,14 @@ namespace BetaHub.Tests
             public string Theme;
         }
 
-        private static Shot S(string name, WidgetPreviewState state, int attachments = 3, int focus = -1, bool signedIn = false, bool terms = false, bool typing = false, string theme = "Dark")
+        private static Shot S(string name, WidgetPreviewState state, int attachments = 3, int focus = -1, bool signedIn = false, bool terms = false, bool typing = false,
+            GlyphSet glyphs = GlyphSet.Keyboard, string theme = "Dark")
         {
             return new Shot
             {
                 Name = name,
                 Theme = theme,
-                Options = new WidgetPreviewOptions { State = state, AttachmentCount = attachments, FocusedAttachment = focus, SignedIn = signedIn, Terms = terms, Typing = typing },
+                Options = new WidgetPreviewOptions { State = state, AttachmentCount = attachments, FocusedAttachment = focus, SignedIn = signedIn, Terms = terms, Typing = typing, Glyphs = glyphs },
             };
         }
 
@@ -61,6 +62,10 @@ namespace BetaHub.Tests
             S("toast", WidgetPreviewState.Toast),
             S("compose-light", WidgetPreviewState.Compose, theme: "Light"),
             S("compose-ocean", WidgetPreviewState.Compose, attachments: 6, focus: 0, theme: "Ocean"),
+            S("compose-xbox-clip-focused", WidgetPreviewState.Compose, focus: 1, glyphs: GlyphSet.Xbox),
+            S("compose-playstation-typing", WidgetPreviewState.Compose, typing: true, glyphs: GlyphSet.PlayStation),
+            S("preview-playstation", WidgetPreviewState.Preview, attachments: 9, glyphs: GlyphSet.PlayStation),
+            S("sent-switch", WidgetPreviewState.Sent, glyphs: GlyphSet.Switch),
         };
 
         [UnityTest]
@@ -76,7 +81,7 @@ namespace BetaHub.Tests
             string folder = OutputFolder();
             yield return CaptureAll(folder, DeckWidth, DeckHeight, new[]
             {
-                S("deck-compose-9", WidgetPreviewState.Compose, attachments: 9, focus: 2),
+                S("deck-compose-9", WidgetPreviewState.Compose, attachments: 9, focus: 2, glyphs: GlyphSet.Xbox),
                 S("deck-sent", WidgetPreviewState.Sent),
             });
         }

@@ -191,6 +191,28 @@ TextField { margin: 0; padding: 0; }
   border-width: 1px; border-bottom-width: 4px; border-color: #a9adb8; border-radius: 6px;
 }
 .bh-key--last { margin-right: 0; }
+
+/* controller glyphs: each platform's own colours, not the theme's. Symbols come from JetBrains Mono,
+   the only bundled font that has them. */
+.bh-pad {
+  width: 37px; height: 37px; border-radius: 19px; padding: 0;
+  -unity-font-definition: url("Fonts/Barlow-Bold.ttf"); font-size: 21px; -unity-text-align: middle-center; color: #ffffff;
+}
+.bh-pad--xbox-south { background-color: #5cb82c; }
+.bh-pad--xbox-east { background-color: #e0463c; }
+.bh-pad--xbox-west { background-color: #2f7fd4; }
+.bh-pad--xbox-north { background-color: #f1c21b; color: #1b1500; }
+.bh-pad--ps { background-color: #0d0f14; border-width: 2px; border-color: #3b4150; -unity-font-definition: url("Fonts/JetBrainsMono-Regular.ttf"); font-size: 32px; }
+.bh-pad--ps-south { color: #8fb4f2; }
+.bh-pad--ps-east { color: #ef7479; }
+.bh-pad--ps-west { color: #e28bd0; }
+.bh-pad--ps-north { color: #6fd0b1; }
+.bh-pad--switch { background-color: #2b2e36; color: #f2f3f5; border-width: 2px; border-color: #555a66; }
+.bh-dpad {
+  height: 37px; padding: 0 12px; border-radius: 8px;
+  background-color: #0d0f14; border-width: 2px; border-color: #3b4150;
+  -unity-font-definition: url("Fonts/JetBrainsMono-Regular.ttf"); font-size: 18px; letter-spacing: 2px; -unity-text-align: middle-center; color: #cfd3dc;
+}
 .bh-spin { width: 31px; height: 31px; flex-grow: 0; }
 .bh-arc { color: var(--bh-accent); border-color: var(--bh-line); }
 

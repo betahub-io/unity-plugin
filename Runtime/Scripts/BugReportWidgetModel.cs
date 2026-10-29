@@ -91,6 +91,8 @@ namespace BetaHub
     {
         public const int DescriptionLimit = 2000;
         public const int StepsLimit = 1000;
+        /// <summary>RFC 5321: the longest address a mail server must accept.</summary>
+        public const int EmailLimit = 254;
         public const int LogTailLines = 14;
         public const string Ellipsis = "…";
         public const string SeeConsoleSuffix = " (see console)";
@@ -351,6 +353,24 @@ namespace BetaHub
         private static readonly string[] CtrlEnter = { "Ctrl", "Enter" };
         private static readonly string[] Tab = { "Tab" };
         private static readonly string[] UpDown = { "↑", "↓" };
+        private const string DpadUpDown = "▲ ▼";
+
+        public static GlyphPart[] For(GlyphSet set, PromptAction action)
+        {
+            if (set == GlyphSet.Keyboard)
+            {
+                var keys = Keyboard(action);
+                var parts = new GlyphPart[keys.Length];
+                for (int i = 0; i < keys.Length; i++) parts[i] = new GlyphPart { Kind = GlyphPartKind.Key, Text = keys[i] };
+                return parts;
+            }
+            if (action == PromptAction.Navigate)
+            {
+                return new[] { new GlyphPart { Kind = GlyphPartKind.Dpad, Text = DpadUpDown } };
+            }
+            var button = PadLayout.ButtonFor(set, action);
+            return new[] { new GlyphPart { Kind = GlyphPartKind.Face, Text = PadLayout.Label(set, button), Button = button } };
+        }
 
         public static string[] Keyboard(PromptAction action)
         {

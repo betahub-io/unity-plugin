@@ -104,6 +104,38 @@ A theme is one small stylesheet of `--bh-*` variables; the layout stylesheet onl
 
 Configuration mistakes are reported once in the Unity console at startup, prefixed with `BetaHub:`, together with the fix.
 
+### Controllers
+
+With the Input System package active, the widget takes a gamepad: the d-pad or left stick moves focus (hold to repeat) and the face buttons follow the prompt bar. The bar draws the buttons of the device used last: key caps for keyboard and mouse, Xbox letters (also on Steam Deck and for unknown pads), PlayStation symbols, or Switch letters with A to confirm and B to go back. Without the Input System package the form takes keyboard and mouse only.
+
+F12 opens the form. Controller players have no F12: open it from your pause menu with `Show()`, or add a gamepad binding to the widget's **Shortcut Action**.
+
+When a controller player starts writing in a field, the widget asks an `ITextEntryProvider` for the platform keyboard. Add a component that implements it to the widget's GameObject, or set `widget.TextEntry`. Without one, the field takes a hardware keyboard, and Steam Deck players can open Steam's keyboard with Steam + X. A sketch for Steam Deck with Steamworks.NET:
+
+```csharp
+public class SteamDeckTextEntry : MonoBehaviour, ITextEntryProvider
+{
+    private Callback<FloatingGamepadTextInputDismissed_t> _dismissed;
+    private Action<string> _done;
+
+    public bool Open(TextEntryRequest request, Action<string> done)
+    {
+        _done = done;
+        _dismissed ??= Callback<FloatingGamepadTextInputDismissed_t>.Create(_ => _done?.Invoke(null));
+        var mode = request.Multiline
+            ? EFloatingGamepadTextInputMode.k_EFloatingGamepadTextInputModeModeMultipleLines
+            : EFloatingGamepadTextInputMode.k_EFloatingGamepadTextInputModeModeSingleLine;
+        var field = request.FieldRect;
+        // The floating keyboard types into the focused field, so done gets null when it closes.
+        return SteamUtils.ShowFloatingGamepadTextInput(mode, (int)field.x, (int)field.y, (int)field.width, (int)field.height);
+    }
+
+    public void Close() => SteamUtils.DismissFloatingGamepadTextInput();
+}
+```
+
+A modal keyboard (a console's text entry) calls `done` with the final text instead.
+
 ## Attachments
 
 When the form opens, the reporter builds the list of what can travel with the report: the screenshot, the last minute of play, the game log, network and location data when those providers are on, files added in code, and rows from your providers. Rows start included unless a provider sets `IncludedByDefault = false`; the player can leave any of them out, and only included rows are sent.

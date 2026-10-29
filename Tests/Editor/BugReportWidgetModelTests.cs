@@ -316,11 +316,14 @@ namespace BetaHub.Tests
         }
 
         [Test]
-        public void EveryActionHasAKeyboardGlyph()
+        public void EveryActionHasAGlyphOnEveryDevice()
         {
-            foreach (PromptAction action in System.Enum.GetValues(typeof(PromptAction)))
+            foreach (GlyphSet set in System.Enum.GetValues(typeof(GlyphSet)))
             {
-                CollectionAssert.IsNotEmpty(PromptGlyphs.Keyboard(action), action.ToString());
+                foreach (PromptAction action in System.Enum.GetValues(typeof(PromptAction)))
+                {
+                    CollectionAssert.IsNotEmpty(PromptGlyphs.For(set, action), set + " " + action);
+                }
             }
             CollectionAssert.AreEqual(new[] { "Ctrl", "Enter" }, PromptGlyphs.Keyboard(PromptAction.Send));
         }
