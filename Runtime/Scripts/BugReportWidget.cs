@@ -9,6 +9,10 @@ using UnityEngine.UIElements;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
 #endif
+#if ENABLE_INPUT_SYSTEM && !ENABLE_LEGACY_INPUT_MANAGER
+using UnityEngine.EventSystems;
+using UnityEngine.InputSystem.UI;
+#endif
 
 namespace BetaHub
 {
@@ -259,6 +263,11 @@ namespace BetaHub
         private Gamepad _lastPad;
         private GlyphSet _lastPadGlyphs;
     #endif
+    #if ENABLE_INPUT_SYSTEM && !ENABLE_LEGACY_INPUT_MANAGER
+        private const string OwnEventSystemName = "BetaHub EventSystem";
+        private GameObject _ownEventSystem;
+        private static bool _eventSystemNoted;
+    #endif
 
         public bool IsVisible => _overlay != null && !_overlay.ClassListContains(HiddenClass);
 
@@ -338,6 +347,9 @@ namespace BetaHub
             Detach(_background);
             ReleaseTextures();
             if (_sampleTexture != null) DestroyImmediate(_sampleTexture);
+    #if ENABLE_INPUT_SYSTEM && !ENABLE_LEGACY_INPUT_MANAGER
+            ReleaseEventSystem();
+    #endif
         }
 
         // ------------------------------------------------------------------ public API
@@ -1670,12 +1682,37 @@ namespace BetaHub
         private void SetOverlayVisible(bool visible)
         {
             _overlay.EnableInClassList(HiddenClass, !visible);
+    #if ENABLE_INPUT_SYSTEM && !ENABLE_LEGACY_INPUT_MANAGER
+            if (visible) EnsureEventSystem();
+            else ReleaseEventSystem();
+    #endif
             if (!visible) return;
             FocusOverlay();
     #if ENABLE_INPUT_SYSTEM
             ResetPadInput();
     #endif
         }
+
+    #if ENABLE_INPUT_SYSTEM && !ENABLE_LEGACY_INPUT_MANAGER
+        // UI Toolkit reads the legacy Input Manager unless an EventSystem feeds it. With only the new
+        // Input System active and no EventSystem, clicks (and keys in a build) never reach the form.
+        private void EnsureEventSystem()
+        {
+            if (!Application.isPlaying || _ownEventSystem != null || EventSystem.current != null) return;
+            _ownEventSystem = new GameObject(OwnEventSystemName, typeof(EventSystem), typeof(InputSystemUIInputModule));
+            _ownEventSystem.transform.SetParent(transform, false);
+            if (_eventSystemNoted) return;
+            _eventSystemNoted = true;
+            Debug.Log(UnityBetaHubLog.Prefix + "Added an EventSystem with InputSystemUIInputModule while the bug report form is open: UI Toolkit needs one when only the new Input System is active. Add your own EventSystem to the scene to skip this.", this);
+        }
+
+        private void ReleaseEventSystem()
+        {
+            if (_ownEventSystem == null) return;
+            Destroy(_ownEventSystem);
+            _ownEventSystem = null;
+        }
+    #endif
 
         private static string Caps(string text) => text?.ToUpperInvariant() ?? "";
 

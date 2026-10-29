@@ -589,16 +589,13 @@ namespace BetaHub
             }
 
             // Draw cursor if enabled
-            if (RenderCursor)
+            if (RenderCursor && TryGetMousePosition(out Vector3 mousePos))
             {
                 if (painter == null)
                 {
                     painter = new TexturePainter(bufferWrapper, flipY: true);
                 }
-                
-                // Get mouse position in screen coordinates
-                Vector3 mousePos = Input.mousePosition;
-                
+
                 // Convert screen coordinates to texture coordinates
                 // Screen coordinates: (0,0) at bottom-left, (Screen.width, Screen.height) at top-right
                 // Texture coordinates depend on scaling and capture source
@@ -632,6 +629,19 @@ namespace BetaHub
             }
 
             return _rgbConversionBuffer;
+        }
+
+        // Mouse position in screen coordinates. The legacy Input class throws when only the new Input System is active.
+        private static bool TryGetMousePosition(out Vector3 position)
+        {
+#if ENABLE_INPUT_SYSTEM && !ENABLE_LEGACY_INPUT_MANAGER
+            var mouse = UnityEngine.InputSystem.Mouse.current;
+            position = mouse != null ? (Vector3)mouse.position.ReadValue() : Vector3.zero;
+            return mouse != null;
+#else
+            position = Input.mousePosition;
+            return true;
+#endif
         }
 
         /// <summary>

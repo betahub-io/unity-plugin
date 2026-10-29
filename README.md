@@ -110,6 +110,8 @@ With the Input System package active, the widget takes a gamepad: the d-pad or l
 
 F12 opens the form. Controller players have no F12: open it from your pause menu with `Show()`, or add a gamepad binding to the widget's **Shortcut Action**.
 
+UI Toolkit takes mouse and keyboard input from the legacy Input Manager unless an EventSystem feeds it. When only the new Input System is active and the scene has no EventSystem, the widget adds one with `InputSystemUIInputModule` while the form is open, removes it on close, and says so once in the console. Add your own EventSystem to the scene to skip this.
+
 When a controller player starts writing in a field, the widget asks an `ITextEntryProvider` for the platform keyboard. Add a component that implements it to the widget's GameObject, or set `widget.TextEntry`. Without one, the field takes a hardware keyboard, and Steam Deck players can open Steam's keyboard with Steam + X. A sketch for Steam Deck with Steamworks.NET:
 
 ```csharp

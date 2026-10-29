@@ -16,6 +16,7 @@
 - `GameRecorder.GetPreviewFrames()`: a small frame every 10 s of the recording for the clip preview (not on WebGL).
 - Fonts: Barlow, Barlow Semi Condensed and JetBrains Mono (SIL OFL) for the widget.
 - Controllers: with the Input System package the widget takes a gamepad (d-pad or stick with repeat, face buttons per the prompt bar) and draws the last-used device's buttons: key caps, Xbox, PlayStation or Switch (A confirms). `ITextEntryProvider` plugs in a platform keyboard for controller players, such as Steam Deck's floating keyboard or a console's text entry.
+- With only the new Input System active and no EventSystem in the scene, the widget adds one (`InputSystemUIInputModule`) while the form is open; without it UI Toolkit ignored mouse clicks.
 
 ### Changed
 - Split `BugReportUI` into a headless `BetaHubReporter` component (configuration, attachments, custom fields, recording policy, submission) and a pure view. Custom UIs call `BetaHubReporter.Submit()` and follow the returned `ReportSubmission` handle instead of driving coroutines. `Issue` is now a thin HTTP client; publish/email sequencing lives in `ReportSubmission`.
@@ -25,6 +26,9 @@
 - Startup configuration checks log actionable `BetaHub:`-prefixed errors and hints; a misconfigured reporter returns an already failed submission instead of throwing.
 - Reporter email failures are surfaced to the UI instead of being logged only.
 - Publish failures now put the submission in a Failed state with the server message.
+
+### Fixed
+- `GameRecorder.RenderCursor` read the legacy `Input.mousePosition`, which throws when only the new Input System is active; it reads `Mouse.current` there.
 
 ## 1.8.3
 

@@ -4,6 +4,7 @@
     "references": [
         "GUID:c015ab2f026f14b0d8cd2e7fdc5b377c",
         "Unity.InputSystem",
+        "UnityEngine.UI",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],

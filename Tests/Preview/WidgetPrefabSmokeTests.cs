@@ -6,6 +6,7 @@ using UnityEngine;
 using UnityEngine.TestTools;
 using UnityEngine.UIElements;
 #if ENABLE_INPUT_SYSTEM
+using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.LowLevel;
 #endif
@@ -174,6 +175,23 @@ namespace BetaHub.Tests
             Assert.IsFalse(_root.Q("bh-fld-description").ClassListContains("bh-fld--editing"), "back to browsing");
             Assert.AreEqual(0, keyboard.Closed, "it closed itself");
         }
+
+#if !ENABLE_LEGACY_INPUT_MANAGER
+        // UI Toolkit reads the legacy Input Manager unless an EventSystem feeds it.
+        [UnityTest]
+        public IEnumerator NewInputSystemOnly_AddsAnEventSystemWhileOpen()
+        {
+            Assert.IsNull(Object.FindObjectOfType<EventSystem>(), "the test scene starts without one");
+            _widget.ApplyPreview(new WidgetPreviewOptions { State = WidgetPreviewState.Compose, AttachmentCount = 3, FocusedAttachment = -1 });
+            yield return null;
+            Assert.IsNotNull(Object.FindObjectOfType<EventSystem>(), "added on open");
+            Assert.IsNotNull(Object.FindObjectOfType<UnityEngine.InputSystem.UI.InputSystemUIInputModule>(), "fed by the Input System");
+
+            _widget.ApplyPreview(WidgetPreviewState.None, false);
+            yield return null;
+            Assert.IsNull(Object.FindObjectOfType<EventSystem>(), "removed on close");
+        }
+#endif
 
         private InputDevice _pad;
         private VisualElement PromptsLeft => _root.Q("bh-prompts-left");
