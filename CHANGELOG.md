@@ -16,6 +16,8 @@
 - `GameRecorder.GetPreviewFrames()`: a small frame every 10 s of the recording for the clip preview (not on WebGL).
 - Fonts: Barlow, Barlow Semi Condensed and JetBrains Mono (SIL OFL) for the widget.
 - Controllers: with the Input System package the widget takes a gamepad (d-pad or stick with repeat, face buttons per the prompt bar) and draws the last-used device's buttons: key caps, Xbox, PlayStation or Switch (A confirms). `ITextEntryProvider` plugs in a platform keyboard for controller players, such as Steam Deck's floating keyboard or a console's text entry.
+- `SteamTextEntry`: Steam's floating keyboard on Steam Deck and in Big Picture through Steamworks.NET, compiled when the Steamworks.NET package is installed or `BETAHUB_STEAMWORKS` is defined.
+- Theme assets: **Create > BetaHub > Bug Report Theme** takes an accent, a neutral tint, a mode and a radius, shows the derived colors with their contrast and writes a theme stylesheet next to the asset. **BetaHub > Regenerate Theme Stylesheets** rewrites them all.
 - With only the new Input System active and no EventSystem in the scene, the widget adds one (`InputSystemUIInputModule`) while the form is open; without it UI Toolkit ignored mouse clicks.
 
 ### Changed

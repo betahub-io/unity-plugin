@@ -1501,6 +1501,7 @@ namespace BetaHub
                 Label = field == _description ? Strings.DescriptionLabel : field == _steps ? Strings.StepsLabel : Strings.EmailLabel,
                 Text = field.Input.value,
                 Multiline = field.Input.multiline,
+                Email = field == _email,
                 MaxLength = field == _description ? BugReportWidgetModel.DescriptionLimit
                     : field == _steps ? BugReportWidgetModel.StepsLimit : BugReportWidgetModel.EmailLimit,
                 FieldRect = ScreenRect(field.Input),

@@ -100,7 +100,11 @@ The older uGUI form (`BugReportingFormCanvas` prefab with `BugReportUI`) still w
 
 ### Reskinning the widget
 
-A theme is one small stylesheet of `--bh-*` variables; the layout stylesheet only reads them. Six built-ins ship in `Runtime/UI/Themes` (Dark, Light, Neutral, Ocean, Forest, Violet), each derived from one accent color with contrast checked. Assign one to the widget's **Theme** field, or call `SetTheme()` at runtime. For your own look, write a stylesheet with the same variables, or generate one from an accent with `ThemeUssWriter.Write(new ThemeSpec(...))`. Strings are editable on the component. Select the prefab and use the inspector's Preview section to see any screen, attachment count and theme in the Game view without entering Play mode.
+A theme is one small stylesheet of `--bh-*` variables; the layout stylesheet only reads them. Six built-ins ship in `Runtime/UI/Themes` (Dark, Light, Neutral, Ocean, Forest, Violet), each derived from one accent color with contrast checked. Assign one to the widget's **Theme** field, or call `SetTheme()` at runtime.
+
+For your own colors, create a theme asset (**Create > BetaHub > Bug Report Theme**) and pick an accent, a neutral tint, dark or light, and a corner radius. The inspector runs the same recipe as the built-ins, shows the derived colors with their contrast, and writes a stylesheet with the asset's name next to it on every change; assign that stylesheet to the **Theme** field. **BetaHub > Regenerate Theme Stylesheets** rewrites them all, for example after pulling changes. You can also write a stylesheet with the same variables by hand, or generate one in code with `ThemeUssWriter.Write(new ThemeSpec(...))`.
+
+Strings are editable on the component. Select the prefab and use the inspector's Preview section to see any screen, attachment count and theme in the Game view without entering Play mode.
 
 Configuration mistakes are reported once in the Unity console at startup, prefixed with `BetaHub:`, together with the fix.
 
@@ -112,31 +116,9 @@ F12 opens the form. Controller players have no F12: open it from your pause menu
 
 UI Toolkit takes mouse and keyboard input from the legacy Input Manager unless an EventSystem feeds it. When only the new Input System is active and the scene has no EventSystem, the widget adds one with `InputSystemUIInputModule` while the form is open, removes it on close, and says so once in the console. Add your own EventSystem to the scene to skip this.
 
-When a controller player starts writing in a field, the widget asks an `ITextEntryProvider` for the platform keyboard. Add a component that implements it to the widget's GameObject, or set `widget.TextEntry`. Without one, the field takes a hardware keyboard, and Steam Deck players can open Steam's keyboard with Steam + X. A sketch for Steam Deck with Steamworks.NET:
+When a controller player starts writing in a field, the widget asks an `ITextEntryProvider` for the platform keyboard. Add a component that implements it to the widget's GameObject, or set `widget.TextEntry`. Without one, the field takes a hardware keyboard, and Steam Deck players can open Steam's keyboard with Steam + X.
 
-```csharp
-public class SteamDeckTextEntry : MonoBehaviour, ITextEntryProvider
-{
-    private Callback<FloatingGamepadTextInputDismissed_t> _dismissed;
-    private Action<string> _done;
-
-    public bool Open(TextEntryRequest request, Action<string> done)
-    {
-        _done = done;
-        _dismissed ??= Callback<FloatingGamepadTextInputDismissed_t>.Create(_ => _done?.Invoke(null));
-        var mode = request.Multiline
-            ? EFloatingGamepadTextInputMode.k_EFloatingGamepadTextInputModeModeMultipleLines
-            : EFloatingGamepadTextInputMode.k_EFloatingGamepadTextInputModeModeSingleLine;
-        var field = request.FieldRect;
-        // The floating keyboard types into the focused field, so done gets null when it closes.
-        return SteamUtils.ShowFloatingGamepadTextInput(mode, (int)field.x, (int)field.y, (int)field.width, (int)field.height);
-    }
-
-    public void Close() => SteamUtils.DismissFloatingGamepadTextInput();
-}
-```
-
-A modal keyboard (a console's text entry) calls `done` with the final text instead.
+For Steam Deck and Big Picture, add the `SteamTextEntry` component: it opens Steam's floating keyboard next to the field through Steamworks.NET. It compiles when Steamworks.NET is installed as a package (`com.rlabrecque.steamworks.net`); if you imported it another way, add the `BETAHUB_STEAMWORKS` scripting define. Your game initializes Steamworks and runs its callbacks as usual. With another Steam wrapper, implement `ITextEntryProvider` yourself: a floating keyboard that types into the focused field calls `done(null)` when it closes, a modal keyboard (a console's text entry) calls `done` with the final text.
 
 ## Attachments
 

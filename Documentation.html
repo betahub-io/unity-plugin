@@ -411,8 +411,8 @@ latency=ping.betahub.io: min/avg/max = 45ms/67ms/89ms (10/10 requests)</code></p
     <p>Settings on the <code>BugReportWidget</code> component:</p>
 
     <ul>
-        <li><strong>Shortcut</strong>: Default is F12. Set to None to disable and open the form programmatically with <code>Show()</code>.</li>
-        <li><strong>Theme</strong>: the theme stylesheet. Six built-ins ship in <code>Runtime/UI/Themes</code> (Dark, Light, Neutral, Ocean, Forest, Violet); <code>SetTheme()</code> swaps it at runtime. Any other look: a stylesheet with the same <code>--bh-*</code> variables, or one generated with <code>ThemeUssWriter</code>.</li>
+        <li><strong>Shortcut Action</strong> (Input System) or <strong>Shortcut Key</strong> (legacy input): default F12. Remove the binding, or set the key to None, to open the form only with <code>Show()</code>. Controller players have no F12: open the form from your pause menu with <code>Show()</code>, or add a gamepad binding.</li>
+        <li><strong>Theme</strong>: the theme stylesheet. Six built-ins ship in <code>Runtime/UI/Themes</code> (Dark, Light, Neutral, Ocean, Forest, Violet); <code>SetTheme()</code> swaps it at runtime. For your own colors, create a theme asset (<em>Create &gt; BetaHub &gt; Bug Report Theme</em>): pick an accent, a neutral tint, dark or light and a radius, and the inspector writes a stylesheet with the asset's name next to it, with the derived colors and their contrast shown. Assign that stylesheet here. <em>BetaHub &gt; Regenerate Theme Stylesheets</em> rewrites them all. A hand-written stylesheet with the same <code>--bh-*</code> variables works too.</li>
         <li><strong>Require Terms Acceptance / Terms Url</strong>: optional terms row that must be accepted before sending.</li>
         <li><strong>Strings</strong>: all player-facing copy, editable per language.</li>
         <li><strong>Preview</strong> (inspector section): shows any screen with sample data in the Game view without Play mode.</li>
@@ -440,6 +440,14 @@ latency=ping.betahub.io: min/avg/max = 45ms/67ms/89ms (10/10 requests)</code></p
             </ul>
         </li>
     </ul>
+
+    <h3>Controllers</h3>
+
+    <p>With the Input System package active, the form takes a gamepad: the d-pad or left stick moves focus (hold to repeat) and the face buttons follow the prompt bar. The bar draws the buttons of the device used last: key caps for keyboard and mouse, Xbox letters (also on Steam Deck and for unknown pads), PlayStation symbols, or Switch letters with A to confirm and B to go back. Without the Input System package the form takes keyboard and mouse only.</p>
+
+    <p>UI Toolkit takes mouse and keyboard input from the legacy Input Manager unless an EventSystem feeds it. When only the new Input System is active and the scene has no EventSystem, the widget adds one with <code>InputSystemUIInputModule</code> while the form is open and removes it on close. Add your own EventSystem to the scene to skip this.</p>
+
+    <p>When a controller player starts writing in a field, the widget asks an <code>ITextEntryProvider</code> for the platform keyboard, passing the field's label, text, length limit and position on screen. Add a component that implements it to the widget's GameObject, or set <code>TextEntry</code> on the widget. For Steam Deck and Big Picture, add the shipped <code>SteamTextEntry</code> component: it opens Steam's floating keyboard through Steamworks.NET, and compiles when the Steamworks.NET package (<code>com.rlabrecque.steamworks.net</code>) is installed or the <code>BETAHUB_STEAMWORKS</code> scripting define is set. Without a provider, the field takes a hardware keyboard, and Steam Deck players can open Steam's keyboard with Steam + X.</p>
 
     <h3>Programmatic Integration</h3>
 

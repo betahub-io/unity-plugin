@@ -50,6 +50,9 @@ namespace BetaHub
             new ThemeSpec("Forest",  "#4fb37a", "#4fb37a",   ThemeMode.Dark,  10f),
             new ThemeSpec("Violet",  "#9b7bff", "#9b7bff",   ThemeMode.Dark,  10f),
         };
+
+        /// <summary>Dark: the prefab's theme and a new theme asset's starting point.</summary>
+        public static ThemeSpec Default => BuiltIns[0];
     }
 
     /// <summary>

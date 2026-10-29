@@ -10,6 +10,8 @@ namespace BetaHub
         public string Label;
         public string Text;
         public bool Multiline;
+        /// <summary>The field takes an email address; use the platform's email layout if it has one.</summary>
+        public bool Email;
         public int MaxLength;
         /// <summary>The field on screen in pixels, top-left origin, so a floating keyboard can keep clear of it.</summary>
         public Rect FieldRect;

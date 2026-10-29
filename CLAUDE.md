@@ -80,7 +80,7 @@ The plugin comes pre-configured with demo project credentials (`DEMO_PROJECT_ID 
 `Tools~/EditTests/` is a dotnet SDK project that compiles `Runtime/Scripts` + `Tests/Editor` against Unity's DLLs and runs the plain-C# NUnit tests without launching Unity. Use it as the inner red/green loop:
 
 ```bash
-cd Tools~/EditTests && dotnet test --filter "FullyQualifiedName~BugReportSessionTests|FullyQualifiedName~ReportSubmissionTests|FullyQualifiedName~ReporterConfigurationTests|FullyQualifiedName~BugReportWidget|FullyQualifiedName~AttachmentSetTests|FullyQualifiedName~ColorMathTests|FullyQualifiedName~ThemeRecipeTests|FullyQualifiedName~ThemeUssWriterTests|FullyQualifiedName~ThumbnailRingTests|FullyQualifiedName~PreviewFrameSizeTests|FullyQualifiedName~WidgetStylesheetTests"
+cd Tools~/EditTests && dotnet test --filter "FullyQualifiedName~BugReportSessionTests|FullyQualifiedName~ReportSubmissionTests|FullyQualifiedName~ReporterConfigurationTests|FullyQualifiedName~BugReportWidget|FullyQualifiedName~AttachmentSetTests|FullyQualifiedName~ColorMathTests|FullyQualifiedName~ThemeRecipeTests|FullyQualifiedName~ThemeUssWriterTests|FullyQualifiedName~ThumbnailRingTests|FullyQualifiedName~PreviewFrameSizeTests|FullyQualifiedName~WidgetStylesheetTests|FullyQualifiedName~ThemeAssetTests"
 ```
 
 Add new pure-C# suites to the filter. Tests that touch the Unity runtime (e.g. `VideoEncoderCleanupTests`) only run in Unity. The NUnit adapter in that project silently drops `[TestCase]` methods with enum arguments; use a table inside a plain `[Test]` instead. Before finishing, confirm with the real Unity EditMode run:
