@@ -10,7 +10,7 @@
    The stylesheet is scoped to this tree, so nothing outside the widget is affected. */
 Label { margin: 0; padding: 0; white-space: normal; color: var(--bh-text); }
 TextField { margin: 0; padding: 0; }
-#unity-text-input { margin: 0; padding: 0; border-width: 0; background-color: rgba(0, 0, 0, 0); color: var(--bh-text); }
+#unity-text-input { margin: 0; padding: 0; border-width: 0; background-color: rgba(0, 0, 0, 0); color: var(--bh-text); --unity-cursor-color: var(--bh-text); }
 
 .bh-hidden { display: none; }
 
@@ -37,7 +37,8 @@ TextField { margin: 0; padding: 0; }
 .bh-left { width: 47.8%; margin-left: -7px; padding: 0 7px; flex-direction: column; overflow: hidden; }
 .bh-right { width: 44.4%; flex-direction: column; overflow: hidden; }
 
-.bh-head { margin-bottom: 29px; }
+/* long text scrolls inside its field, so the header and fields never give up height */
+.bh-head { margin-bottom: 29px; flex-shrink: 0; }
 .bh-kicker { -unity-font-definition: url("Fonts/BarlowSemiCondensed-Bold.ttf"); font-size: 24px; letter-spacing: 3.8px; color: var(--bh-accent); }
 .bh-title { -unity-font-definition: url("Fonts/BarlowSemiCondensed-Bold.ttf"); font-size: 48px; letter-spacing: 1px; margin: 10px 0 9px 0; color: var(--bh-text); }
 .bh-title--error { color: var(--bh-err); }
@@ -51,10 +52,11 @@ TextField { margin: 0; padding: 0; }
 /* ------------------------------------------------------------------ fields */
 
 .bh-form { flex-direction: column; }
-.bh-fld { margin-bottom: 20px; }
+.bh-fld { margin-bottom: 20px; flex-shrink: 0; }
 .bh-fld-label { flex-direction: row; justify-content: space-between; align-items: flex-end; margin-bottom: 9px; }
 .bh-fld-label > Label { -unity-font-definition: url("Fonts/BarlowSemiCondensed-SemiBold.ttf"); font-size: 26px; letter-spacing: 1.5px; color: var(--bh-muted); }
 .bh-fld-label > .bh-tag { -unity-font-definition: url("Fonts/Barlow-Medium.ttf"); font-size: 24px; letter-spacing: 0; }
+.bh-fld .bh-fld-label > .bh-tag--limit { color: var(--bh-warn); }
 .bh-fld--focused .bh-fld-label > Label { color: var(--bh-text); -unity-font-definition: url("Fonts/BarlowSemiCondensed-Bold.ttf"); }
 .bh-fld--focused .bh-fld-label > .bh-tag { -unity-font-definition: url("Fonts/Barlow-Medium.ttf"); }
 
@@ -66,14 +68,34 @@ TextField { margin: 0; padding: 0; }
   border-radius: var(--bh-radius);
 }
 .bh-box--multi { min-height: 146px; }
+/* mouse hover: lighter than focus, no accent; .bh-pointer is on while the mouse and keys are in use */
+.bh-pointer .bh-box:hover { border-color: var(--bh-muted); }
 .bh-fld--focused .bh-box { border-width: 5px; border-color: var(--bh-accent); background-color: var(--bh-field-hi); padding: 12px 15px; }
+.bh-pointer .bh-fld--focused .bh-box:hover { border-color: var(--bh-accent); }
+.bh-locked.bh-pointer .bh-box:hover { border-color: var(--bh-line); }
 /* the glow is the box's previous sibling so it is drawn behind the field, as a ring around it */
 .bh-glow { position: absolute; left: -7px; top: -7px; right: -7px; bottom: -7px; border-radius: var(--bh-radius); background-color: var(--bh-accent); opacity: 0.24; display: none; }
 .bh-fld--editing .bh-glow { display: flex; }
 
 .bh-input { flex-grow: 1; }
 .bh-input > #unity-text-input { font-size: 30px; white-space: normal; -unity-font-definition: url("Fonts/Barlow-Regular.ttf"); padding: 0 2px 0 0; }
-.bh-input--multi > #unity-text-input { min-height: 112px; -unity-text-align: upper-left; }
+/* lines of 30 px Barlow are 36 px: What happened grows to 6, Steps to reproduce to 4 */
+.bh-input--multi > #unity-text-input { min-height: 112px; max-height: 216px; -unity-text-align: upper-left; }
+.bh-input--steps > #unity-text-input { max-height: 144px; }
+/* the scroller inside a long field: a thin bar in the theme's colors, no arrow buttons
+   (four classes, so it wins over Unity's default runtime theme) */
+.bh-input .unity-scroller--vertical .unity-scroller__low-button,
+.bh-input .unity-scroller--vertical .unity-scroller__high-button,
+.bh-log-scroll .unity-scroller--vertical .unity-scroller__low-button,
+.bh-log-scroll .unity-scroller--vertical .unity-scroller__high-button { display: none; }
+.bh-input .unity-scroller.unity-scroller--vertical,
+.bh-log-scroll .unity-scroller.unity-scroller--vertical { width: 10px; min-width: 10px; margin-left: 8px; border-width: 0; background-color: rgba(0, 0, 0, 0); }
+.bh-input .unity-scroller--vertical .unity-scroller__slider .unity-base-slider__tracker,
+.bh-log-scroll .unity-scroller--vertical .unity-scroller__slider .unity-base-slider__tracker { background-color: rgba(0, 0, 0, 0); border-width: 0; }
+.bh-input .unity-scroller--vertical .unity-scroller__slider .unity-base-slider__dragger,
+.bh-log-scroll .unity-scroller--vertical .unity-scroller__slider .unity-base-slider__dragger { left: 0; width: 10px; border-width: 0; border-radius: 5px; background-color: var(--bh-muted); }
+.bh-input .unity-scroller--vertical .unity-scroller__slider .unity-base-slider__dragger-border,
+.bh-log-scroll .unity-scroller--vertical .unity-scroller__slider .unity-base-slider__dragger-border { display: none; }
 .bh-prompt { position: absolute; left: 17px; top: 14px; right: 17px; font-size: 30px; color: var(--bh-muted); }
 .bh-fld--focused .bh-prompt { left: 15px; top: 12px; }
 
@@ -94,6 +116,8 @@ TextField { margin: 0; padding: 0; }
   border-radius: var(--bh-radius);
 }
 .bh-rows--two > .bh-row { width: 49.6%; }
+.bh-pointer .bh-row:hover { background-color: var(--bh-surface-hi); }
+.bh-locked.bh-pointer .bh-row:hover { background-color: var(--bh-surface); }
 .bh-row--focused { background-color: var(--bh-surface-hi); border-width: 5px; border-color: var(--bh-accent); padding: 0 17px; }
 
 .bh-row-name { flex-direction: row; align-items: center; flex-shrink: 1; overflow: hidden; margin-right: 15px; }
@@ -137,6 +161,11 @@ TextField { margin: 0; padding: 0; }
 .bh-pane-log > Label { -unity-font-definition: url("Fonts/JetBrainsMono-Regular.ttf"); font-size: 20px; color: var(--bh-muted); white-space: nowrap; overflow: hidden; margin-bottom: 3px; }
 .bh-pane-log > .bh-log--warn { color: var(--bh-warn); }
 .bh-pane-log > .bh-log--err { color: var(--bh-err); }
+/* full-screen preview: the whole tail, wrapped, scrolling */
+.bh-log-scroll { position: absolute; left: 0; top: 0; right: 0; bottom: 0; padding: 19px 8px 19px 23px; }
+.bh-log-scroll Label { -unity-font-definition: url("Fonts/JetBrainsMono-Regular.ttf"); font-size: 20px; color: var(--bh-muted); white-space: normal; margin-bottom: 3px; }
+.bh-log-scroll .bh-log--warn { color: var(--bh-warn); }
+.bh-log-scroll .bh-log--err { color: var(--bh-err); }
 .bh-pane-kv { position: absolute; left: 0; top: 0; right: 0; bottom: 0; padding: 23px 27px; }
 .bh-kv { flex-direction: row; margin-bottom: 13px; }
 .bh-kv > Label { -unity-font-definition: url("Fonts/JetBrainsMono-Regular.ttf"); font-size: 22px; }
@@ -146,7 +175,9 @@ TextField { margin: 0; padding: 0; }
 
 .bh-cap { flex-direction: row; justify-content: space-between; align-items: center; margin: 15px 0 25px 0; }
 .bh-cap > Label { -unity-font-definition: url("Fonts/BarlowSemiCondensed-SemiBold.ttf"); font-size: 24px; letter-spacing: 1.4px; color: var(--bh-muted); flex-shrink: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.bh-cap-right { flex-direction: row; align-items: center; flex-shrink: 0; margin-left: 19px; }
+/* padding with matching negative margins leaves room for the hover pill without moving the caption */
+.bh-cap-right { flex-direction: row; align-items: center; flex-shrink: 0; margin: -4px -10px -4px 19px; padding: 4px 10px; border-radius: var(--bh-radius); }
+.bh-pointer .bh-cap-right--action:hover { background-color: var(--bh-surface); }
 .bh-cap-right > Label { -unity-font-definition: url("Fonts/Barlow-Medium.ttf"); font-size: 24px; color: var(--bh-text); margin-left: 10px; }
 
 /* ------------------------------------------------------------------ sent */
@@ -171,15 +202,18 @@ TextField { margin: 0; padding: 0; }
 
 .bh-prompts {
   position: absolute; left: 0; right: 0; bottom: 0; height: 125px;
-  padding: 0 96px 54px 96px;
+  padding: 0 82px 54px 82px;
   flex-direction: row; align-items: center;
   background-color: var(--bh-bar);
   border-top-width: 1px; border-color: var(--bh-line);
 }
 .bh-prompts-side { flex-direction: row; align-items: center; }
 .bh-spacer { flex-grow: 1; }
-.bh-p { flex-direction: row; align-items: center; margin-right: 46px; min-height: 64px; }
-#bh-prompts-right > .bh-p { margin-right: 0; margin-left: 46px; }
+/* 14px padding each side (the bar's 82px + 14px keeps prompts at the 96px safe line) leaves room for the hover pill */
+.bh-p { flex-direction: row; align-items: center; margin-right: 18px; min-height: 64px; padding: 0 14px; border-radius: var(--bh-radius); }
+#bh-prompts-right > .bh-p { margin-right: 0; margin-left: 18px; }
+.bh-pointer .bh-p:hover { background-color: var(--bh-surface); }
+.bh-pointer .bh-p--disabled:hover { background-color: rgba(0, 0, 0, 0); }
 .bh-p > .bh-p-label { font-size: 26px; color: var(--bh-text); white-space: nowrap; margin-left: 12px; }
 .bh-p--primary > .bh-p-label { -unity-font-definition: url("Fonts/Barlow-Bold.ttf"); color: var(--bh-accent); }
 .bh-p--disabled { opacity: 0.45; }
@@ -212,6 +246,12 @@ TextField { margin: 0; padding: 0; }
   height: 37px; padding: 0 12px; border-radius: 8px;
   background-color: #0d0f14; border-width: 2px; border-color: #3b4150;
   -unity-font-definition: url("Fonts/JetBrainsMono-Regular.ttf"); font-size: 18px; letter-spacing: 2px; -unity-text-align: middle-center; color: #cfd3dc;
+}
+/* a thumbstick: an outlined circle with the stick's letter */
+.bh-stick {
+  width: 37px; height: 37px; border-radius: 19px; padding: 0;
+  background-color: #0d0f14; border-width: 3px; border-color: #5b6170;
+  -unity-font-definition: url("Fonts/Barlow-Bold.ttf"); font-size: 19px; -unity-text-align: middle-center; color: #cfd3dc;
 }
 .bh-spin { width: 31px; height: 31px; flex-grow: 0; }
 .bh-arc { color: var(--bh-accent); border-color: var(--bh-line); }

@@ -21,6 +21,7 @@ namespace BetaHub
         public string StepsPrompt = "Add steps if you can. It helps a lot.";
         public string Required = "required";
         public string Optional = "optional";
+        public string CharacterCount = "{0} / {1}";
         public string TermsLabel = "Terms of bug reporting";
         public string TermsAccepted = "Accepted";
         public string TermsNotAccepted = "Not accepted";
@@ -58,6 +59,7 @@ namespace BetaHub
         public string ReadTerms = "Read terms";
         public string FullScreen = "Full screen";
         public string Item = "Item";
+        public string Scroll = "Scroll";
         public string BackToForm = "Back to form";
         public string SendReport = "Send report";
         public string Sending = "Sending…";

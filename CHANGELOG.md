@@ -19,6 +19,8 @@
 - `SteamTextEntry`: Steam's floating keyboard on Steam Deck and in Big Picture through Steamworks.NET, compiled when the Steamworks.NET package is installed or `BETAHUB_STEAMWORKS` is defined.
 - Theme assets: **Create > BetaHub > Bug Report Theme** takes an accent, a neutral tint, a mode and a radius, shows the derived colors with their contrast and writes a theme stylesheet next to the asset. **BetaHub > Regenerate Theme Stylesheets** rewrites them all.
 - With only the new Input System active and no EventSystem in the scene, the widget adds one (`InputSystemUIInputModule`) while the form is open; without it UI Toolkit ignored mouse clicks.
+- Long text: What happened grows to 6 lines and Steps to reproduce to 4, then each scrolls inside and shows its first lines again when left. From 80% of a field's limit its label shows the character count.
+- The full-screen log preview shows the whole tail it reads (up to 64 KB), opens at the newest lines and scrolls with the mouse wheel, PgUp/PgDn or the right stick.
 
 ### Changed
 - Split `BugReportUI` into a headless `BetaHubReporter` component (configuration, attachments, custom fields, recording policy, submission) and a pure view. Custom UIs call `BetaHubReporter.Submit()` and follow the returned `ReportSubmission` handle instead of driving coroutines. `Issue` is now a thin HTTP client; publish/email sequencing lives in `ReportSubmission`.

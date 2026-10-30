@@ -43,7 +43,7 @@
               <ui:VisualElement class="bh-box-wrap">
                 <ui:VisualElement class="bh-glow" picking-mode="Ignore" />
                 <ui:VisualElement class="bh-box">
-                  <ui:TextField name="bh-steps" multiline="true" class="bh-input" />
+                  <ui:TextField name="bh-steps" multiline="true" class="bh-input bh-input--steps" />
                   <ui:Label name="bh-steps-prompt" class="bh-prompt" picking-mode="Ignore" text="Add steps if you can. It helps a lot." />
                 </ui:VisualElement>
               </ui:VisualElement>

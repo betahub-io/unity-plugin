@@ -26,6 +26,7 @@ namespace BetaHub
         Key,
         Face,
         Dpad,
+        Stick,
     }
 
     /// <summary>One piece of a prompt glyph: a key cap, a face button or the d-pad.</summary>

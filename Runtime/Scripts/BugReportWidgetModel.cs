@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 
 namespace BetaHub
 {
@@ -39,6 +40,8 @@ namespace BetaHub
         Send,
         Next,
         Navigate,
+        /// <summary>Scrolls a long log in the full-screen preview.</summary>
+        Scroll,
     }
 
     public enum WidgetFocusKind
@@ -81,6 +84,8 @@ namespace BetaHub
         public bool SignedIn;
         /// <summary>Sent screen: an anonymous player can still leave an email.</summary>
         public bool CanEmail;
+        /// <summary>The full-screen preview shows a log that scrolls.</summary>
+        public bool PreviewScrolls;
     }
 
     /// <summary>
@@ -144,6 +149,23 @@ namespace BetaHub
                     throw new ArgumentOutOfRangeException(nameof(state), state, null);
             }
         }
+
+        /// <summary>Share of a field's limit from which its tag shows the character count instead of its note.</summary>
+        public const double CounterThreshold = 0.8;
+
+        /// <summary>
+        /// The tag on a text field's label: its required/optional note, or the count near the limit, since the
+        /// field stops taking text there.
+        /// </summary>
+        public static string FieldTag(string note, int length, int limit, BugReportWidgetStrings s)
+        {
+            if (limit < 1) throw new ArgumentOutOfRangeException(nameof(limit), limit, "A field limit must be at least 1.");
+            if (length < limit * CounterThreshold) return note;
+            return string.Format(CultureInfo.InvariantCulture, s.CharacterCount,
+                length.ToString("N0", CultureInfo.InvariantCulture), limit.ToString("N0", CultureInfo.InvariantCulture));
+        }
+
+        public static bool IsAtLimit(int length, int limit) => length >= limit;
 
         public static bool CanSend(string description, bool termsRequired, bool termsAccepted, bool configured)
         {
@@ -240,6 +262,7 @@ namespace BetaHub
             {
                 case WidgetScreen.Preview:
                     bar.Left.Add(P(PromptAction.Navigate, s.Item));
+                    if (c.PreviewScrolls) bar.Left.Add(P(PromptAction.Scroll, s.Scroll));
                     bar.Left.Add(P(PromptAction.Confirm, c.FocusedIncluded ? s.LeaveOut : s.Include));
                     bar.Left.Add(P(PromptAction.Back, s.BackToForm));
                     break;
@@ -362,7 +385,9 @@ namespace BetaHub
         private static readonly string[] CtrlEnter = { "Ctrl", "Enter" };
         private static readonly string[] Tab = { "Tab" };
         private static readonly string[] UpDown = { "↑", "↓" };
+        private static readonly string[] PageKeys = { "PgUp", "PgDn" };
         private const string DpadUpDown = "▲ ▼";
+        private const string RightStick = "R";
 
         public static GlyphPart[] For(GlyphSet set, PromptAction action)
         {
@@ -376,6 +401,10 @@ namespace BetaHub
             if (action == PromptAction.Navigate)
             {
                 return new[] { new GlyphPart { Kind = GlyphPartKind.Dpad, Text = DpadUpDown } };
+            }
+            if (action == PromptAction.Scroll)
+            {
+                return new[] { new GlyphPart { Kind = GlyphPartKind.Stick, Text = RightStick } };
             }
             var button = PadLayout.ButtonFor(set, action);
             return new[] { new GlyphPart { Kind = GlyphPartKind.Face, Text = PadLayout.Label(set, button), Button = button } };
@@ -391,6 +420,7 @@ namespace BetaHub
                 case PromptAction.Send: return CtrlEnter;
                 case PromptAction.Next: return Tab;
                 case PromptAction.Navigate: return UpDown;
+                case PromptAction.Scroll: return PageKeys;
                 default: throw new ArgumentOutOfRangeException(nameof(action), action, null);
             }
         }

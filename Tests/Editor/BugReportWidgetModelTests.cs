@@ -22,6 +22,31 @@ namespace BetaHub.Tests
             }
         }
 
+        // --- field tags: the note, or a counter near the limit ---
+
+        // Fields stop at their limit, so the count shows before the player runs into it.
+        [Test]
+        public void FieldTag_ShowsTheNoteUntilEightyPercentOfTheLimit()
+        {
+            Assert.AreEqual("required", BugReportWidgetModel.FieldTag("required", 0, 2000, S));
+            Assert.AreEqual("required", BugReportWidgetModel.FieldTag("required", 1599, 2000, S));
+            Assert.AreEqual("1,600 / 2,000", BugReportWidgetModel.FieldTag("required", 1600, 2000, S));
+            Assert.AreEqual("2,000 / 2,000", BugReportWidgetModel.FieldTag("required", 2000, 2000, S));
+        }
+
+        [Test]
+        public void FieldTag_RejectsALimitBelowOne()
+        {
+            Assert.Throws<System.ArgumentOutOfRangeException>(() => BugReportWidgetModel.FieldTag("optional", 0, 0, S));
+        }
+
+        [Test]
+        public void IsAtLimit_OnlyWhenTheFieldIsFull()
+        {
+            Assert.IsFalse(BugReportWidgetModel.IsAtLimit(999, 1000));
+            Assert.IsTrue(BugReportWidgetModel.IsAtLimit(1000, 1000));
+        }
+
         // A plain test with a table: NUnit3TestAdapter 3.11 drops [TestCase] methods with enum arguments.
         [Test]
         public void ScreenFor_MapsEverySubmissionState()
@@ -301,6 +326,24 @@ namespace BetaHub.Tests
         {
             var context = new PromptContext { Screen = WidgetScreen.Preview, FocusedIncluded = true };
             Assert.AreEqual("Navigate:Item, Confirm:Leave out, Back:Back to form | ", Describe(BugReportWidgetModel.Prompts(context, S)));
+        }
+
+        // A long log scrolls in the full-screen preview; up and down still switch items.
+        [Test]
+        public void Preview_OfALog_AddsScroll()
+        {
+            var context = new PromptContext { Screen = WidgetScreen.Preview, FocusedIncluded = true, PreviewScrolls = true };
+            Assert.AreEqual("Navigate:Item, Scroll:Scroll, Confirm:Leave out, Back:Back to form | ", Describe(BugReportWidgetModel.Prompts(context, S)));
+        }
+
+        [Test]
+        public void Scroll_IsPageKeysOrTheRightStick()
+        {
+            CollectionAssert.AreEqual(new[] { "PgUp", "PgDn" }, PromptGlyphs.Keyboard(PromptAction.Scroll));
+            var pad = PromptGlyphs.For(GlyphSet.Xbox, PromptAction.Scroll);
+            Assert.AreEqual(1, pad.Length);
+            Assert.AreEqual(GlyphPartKind.Stick, pad[0].Kind);
+            Assert.AreEqual("R", pad[0].Text);
         }
 
         [Test]

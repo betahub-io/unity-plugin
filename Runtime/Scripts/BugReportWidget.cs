@@ -110,6 +110,8 @@ namespace BetaHub
         private const string PreviewCountName = "bh-preview-count";
         private const string PreviewListName = "bh-preview-list";
         private const string PreviewPaneName = "bh-preview-pane";
+        private const string PromptsName = "bh-prompts";
+        private const string CapActionClass = "bh-cap-right--action";
         private const string PromptsLeftName = "bh-prompts-left";
         private const string PromptsRightName = "bh-prompts-right";
         private const string ToastName = "bh-toast";
@@ -120,8 +122,10 @@ namespace BetaHub
         // class names, shared with BugReportWidget.uss
         private const string HiddenClass = "bh-hidden";
         private const string LockedClass = "bh-locked";
+        private const string PointerClass = "bh-pointer";
         private const string FieldFocusedClass = "bh-fld--focused";
         private const string FieldEditingClass = "bh-fld--editing";
+        private const string TagLimitClass = "bh-tag--limit";
         private const string RowClass = "bh-row";
         private const string RowFocusedClass = "bh-row--focused";
         private const string RowsTwoClass = "bh-rows--two";
@@ -162,6 +166,8 @@ namespace BetaHub
         private const string KeyClass = "bh-key";
         private const string KeyLastClass = "bh-key--last";
         private const string DpadClass = "bh-dpad";
+        private const string StickClass = "bh-stick";
+        private const string LogScrollClass = "bh-log-scroll";
         private const string PadClass = "bh-pad";
         private const string PadClassPrefix = "bh-pad--";
         // indexed by GlyphSet and PadButton: bh-pad--xbox, bh-pad--xbox-south
@@ -169,6 +175,13 @@ namespace BetaHub
         private static readonly string[] PadButtonClassNames = { "south", "east", "west", "north" };
         // a nudge of the mouse is not a switch from the controller
         private const float MouseMoveThreshold = 6f;
+        // PgUp/PgDn move this share of the visible log, so a line of context stays on screen.
+        private const float LogPageFraction = 0.9f;
+        // right stick: panel px per second at full tilt, ignored below the dead zone
+        private const float StickScrollSpeed = 1500f;
+        private const float StickScrollDeadZone = 0.2f;
+        // half a panel pixel: below what a layout can tell apart
+        private const float LayoutEpsilon = 0.5f;
         private const string SpinClass = "bh-spin";
         private const string ArcClass = "bh-arc";
         private const string NoteErrorClass = "bh-note--error";
@@ -246,6 +259,8 @@ namespace BetaHub
         private bool _emailNoteIsError;
         private DateTime _captureTime;
         private string _paneKey, _previewPaneKey;
+        // the full-screen preview's log, while it shows one
+        private ScrollView _previewLog;
 
         // sample mode: the editor preview and the render tests
         private bool _sample;
@@ -546,10 +561,16 @@ namespace BetaHub
             _description.Input.maxLength = BugReportWidgetModel.DescriptionLimit;
             _steps.Input.maxLength = BugReportWidgetModel.StepsLimit;
             _email.Input.maxLength = BugReportWidgetModel.EmailLimit;
+            // Long text grows the field up to its max-height, then scrolls inside it.
+            _description.Input.SetVerticalScrollerVisibility(ScrollerVisibility.Auto);
+            _steps.Input.SetVerticalScrollerVisibility(ScrollerVisibility.Auto);
 
             foreach (var field in new[] { _description, _steps, _email })
             {
                 var view = field;
+                // UI Toolkit selects all text on focus, so coming back to a field and typing replaced it.
+                view.Input.selectAllOnFocus = false;
+                view.Input.selectAllOnMouseUp = false;
                 view.Root.RegisterCallback<ClickEvent>(_ => OnFieldClicked(view));
                 view.Input.RegisterCallback<FocusInEvent>(_ => OnFieldFocusIn(view));
                 view.Input.RegisterCallback<FocusOutEvent>(_ => OnFieldFocusOut(view));
@@ -558,6 +579,12 @@ namespace BetaHub
             _terms.RegisterCallback<ClickEvent>(_ => OnTermsClicked());
             _link.RegisterCallback<ClickEvent>(_ => Act(PromptAction.Alt));
             _overlay.RegisterCallback<PointerDownEvent>(OnPointerUsed, TrickleDown.TrickleDown);
+            // A press on the prompt bar would take focus from the field being typed; that rebuilds the bar
+            // under the pointer and the click never arrives. The prompt acts on its own, so keep the focus.
+            root.Q<VisualElement>(PromptsName).RegisterCallback<PointerDownEvent>(e => e.PreventDefault());
+            // "Full screen" under the pane is a prompt too, rebuilt with every render.
+            _capRight.RegisterCallback<PointerDownEvent>(e => e.PreventDefault());
+            _capRight.RegisterCallback<ClickEvent>(_ => { if (PaneShowsAttachment) Act(PromptAction.Alt); });
             _overlay.RegisterCallback<PointerMoveEvent>(OnPointerUsed, TrickleDown.TrickleDown);
             if (TextEntry == null) TextEntry = GetComponent<ITextEntryProvider>();
 
@@ -721,6 +748,8 @@ namespace BetaHub
             if (!_bound) return;
             bool locked = _screen == WidgetScreen.Sending || _screen == WidgetScreen.Uploading || (_screen == WidgetScreen.Compose && !Configured);
             _overlay.EnableInClassList(LockedClass, locked);
+            // hover marks are for mouse players; a resting cursor must not mark a row while a controller drives
+            _overlay.EnableInClassList(PointerClass, _glyphs == GlyphSet.Keyboard);
             // a report on its way can't change, so the lock is more than a look
             _description.Input.focusable = !locked;
             _steps.Input.focusable = !locked;
@@ -760,8 +789,8 @@ namespace BetaHub
         private void RenderForm()
         {
             bool focusVisible = _screen == WidgetScreen.Compose && Configured;
-            RenderField(_description, Strings.DescriptionLabel, Strings.Required, Strings.DescriptionPrompt, focusVisible && FocusKind == WidgetFocusKind.Field && _focus.Index == 0);
-            RenderField(_steps, Strings.StepsLabel, Strings.Optional, Strings.StepsPrompt, focusVisible && FocusKind == WidgetFocusKind.Field && _focus.Index == 1);
+            RenderField(_description, Strings.DescriptionLabel, Strings.Required, BugReportWidgetModel.DescriptionLimit, Strings.DescriptionPrompt, focusVisible && FocusKind == WidgetFocusKind.Field && _focus.Index == 0);
+            RenderField(_steps, Strings.StepsLabel, Strings.Optional, BugReportWidgetModel.StepsLimit, Strings.StepsPrompt, focusVisible && FocusKind == WidgetFocusKind.Field && _focus.Index == 1);
 
             _terms.EnableInClassList(HiddenClass, !TermsRequired);
             _terms.EnableInClassList(RowFocusedClass, focusVisible && FocusKind == WidgetFocusKind.Terms);
@@ -796,11 +825,13 @@ namespace BetaHub
             _attachmentsGroup.EnableInClassList(HiddenClass, _attachments.Items.Count == 0);
         }
 
-        private void RenderField(FieldView field, string label, string tag, string prompt, bool focused)
+        private void RenderField(FieldView field, string label, string note, int limit, string prompt, bool focused)
         {
             var labels = field.Root.Q<VisualElement>(className: "bh-fld-label").Query<Label>().ToList();
             labels[0].text = Caps(label);
-            labels[1].text = tag;
+            int length = field.Input.value.Length;
+            labels[1].text = BugReportWidgetModel.FieldTag(note, length, limit, Strings);
+            labels[1].EnableInClassList(TagLimitClass, BugReportWidgetModel.IsAtLimit(length, limit));
             bool editing = _typing == field;
             field.Root.EnableInClassList(FieldFocusedClass, focused || editing);
             field.Root.EnableInClassList(FieldEditingClass, editing);
@@ -813,7 +844,7 @@ namespace BetaHub
             bool canEmail = CanEmail;
             bool showEmail = !SignedIn && (canEmail || !string.IsNullOrEmpty(_pendingEmail));
             _email.Root.EnableInClassList(HiddenClass, !showEmail);
-            RenderField(_email, Strings.EmailLabel, Strings.Optional, Strings.EmailPrompt, canEmail);
+            RenderField(_email, Strings.EmailLabel, Strings.Optional, BugReportWidgetModel.EmailLimit, Strings.EmailPrompt, canEmail);
             _email.Input.SetEnabled(canEmail);
 
             string note = _emailNote ?? (SignedIn ? Strings.SignedInNote
@@ -853,22 +884,25 @@ namespace BetaHub
 
         // ------------------------------------------------------------------ pane: follows focus
 
+        // The pane shows the focused attachment, with "Full screen" under it; otherwise the screenshot.
+        private bool PaneShowsAttachment => _screen == WidgetScreen.Compose && Configured && _focus.OnAttachment;
+
         private void RenderPane()
         {
             AttachmentDescriptor item = null;
-            bool showFocused = _screen == WidgetScreen.Compose && Configured && _focus.OnAttachment;
-            if (showFocused) item = _attachments.Items[_focus.Index];
+            if (PaneShowsAttachment) item = _attachments.Items[_focus.Index];
 
             string key = item == null ? BuiltInAttachments.Screenshot + ":frame" : item.Id;
             if (key != _paneKey)
             {
                 _paneKey = key;
-                FillPane(_pane, item);
+                FillPane(_pane, item, fullScreen: false);
             }
 
             _capLeft.text = item == null ? Caps(Strings.ScreenshotCaption)
                 : Caps(string.IsNullOrEmpty(item.Meta) ? item.Name : item.Name + Separator + item.Meta);
             _capRight.Clear();
+            _capRight.EnableInClassList(CapActionClass, item != null);
             if (item != null)
             {
                 _capRight.Add(Glyph(PromptAction.Alt));
@@ -903,7 +937,7 @@ namespace BetaHub
             if (item.Id != _previewPaneKey)
             {
                 _previewPaneKey = item.Id;
-                FillPane(_previewPane, item);
+                FillPane(_previewPane, item, fullScreen: true);
             }
         }
 
@@ -925,9 +959,10 @@ namespace BetaHub
             }
         }
 
-        private void FillPane(VisualElement pane, AttachmentDescriptor item)
+        private void FillPane(VisualElement pane, AttachmentDescriptor item, bool fullScreen)
         {
             pane.Clear();
+            if (fullScreen) _previewLog = null;
             if (item == null || item.Id == BuiltInAttachments.Screenshot)
             {
                 AddImage(pane, ScreenshotTexture(), Strings.NoScreenshot);
@@ -954,7 +989,8 @@ namespace BetaHub
                     AddImage(pane, _sample ? _sampleTexture : LoadTexture(item.FilePath), Strings.NoScreenshot);
                     break;
                 case AttachmentKind.Log:
-                    AddLog(pane, item);
+                    if (fullScreen) AddScrollingLog(pane, item);
+                    else AddLog(pane, item);
                     break;
                 case AttachmentKind.Data:
                     AddKeyValues(pane, null, item.Fields);
@@ -1042,6 +1078,42 @@ namespace BetaHub
             pane.Add(grid);
         }
 
+        // Full screen: every line read for the preview, newest at the bottom and in view first.
+        private void AddScrollingLog(VisualElement pane, AttachmentDescriptor item)
+        {
+            string text = _sample ? SampleLog : ReadLogForPreview(item);
+            var scroll = new ScrollView(ScrollViewMode.Vertical) { horizontalScrollerVisibility = ScrollerVisibility.Hidden };
+            scroll.AddToClassList(LogScrollClass);
+            foreach (var line in BugReportWidgetModel.LogTail(text, int.MaxValue).Split('\n'))
+            {
+                scroll.Add(LogLine(line));
+            }
+            // Stays at the end through layout passes (wrapped lines keep growing it) until the player scrolls up.
+            bool atEnd = true;
+            scroll.verticalScroller.valueChanged += value => atEnd = value >= scroll.verticalScroller.highValue - LayoutEpsilon;
+            EventCallback<GeometryChangedEvent> keepAtEnd = _ =>
+            {
+                if (atEnd) scroll.verticalScroller.value = scroll.verticalScroller.highValue;
+            };
+            scroll.contentContainer.RegisterCallback(keepAtEnd);
+            scroll.contentViewport.RegisterCallback(keepAtEnd);
+            pane.Add(scroll);
+            _previewLog = scroll;
+        }
+
+        private Label LogLine(string line)
+        {
+            var label = new Label(line);
+            if (ContainsAny(line, ErrorMarkers)) label.AddToClassList(LogErrorClass);
+            else if (ContainsAny(line, WarningMarkers)) label.AddToClassList(LogWarnClass);
+            return label;
+        }
+
+        private void ScrollPreviewLog(float pages)
+        {
+            _previewLog.verticalScroller.value += pages * LogPageFraction * _previewLog.contentViewport.layout.height;
+        }
+
         private void AddLog(VisualElement pane, AttachmentDescriptor item)
         {
             string text = _sample ? SampleLog : ReadLogForPreview(item);
@@ -1049,10 +1121,7 @@ namespace BetaHub
             box.AddToClassList(PaneLogClass);
             foreach (var line in BugReportWidgetModel.LogTail(text, BugReportWidgetModel.LogTailLines).Split('\n'))
             {
-                var label = new Label(line);
-                if (ContainsAny(line, ErrorMarkers)) label.AddToClassList(LogErrorClass);
-                else if (ContainsAny(line, WarningMarkers)) label.AddToClassList(LogWarnClass);
-                box.Add(label);
+                box.Add(LogLine(line));
             }
             pane.Add(box);
         }
@@ -1110,6 +1179,7 @@ namespace BetaHub
                 Configured = Configured,
                 SignedIn = SignedIn,
                 CanEmail = CanEmail,
+                PreviewScrolls = _screen == WidgetScreen.Preview && _previewLog != null,
             };
             var bar = BugReportWidgetModel.Prompts(context, Strings);
             FillPrompts(_promptsLeft, bar.Left);
@@ -1161,6 +1231,9 @@ namespace BetaHub
                     case GlyphPartKind.Dpad:
                         cap.AddToClassList(DpadClass);
                         break;
+                    case GlyphPartKind.Stick:
+                        cap.AddToClassList(StickClass);
+                        break;
                     case GlyphPartKind.Face:
                         string set = PadClassPrefix + GlyphSetClassNames[(int)_glyphs];
                         cap.AddToClassList(PadClass);
@@ -1205,6 +1278,8 @@ namespace BetaHub
             {
                 if (evt.keyCode == KeyCode.UpArrow) MovePreview(-1);
                 else if (evt.keyCode == KeyCode.DownArrow) MovePreview(1);
+                else if (evt.keyCode == KeyCode.PageUp && _previewLog != null) ScrollPreviewLog(-1f);
+                else if (evt.keyCode == KeyCode.PageDown && _previewLog != null) ScrollPreviewLog(1f);
                 else handled = HandleCommonKeys(evt.keyCode);
             }
             else
@@ -1280,6 +1355,14 @@ namespace BetaHub
                 UseGlyphs(_lastPadGlyphs);
                 OnPadButton(PadLayout.ActionFor(_lastPadGlyphs, FaceButtons[i]));
                 if (!IsVisible) return;
+            }
+
+            float stick = pad.rightStick.ReadValue().y;
+            if (_screen == WidgetScreen.Preview && _previewLog != null && Mathf.Abs(stick) > StickScrollDeadZone)
+            {
+                UseGlyphs(_lastPadGlyphs);
+                // tilting up reads back towards the start
+                _previewLog.verticalScroller.value -= stick * StickScrollSpeed * Time.unscaledDeltaTime;
             }
 
             var direction = PadDirection(pad);
@@ -1373,6 +1456,7 @@ namespace BetaHub
                     if (action == PromptAction.Back) { _screen = WidgetScreen.Compose; Render(); FocusOverlay(); }
                     else if (action == PromptAction.Confirm) { ToggleAttachment(_previewIndex); }
                     else if (action == PromptAction.Navigate) { MovePreview(1); }
+                    else if (action == PromptAction.Scroll && _previewLog != null) { ScrollPreviewLog(1f); }
                     break;
 
                 case WidgetScreen.Compose:
@@ -1497,6 +1581,7 @@ namespace BetaHub
 
         private void OnFieldFocusOut(FieldView field)
         {
+            ScrollToStart(field);
             if (_typing != field) return;
             _typing = null;
             Render();
@@ -1511,9 +1596,25 @@ namespace BetaHub
             field.Input.schedule.Execute(() =>
             {
                 if (_typing != field) return;
-                field.Input.Focus();
+                // A focused TextField hands a second Focus() to its own frame, where typed keys are dropped;
+                // a mouse click has already focused the field by now.
+                if (!HoldsFocus(field.Input)) field.Input.Focus();
                 OpenTextEntry(field);
             });
+        }
+
+        // A field left in the middle of long text shows its first lines again.
+        private static void ScrollToStart(FieldView field)
+        {
+            // single-line fields have no scroll view
+            var scroll = field.Input.Q<ScrollView>();
+            if (scroll != null) scroll.scrollOffset = Vector2.zero;
+        }
+
+        private static bool HoldsFocus(VisualElement element)
+        {
+            var focused = element.focusController?.focusedElement as VisualElement;
+            return focused != null && (focused == element || element.Contains(focused));
         }
 
         private void StopTyping()
@@ -1828,7 +1929,11 @@ namespace BetaHub
                     stream.Seek(start, SeekOrigin.Begin);
                     var bytes = new byte[stream.Length - start];
                     int read = stream.Read(bytes, 0, bytes.Length);
-                    return Encoding.UTF8.GetString(bytes, 0, read);
+                    string text = Encoding.UTF8.GetString(bytes, 0, read);
+                    if (start == 0) return text;
+                    // the read began mid-file: its first line (and maybe a split character) is a fragment
+                    int firstBreak = text.IndexOf('\n');
+                    return firstBreak < 0 ? "" : text.Substring(firstBreak + 1);
                 }
             }
             catch (Exception ex)
@@ -1840,7 +1945,16 @@ namespace BetaHub
 
         // ------------------------------------------------------------------ sample data
 
+        // longer than the full-screen preview, so its renders show the log scrolled to the end
         private const string SampleLog =
+            "[14:00:02] Game started, build 0.9.4 (Steam)\n[14:00:02] Graphics: Vulkan, 1920x1080, VSync on\n" +
+            "[14:00:03] Audio: 48 kHz, 2 channels\n[14:00:04] Input: keyboard and mouse, gamepad connected\n" +
+            "[14:00:05] Loading save slot 2\n[14:00:06] Save loaded: 41 h 12 min played\n[14:00:08] Scene loaded: Town_Hub\n" +
+            "[14:00:09] Quest log restored: 14 active, 63 done\n[14:00:21] Shop opened: Blacksmith\n[14:00:34] Bought Shield_01\n" +
+            "[14:00:35] Shop closed\n[14:01:02] Warn Texture streaming budget exceeded (1.1 GB)\n[14:01:10] Teleport: Town_Hub -> Dungeon_03\n" +
+            "[14:01:11] Unloading Town_Hub\n[14:01:14] Navmesh built for Dungeon_03 in 380 ms\n[14:01:20] Enemy group spawned: Skeleton x4\n" +
+            "[14:01:42] Combat started\n[14:01:58] Warn Animation event missing on Skeleton_Attack_02\n[14:02:03] Combat ended: 4 kills\n" +
+            "[14:02:04] Loot dropped: Sword_02, 31 gold\n[14:02:06] Autosave written in 120 ms\n" +
             "[14:02:11] Scene loaded: Dungeon_03\n[14:02:12] Player spawned at (12.4, 0.0, -3.1)\n[14:02:13] Inventory opened\n" +
             "[14:02:14] Warn Missing ref: Sword_LOD1\n[14:02:15] Inventory.Drop(sword)\n[14:02:15] Warn Drop target Shield_01 has no slot\n" +
             "[14:02:15] NullReferenceException at Inventory.cs:212\n[14:02:15]   at InventoryUI.OnDrop (InventoryUI.cs:88)\n" +
