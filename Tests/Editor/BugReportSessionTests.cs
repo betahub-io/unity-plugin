@@ -428,6 +428,47 @@ namespace BetaHub.Tests
             Assert.AreEqual(0, draft.InlineAttachmentIds.Count);
         }
 
+        // --- BuildSuggestion ---
+
+        [Test]
+        public void BuildSuggestion_SendsTheScreenshotOnly_WithNoStepsOrFields()
+        {
+            _session.SetFrameScreenshot(ShotPath);
+            _session.AddFile("/tmp/slot2.sav", "Save", false);
+            _session.SetCustomField("level", "Dungeon_03");
+            var set = _session.CollectAttachments(AllBuiltIns());
+
+            var draft = _session.BuildSuggestion(Description, set);
+
+            Assert.AreEqual(Description, draft.Description);
+            Assert.AreEqual("", draft.Steps);
+            var upload = draft.Uploads.Single();
+            Assert.AreEqual((BuiltInAttachments.Screenshot, UploadKind.Screenshot, ShotPath, true),
+                (upload.AttachmentId, upload.Kind, upload.Path, upload.RemoveAfterUpload));
+            Assert.AreEqual(0, draft.InlineAttachmentIds.Count);
+            Assert.AreEqual(0, draft.CustomFields.Count);
+        }
+
+        [Test]
+        public void BuildSuggestion_ScreenshotLeftOut_SendsText()
+        {
+            _session.SetFrameScreenshot(ShotPath);
+            var set = _session.CollectAttachments(AllBuiltIns());
+            set.SetIncluded(BuiltInAttachments.Screenshot, false);
+
+            Assert.AreEqual(0, _session.BuildSuggestion(Description, set).Uploads.Count);
+        }
+
+        [Test]
+        public void TravelsWithSuggestion_OnlyTheScreenshot()
+        {
+            Assert.IsTrue(BugReportSession.TravelsWithSuggestion(BuiltInAttachments.Screenshot));
+            foreach (var id in new[] { BuiltInAttachments.Recording, BuiltInAttachments.PlayerLog, BuiltInAttachments.Latency, BuiltInAttachments.Location, "save" })
+            {
+                Assert.IsFalse(BugReportSession.TravelsWithSuggestion(id), id);
+            }
+        }
+
         // --- legacy toggles ---
 
         [Test]

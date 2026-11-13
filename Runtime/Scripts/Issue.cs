@@ -174,7 +174,7 @@ namespace BetaHub
         }
 
         // Server errors arrive as {"error":"...","status":"..."}; fall back to the transport error.
-        private static string ExtractErrorMessage(UnityWebRequest www)
+        internal static string ExtractErrorMessage(UnityWebRequest www)
         {
             string body = www.downloadHandler?.text;
             if (!string.IsNullOrEmpty(body))

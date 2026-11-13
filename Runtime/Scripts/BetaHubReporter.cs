@@ -312,6 +312,41 @@ namespace BetaHub
         {
             if (attachments == null) throw new ArgumentNullException(nameof(attachments));
 
+            var submission = NewSubmission(authToken => new Issue(SubmitEndpoint, ProjectID, authToken, _recorder));
+            if (submission.State == ReportSubmissionState.Failed) return submission;
+            StartCoroutine(PrepareAndStart(submission, description, steps, attachments));
+            return submission;
+        }
+
+        /// <summary>
+        /// Sends a suggestion (a BetaHub feature request): the description and, if included, the screenshot.
+        /// The other rows of <paramref name="attachments"/> stay behind. Publishes on its own: a suggestion
+        /// has no email step. Same handle and failure rules as <see cref="Submit(string, string, AttachmentSet)"/>.
+        /// </summary>
+        public ReportSubmission SubmitSuggestion(string description, AttachmentSet attachments)
+        {
+            if (attachments == null) throw new ArgumentNullException(nameof(attachments));
+
+            var submission = NewSubmission(authToken => new FeatureRequest(SubmitEndpoint, ProjectID, authToken));
+            if (submission.State == ReportSubmissionState.Failed) return submission;
+            BugReportDraft draft;
+            try
+            {
+                draft = Session.BuildSuggestion(description, attachments);
+            }
+            catch (Exception ex)
+            {
+                submission.Fail("Could not build the suggestion: " + ex.Message);
+                return submission;
+            }
+            // nothing uploads after the draft, so there is nothing to wait for
+            submission.Start(draft, ReleaseTarget.Latest, MediaUploadType.UploadInBackground, autoPublish: true);
+            return submission;
+        }
+
+        // A handle on its way, or one already failed when the configuration or the token is missing.
+        private ReportSubmission NewSubmission(Func<string, IIssueClient> newClient)
+        {
             string configurationError = ConfigurationError;
             if (configurationError != null)
             {
@@ -330,13 +365,10 @@ namespace BetaHub
                 Log.Info("A previous report is still uploading. Recording stays paused until it finishes.");
             }
 
-            var client = new Issue(SubmitEndpoint, ProjectID, authToken, _recorder);
-            var submission = new ReportSubmission(client, this, Log);
+            var submission = new ReportSubmission(newClient(authToken), this, Log);
             submission.DraftCreated += _ => Session.ClearAttachments();
             _submissions.Add(submission);
             _submissions.RemoveAll(s => s.IsFinished);
-
-            StartCoroutine(PrepareAndStart(submission, description, steps, attachments));
             return submission;
         }
 

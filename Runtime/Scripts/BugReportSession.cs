@@ -367,6 +367,22 @@ namespace BetaHub
             return draft;
         }
 
+        /// <summary>BetaHub takes only the screenshot with a suggestion.</summary>
+        public static bool TravelsWithSuggestion(string attachmentId) => attachmentId == BuiltInAttachments.Screenshot;
+
+        /// <summary>A suggestion: the description and, if included, the screenshot. No steps, no custom fields.</summary>
+        public BugReportDraft BuildSuggestion(string description, AttachmentSet attachments)
+        {
+            if (attachments == null) throw new ArgumentNullException(nameof(attachments));
+
+            var draft = new BugReportDraft { Description = description, Steps = "" };
+            foreach (var item in attachments.Items)
+            {
+                if (TravelsWithSuggestion(item.Id) && attachments.IsIncluded(item.Id)) draft.Uploads.Add(UploadFor(item));
+            }
+            return draft;
+        }
+
         private static ReportUpload UploadFor(AttachmentDescriptor item)
         {
             var upload = new ReportUpload { AttachmentId = item.Id, Path = item.FilePath, RemoveAfterUpload = item.RemoveAfterUpload };
