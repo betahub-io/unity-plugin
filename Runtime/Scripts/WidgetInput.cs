@@ -25,11 +25,11 @@ namespace BetaHub
     {
         Key,
         Face,
+        /// <summary>A chip: the d-pad, a stick direction or a shoulder button.</summary>
         Dpad,
-        Stick,
     }
 
-    /// <summary>One piece of a prompt glyph: a key cap, a face button or the d-pad.</summary>
+    /// <summary>One piece of a prompt glyph: a key cap, a face button or a chip.</summary>
     public struct GlyphPart
     {
         public GlyphPartKind Kind;
@@ -47,6 +47,10 @@ namespace BetaHub
         private static readonly string[] XboxLabels = { "A", "B", "X", "Y" };
         private static readonly string[] PlayStationLabels = { "✕", "○", "□", "△" };
         private static readonly string[] SwitchLabels = { "B", "A", "Y", "X" };
+        // left, right: the names each pad prints on its shoulder buttons
+        private static readonly string[] XboxShoulders = { "LB", "RB" };
+        private static readonly string[] PlayStationShoulders = { "L1", "R1" };
+        private static readonly string[] SwitchShoulders = { "L", "R" };
 
         public static PadButton ButtonFor(GlyphSet set, PromptAction action)
         {
@@ -78,6 +82,18 @@ namespace BetaHub
                 case PadButton.West: return PromptAction.Alt;
                 case PadButton.North: return PromptAction.Send;
                 default: throw new ArgumentOutOfRangeException(nameof(button), button, null);
+            }
+        }
+
+        public static string Shoulder(GlyphSet set, bool left)
+        {
+            int side = left ? 0 : 1;
+            switch (set)
+            {
+                case GlyphSet.Xbox: return XboxShoulders[side];
+                case GlyphSet.PlayStation: return PlayStationShoulders[side];
+                case GlyphSet.Switch: return SwitchShoulders[side];
+                default: throw new ArgumentOutOfRangeException(nameof(set), set, "The keyboard has no shoulder buttons.");
             }
         }
 

@@ -34,13 +34,13 @@ namespace BetaHub.Tests
         }
 
         private static Shot S(string name, WidgetPreviewState state, int attachments = 3, int focus = -1, bool signedIn = false, bool terms = false, bool typing = false,
-            GlyphSet glyphs = GlyphSet.Keyboard, string theme = "Dark")
+            GlyphSet glyphs = GlyphSet.Keyboard, string theme = "Dark", ReportType type = ReportType.Bug)
         {
             return new Shot
             {
                 Name = name,
                 Theme = theme,
-                Options = new WidgetPreviewOptions { State = state, AttachmentCount = attachments, FocusedAttachment = focus, SignedIn = signedIn, Terms = terms, Typing = typing, Glyphs = glyphs },
+                Options = new WidgetPreviewOptions { State = state, AttachmentCount = attachments, FocusedAttachment = focus, SignedIn = signedIn, Terms = terms, Typing = typing, Glyphs = glyphs, Type = type },
             };
         }
 
@@ -66,6 +66,8 @@ namespace BetaHub.Tests
             S("compose-playstation-typing", WidgetPreviewState.Compose, typing: true, glyphs: GlyphSet.PlayStation),
             S("preview-playstation", WidgetPreviewState.Preview, attachments: 9, glyphs: GlyphSet.PlayStation),
             S("sent-switch", WidgetPreviewState.Sent, glyphs: GlyphSet.Switch),
+            S("compose-suggestion", WidgetPreviewState.Compose, terms: true, type: ReportType.Suggestion),
+            S("sent-suggestion", WidgetPreviewState.Sent, type: ReportType.Suggestion),
         };
 
         [UnityTest]
@@ -83,6 +85,8 @@ namespace BetaHub.Tests
             {
                 S("deck-compose-9", WidgetPreviewState.Compose, attachments: 9, focus: 2, glyphs: GlyphSet.Xbox),
                 S("deck-sent", WidgetPreviewState.Sent),
+                // the longest tab label with a pad's shoulder buttons either side
+                S("deck-compose-suggestion", WidgetPreviewState.Compose, terms: true, glyphs: GlyphSet.PlayStation, type: ReportType.Suggestion),
             });
         }
 

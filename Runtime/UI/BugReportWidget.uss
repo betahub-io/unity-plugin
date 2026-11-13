@@ -47,11 +47,31 @@ TextField { margin: 0; padding: 0; }
 .bh-sub--error { color: var(--bh-err); }
 .bh-sub--warn { color: var(--bh-warn); }
 
+/* header tabs: the report and its attachments. The title's height and margins, so the form stays where
+   it is under either. A keyboard's 1 and 2 sit inside the tabs, a pad's shoulder buttons either side. */
+.bh-tabs { flex-direction: row; align-items: flex-end; height: 58px; margin: 10px 0 9px 0; flex-shrink: 0; }
+.bh-tabs-shoulder { flex-direction: row; align-self: center; }
+.bh-tabs-shoulder--left { margin-right: 18px; }
+.bh-tab { flex-direction: column; margin-right: 34px; }
+.bh-tab-line { flex-direction: row; align-items: center; margin-bottom: 6px; }
+.bh-tab-key { flex-direction: row; align-items: center; margin-right: 12px; }
+.bh-tab-text { -unity-font-definition: url("Fonts/BarlowSemiCondensed-Bold.ttf"); font-size: 38px; letter-spacing: 1px; color: var(--bh-muted); white-space: nowrap; }
+.bh-tab--on .bh-tab-text { color: var(--bh-text); }
+.bh-pointer .bh-tab:hover .bh-tab-text { color: var(--bh-text); }
+.bh-tab-mark { height: 5px; }
+.bh-tab--on > .bh-tab-mark { background-color: var(--bh-accent); }
+.bh-tab-badge { margin-left: 12px; padding: 1px 11px; border-radius: 14px; background-color: var(--bh-line); }
+.bh-tab-badge > Label { -unity-font-definition: url("Fonts/BarlowSemiCondensed-Bold.ttf"); font-size: 22px; color: var(--bh-text); }
+.bh-tab--on .bh-tab-badge { background-color: var(--bh-accent); }
+.bh-tab--on .bh-tab-badge > Label { color: var(--bh-on-accent); }
+
 .bh-locked .bh-form, .bh-locked .bh-rows { opacity: 0.55; }
 
 /* ------------------------------------------------------------------ fields */
 
 .bh-form { flex-direction: column; }
+/* the type and terms rows keep the fields' spacing */
+.bh-form > .bh-row { margin-bottom: 20px; flex-shrink: 0; }
 .bh-fld { margin-bottom: 20px; flex-shrink: 0; }
 .bh-fld-label { flex-direction: row; justify-content: space-between; align-items: flex-end; margin-bottom: 9px; }
 .bh-fld-label > Label { -unity-font-definition: url("Fonts/BarlowSemiCondensed-SemiBold.ttf"); font-size: 26px; letter-spacing: 1.5px; color: var(--bh-muted); }
@@ -93,7 +113,11 @@ TextField { margin: 0; padding: 0; }
 .bh-input .unity-scroller--vertical .unity-scroller__slider .unity-base-slider__tracker,
 .bh-log-scroll .unity-scroller--vertical .unity-scroller__slider .unity-base-slider__tracker { background-color: rgba(0, 0, 0, 0); border-width: 0; }
 .bh-input .unity-scroller--vertical .unity-scroller__slider .unity-base-slider__dragger,
-.bh-log-scroll .unity-scroller--vertical .unity-scroller__slider .unity-base-slider__dragger { left: 0; width: 10px; border-width: 0; border-radius: 5px; background-color: var(--bh-muted); }
+.bh-log-scroll .unity-scroller--vertical .unity-scroller__slider .unity-base-slider__dragger { left: 0; width: 10px; border-width: 0; border-radius: 5px; background-color: var(--bh-line); }
+.bh-input .unity-scroller--vertical .unity-scroller__slider .unity-base-slider__dragger:hover,
+.bh-log-scroll .unity-scroller--vertical .unity-scroller__slider .unity-base-slider__dragger:hover { background-color: var(--bh-muted); }
+.bh-input .unity-scroller--vertical .unity-scroller__slider .unity-base-slider__dragger:active,
+.bh-log-scroll .unity-scroller--vertical .unity-scroller__slider .unity-base-slider__dragger:active { background-color: var(--bh-accent); }
 .bh-input .unity-scroller--vertical .unity-scroller__slider .unity-base-slider__dragger-border,
 .bh-log-scroll .unity-scroller--vertical .unity-scroller__slider .unity-base-slider__dragger-border { display: none; }
 .bh-prompt { position: absolute; left: 17px; top: 14px; right: 17px; font-size: 30px; color: var(--bh-muted); }
@@ -126,6 +150,23 @@ TextField { margin: 0; padding: 0; }
 .bh-ometa { font-size: 24px; color: var(--bh-muted); margin-left: 15px; white-space: nowrap; flex-shrink: 0; }
 .bh-rows--two .bh-ometa { display: none; }
 .bh-rows--two .bh-oname { font-size: 26px; }
+
+.bh-oname--off { color: var(--bh-muted); }
+
+/* include or leave out: a box ticked in the accent colour. The tick is JetBrains Mono's, the only
+   bundled font that has one; unticked it is drawn clear. */
+.bh-check { width: 38px; height: 38px; margin-right: 18px; flex-shrink: 0; align-items: center; justify-content: center; border-width: 3px; border-color: var(--bh-muted); border-radius: 7px; }
+.bh-check-mark { -unity-font-definition: url("Fonts/JetBrainsMono-Regular.ttf"); font-size: 28px; -unity-text-align: middle-center; color: rgba(0, 0, 0, 0); }
+.bh-pointer .bh-check:hover { border-color: var(--bh-text); }
+.bh-locked.bh-pointer .bh-check:hover { border-color: var(--bh-muted); }
+.bh-check.bh-check--on { background-color: var(--bh-accent); border-color: var(--bh-accent); }
+.bh-check--on > .bh-check-mark { color: var(--bh-on-accent); }
+
+/* the report type: both values in view, the chosen one filled */
+.bh-switch { flex-direction: row; flex-shrink: 0; padding: 4px; border-radius: 8px; background-color: var(--bh-field); }
+.bh-switch-opt { padding: 7px 18px; border-radius: 6px; -unity-font-definition: url("Fonts/BarlowSemiCondensed-Bold.ttf"); font-size: 24px; letter-spacing: 1.3px; color: var(--bh-muted); white-space: nowrap; }
+.bh-pointer .bh-switch-opt:hover { color: var(--bh-text); }
+.bh-switch-opt.bh-switch-opt--on { background-color: var(--bh-accent); color: var(--bh-on-accent); }
 
 .bh-oval { flex-direction: row; align-items: center; flex-shrink: 0; }
 .bh-oval > Label { -unity-font-definition: url("Fonts/BarlowSemiCondensed-Bold.ttf"); font-size: 26px; letter-spacing: 1.3px; color: var(--bh-accent); white-space: nowrap; }
@@ -214,6 +255,8 @@ TextField { margin: 0; padding: 0; }
 #bh-prompts-right > .bh-p { margin-right: 0; margin-left: 18px; }
 .bh-pointer .bh-p:hover { background-color: var(--bh-surface); }
 .bh-pointer .bh-p--disabled:hover { background-color: rgba(0, 0, 0, 0); }
+/* Move only explains the arrows; there is nothing to click */
+.bh-pointer .bh-p--hint:hover { background-color: rgba(0, 0, 0, 0); }
 .bh-p > .bh-p-label { font-size: 26px; color: var(--bh-text); white-space: nowrap; margin-left: 12px; }
 .bh-p--primary > .bh-p-label { -unity-font-definition: url("Fonts/Barlow-Bold.ttf"); color: var(--bh-accent); }
 .bh-p--disabled { opacity: 0.45; }
@@ -246,12 +289,6 @@ TextField { margin: 0; padding: 0; }
   height: 37px; padding: 0 12px; border-radius: 8px;
   background-color: #0d0f14; border-width: 2px; border-color: #3b4150;
   -unity-font-definition: url("Fonts/JetBrainsMono-Regular.ttf"); font-size: 18px; letter-spacing: 2px; -unity-text-align: middle-center; color: #cfd3dc;
-}
-/* a thumbstick: an outlined circle with the stick's letter */
-.bh-stick {
-  width: 37px; height: 37px; border-radius: 19px; padding: 0;
-  background-color: #0d0f14; border-width: 3px; border-color: #5b6170;
-  -unity-font-definition: url("Fonts/Barlow-Bold.ttf"); font-size: 19px; -unity-text-align: middle-center; color: #cfd3dc;
 }
 .bh-spin { width: 31px; height: 31px; flex-grow: 0; }
 .bh-arc { color: var(--bh-accent); border-color: var(--bh-line); }

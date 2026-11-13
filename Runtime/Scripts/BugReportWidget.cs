@@ -44,6 +44,8 @@ namespace BetaHub
         public bool Typing;
         /// <summary>Whose buttons the prompt bar shows.</summary>
         public GlyphSet Glyphs;
+        /// <summary>A bug report or a suggestion.</summary>
+        public ReportType Type;
         /// <summary>A stylesheet to preview instead of the assigned one; null shows the assigned one. The Theme field is left alone.</summary>
         public StyleSheet Theme;
     }
@@ -65,6 +67,8 @@ namespace BetaHub
         private const float SpinnerDegreesPerTick = 6f;
         private const float PaneAspect = 9f / 16f;
         private const int MaxSampleAttachments = 9;
+        // BetaHub's default for a project's shortest suggestion
+        private const int DefaultSuggestionMinLength = 80;
         private const string TimeFormat = "HH:mm:ss";
         private const string Separator = " · ";
         private const string SampleIssueId = "4821";
@@ -82,6 +86,11 @@ namespace BetaHub
         private const string OverlayName = "bh-overlay";
         private const string KickerName = "bh-kicker";
         private const string TitleName = "bh-title";
+        private const string TabsName = "bh-tabs";
+        private const string TypeName = "bh-type";
+        private const string TypeBugName = "bh-type-bug";
+        private const string TypeSuggestionName = "bh-type-suggestion";
+        private const string TermsCheckName = "bh-terms-check";
         private const string SubtitleName = "bh-subtitle";
         private const string ScreenName = "bh-screen";
         private const string FormName = "bh-form";
@@ -105,7 +114,7 @@ namespace BetaHub
         private const string SentNoteName = "bh-sent-note";
         private const string PreviewName = "bh-preview";
         private const string PreviewKickerName = "bh-preview-kicker";
-        private const string PreviewTitleName = "bh-preview-title";
+        private const string PreviewTabsName = "bh-preview-tabs";
         private const string PreviewSubtitleName = "bh-preview-subtitle";
         private const string PreviewCountName = "bh-preview-count";
         private const string PreviewListName = "bh-preview-list";
@@ -131,6 +140,21 @@ namespace BetaHub
         private const string RowsTwoClass = "bh-rows--two";
         private const string RowNameClass = "bh-row-name";
         private const string NameClass = "bh-oname";
+        private const string NameOffClass = "bh-oname--off";
+        private const string CheckClass = "bh-check";
+        private const string CheckOnClass = "bh-check--on";
+        private const string CheckMarkClass = "bh-check-mark";
+        private const string CheckMark = "✓";
+        private const string SwitchOptionOnClass = "bh-switch-opt--on";
+        private const string TabsShoulderClass = "bh-tabs-shoulder";
+        private const string TabsShoulderLeftClass = "bh-tabs-shoulder--left";
+        private const string TabClass = "bh-tab";
+        private const string TabOnClass = "bh-tab--on";
+        private const string TabLineClass = "bh-tab-line";
+        private const string TabKeyClass = "bh-tab-key";
+        private const string TabTextClass = "bh-tab-text";
+        private const string TabMarkClass = "bh-tab-mark";
+        private const string TabBadgeClass = "bh-tab-badge";
         private const string MetaClass = "bh-ometa";
         private const string ValueClass = "bh-oval";
         private const string ValueMutedClass = "bh-oval--muted";
@@ -161,12 +185,12 @@ namespace BetaHub
         private const string PromptClass = "bh-p";
         private const string PromptPrimaryClass = "bh-p--primary";
         private const string PromptDisabledClass = "bh-p--disabled";
+        private const string PromptHintClass = "bh-p--hint";
         private const string PromptLabelClass = "bh-p-label";
         private const string GlyphClass = "bh-glyph";
         private const string KeyClass = "bh-key";
         private const string KeyLastClass = "bh-key--last";
         private const string DpadClass = "bh-dpad";
-        private const string StickClass = "bh-stick";
         private const string LogScrollClass = "bh-log-scroll";
         private const string PadClass = "bh-pad";
         private const string PadClassPrefix = "bh-pad--";
@@ -205,6 +229,10 @@ namespace BetaHub
         [Tooltip("Opened from the terms row. Leave empty to show the row without a link.")]
         public string TermsUrl = "";
 
+        [Tooltip("Shortest suggestion BetaHub accepts: your project's setting, 80 characters unless you changed it. Send stays off below it.")]
+        [Min(0)]
+        public int SuggestionMinLength = DefaultSuggestionMinLength;
+
         public BugReportWidgetStrings Strings = new BugReportWidgetStrings();
 
         public UnityEvent OnBugReportWindowShown;
@@ -213,6 +241,7 @@ namespace BetaHub
         private sealed class RowView
         {
             public VisualElement Root;
+            public VisualElement Check;
             public Label Name;
             public Label Meta;
             public VisualElement Value;
@@ -228,16 +257,25 @@ namespace BetaHub
             public Label Prompt;
         }
 
+        // The header's two tabs; built in code because their key glyphs follow the device.
+        private sealed class TabsView
+        {
+            public VisualElement Root, LeftShoulder, RightShoulder, Report, ReportKey, Attachments, AttachmentsKey;
+            public Label ReportText, Count;
+            public GlyphSet? KeysFor;
+        }
+
         private UIDocument _document;
         private BetaHubReporter _reporter;
         private bool _bound;
 
         private VisualElement _keyTarget;
-        private VisualElement _layer, _overlay, _screenRoot, _form, _terms, _sent, _link, _pane, _capRight, _attachmentsGroup, _rowsContainer;
+        private VisualElement _layer, _overlay, _screenRoot, _form, _type, _terms, _termsCheck, _sent, _link, _pane, _capRight, _attachmentsGroup, _rowsContainer;
         private VisualElement _sentWith, _preview, _previewList, _previewPane, _promptsLeft, _promptsRight, _toast;
         private Label _kicker, _title, _subtitle, _capLeft, _groupLabel, _groupCount, _sentWithLabel, _sentWithCount, _sentList, _sentNote;
-        private Label _previewKicker, _previewTitle, _previewSubtitle, _previewCount, _toastTitle, _toastSub, _termsLabel, _linkLabel;
-        private VisualElement _termsValue, _linkValue;
+        private Label _previewKicker, _previewSubtitle, _previewCount, _toastTitle, _toastSub, _typeLabel, _typeBug, _typeSuggestion, _termsLabel, _linkLabel;
+        private VisualElement _linkValue;
+        private TabsView _tabs, _previewTabs;
         private FieldView _description, _steps, _email;
         private ArcElement _ring;
         private readonly List<RowView> _rows = new List<RowView>();
@@ -245,8 +283,14 @@ namespace BetaHub
         private readonly Dictionary<string, Texture2D> _textures = new Dictionary<string, Texture2D>();
 
         private AttachmentSet _attachments = new AttachmentSet(null);
+        // the rows on screen: every attachment for a bug, only the screenshot for a suggestion
+        private readonly List<AttachmentDescriptor> _visible = new List<AttachmentDescriptor>();
+        private ReportType _reportType = ReportType.Bug;
+        private List<WidgetField> _fields = BugReportWidgetModel.FieldsFor(ReportType.Bug, false);
         private WidgetFocus _focus = new WidgetFocus(1, 0, 1);
         private WidgetScreen _screen = WidgetScreen.Compose;
+        private SentFocus _sentFocus;
+        private bool _linkCopied;
         private FieldView _typing;
         private int _previewIndex;
         private bool _termsAccepted;
@@ -259,8 +303,9 @@ namespace BetaHub
         private bool _emailNoteIsError;
         private DateTime _captureTime;
         private string _paneKey, _previewPaneKey;
-        // the full-screen preview's log, while it shows one
+        // the full-screen preview's log, while it shows one, and whether it has nothing older or newer to show
         private ScrollView _previewLog;
+        private bool _logAtTop, _logAtEnd = true;
 
         // sample mode: the editor preview and the render tests
         private bool _sample;
@@ -280,6 +325,8 @@ namespace BetaHub
     #if ENABLE_INPUT_SYSTEM
         private static readonly PadButton[] FaceButtons = { PadButton.South, PadButton.East, PadButton.West, PadButton.North };
         private readonly bool[] _faceHeld = new bool[FaceButtons.Length];
+        // left and right shoulder: the header's tabs
+        private readonly bool[] _shoulderHeld = new bool[2];
         private readonly NavRepeat _padRepeat = new NavRepeat();
         private Gamepad _lastPad;
         private GlyphSet _lastPadGlyphs;
@@ -449,13 +496,17 @@ namespace BetaHub
             _termsAccepted = false;
             _pendingEmail = null;
             _emailNote = null;
+            _sentFocus = SentFocus.Email;
+            _linkCopied = false;
+            _reportType = options.Type;
             _captureTime = DateTime.Now;
             _submissionError = options.State == WidgetPreviewState.Error ? SampleError : null;
             _description.Input.SetValueWithoutNotify(SampleDescription);
             _steps.Input.SetValueWithoutNotify("");
             _email.Input.SetValueWithoutNotify("");
             SetAttachments(new AttachmentSet(SampleAttachments(Mathf.Clamp(options.AttachmentCount, 1, MaxSampleAttachments))));
-            if (options.FocusedAttachment >= 0 && options.FocusedAttachment < _attachments.Items.Count)
+            _focus.FocusField(FieldIndex(WidgetField.Description));
+            if (options.FocusedAttachment >= 0 && options.FocusedAttachment < _visible.Count)
             {
                 _focus.FocusAttachment(options.FocusedAttachment);
             }
@@ -464,7 +515,8 @@ namespace BetaHub
             {
                 case WidgetPreviewState.Preview:
                     _screen = WidgetScreen.Preview;
-                    _previewIndex = Math.Min(2, _attachments.Items.Count - 1);
+                    _previewIndex = Math.Min(2, _visible.Count - 1);
+                    ResetLogEdges();
                     break;
                 case WidgetPreviewState.Sending: _screen = WidgetScreen.Sending; break;
                 case WidgetPreviewState.Uploading: _screen = WidgetScreen.Uploading; break;
@@ -497,9 +549,14 @@ namespace BetaHub
             _overlay = root.Q<VisualElement>(OverlayName);
             _kicker = root.Q<Label>(KickerName);
             _title = root.Q<Label>(TitleName);
+            var tabsHost = root.Q<VisualElement>(TabsName);
             _subtitle = root.Q<Label>(SubtitleName);
             _screenRoot = root.Q<VisualElement>(ScreenName);
             _form = root.Q<VisualElement>(FormName);
+            _type = root.Q<VisualElement>(TypeName);
+            _typeBug = root.Q<Label>(TypeBugName);
+            _typeSuggestion = root.Q<Label>(TypeSuggestionName);
+            _termsCheck = root.Q<VisualElement>(TermsCheckName);
             _description = BindField(root, DescriptionFieldName);
             _steps = BindField(root, StepsFieldName);
             _email = BindField(root, EmailFieldName);
@@ -520,7 +577,7 @@ namespace BetaHub
             _sentNote = root.Q<Label>(SentNoteName);
             _preview = root.Q<VisualElement>(PreviewName);
             _previewKicker = root.Q<Label>(PreviewKickerName);
-            _previewTitle = root.Q<Label>(PreviewTitleName);
+            var previewTabsHost = root.Q<VisualElement>(PreviewTabsName);
             _previewSubtitle = root.Q<Label>(PreviewSubtitleName);
             _previewCount = root.Q<Label>(PreviewCountName);
             _previewList = root.Q<VisualElement>(PreviewListName);
@@ -533,7 +590,8 @@ namespace BetaHub
             var ringHost = root.Q<VisualElement>(RingName);
 
             if (_layer == null || _overlay == null || _description == null || _steps == null || _email == null || _rowsContainer == null
-                || _pane == null || _preview == null || _promptsLeft == null || _toast == null || ringHost == null || _terms == null || _link == null)
+                || _pane == null || _preview == null || _promptsLeft == null || _toast == null || ringHost == null || _terms == null || _link == null
+                || tabsHost == null || previewTabsHost == null || _type == null || _typeBug == null || _typeSuggestion == null || _termsCheck == null)
             {
                 Debug.LogError(UnityBetaHubLog.Prefix + "BugReportWidget.uxml is missing expected elements. Assign the shipped UXML to the UIDocument, or keep the bh-* element names when customizing.", this);
                 return false;
@@ -546,9 +604,11 @@ namespace BetaHub
             _appliedSheet = null;
             ApplyStyleSheet(Theme);
 
+            _typeLabel = _type.Q<Label>(className: NameClass);
             _termsLabel = _terms.Q<Label>(className: NameClass);
-            _termsValue = _terms.Q<VisualElement>(className: ValueClass);
             _linkLabel = _link.Q<Label>(className: NameClass);
+            _tabs = BuildTabs(tabsHost);
+            _previewTabs = BuildTabs(previewTabsHost);
             _linkValue = _link.Q<VisualElement>(className: ValueClass);
             _ring = new ArcElement();
             _ring.AddToClassList(ArcClass);
@@ -576,8 +636,13 @@ namespace BetaHub
                 view.Input.RegisterCallback<FocusOutEvent>(_ => OnFieldFocusOut(view));
                 view.Input.RegisterValueChangedCallback(_ => Render());
             }
-            _terms.RegisterCallback<ClickEvent>(_ => OnTermsClicked());
-            _link.RegisterCallback<ClickEvent>(_ => Act(PromptAction.Alt));
+            // A click selects; only the checkbox and the switch's values change anything.
+            _type.RegisterCallback<ClickEvent>(_ => SelectField(WidgetField.Type));
+            _typeBug.RegisterCallback<ClickEvent>(e => { OnTypeClicked(ReportType.Bug); e.StopPropagation(); });
+            _typeSuggestion.RegisterCallback<ClickEvent>(e => { OnTypeClicked(ReportType.Suggestion); e.StopPropagation(); });
+            _terms.RegisterCallback<ClickEvent>(_ => SelectField(WidgetField.Terms));
+            _termsCheck.RegisterCallback<ClickEvent>(e => { OnTermsCheckClicked(); e.StopPropagation(); });
+            _link.RegisterCallback<ClickEvent>(_ => OnLinkClicked());
             _overlay.RegisterCallback<PointerDownEvent>(OnPointerUsed, TrickleDown.TrickleDown);
             // A press on the prompt bar would take focus from the field being typed; that rebuilds the bar
             // under the pointer and the click never arrives. The prompt acts on its own, so keep the focus.
@@ -640,6 +705,9 @@ namespace BetaHub
             _submissionError = null;
             _pendingEmail = null;
             _emailNote = null;
+            _sentFocus = SentFocus.Email;
+            _linkCopied = false;
+            _reportType = ReportType.Bug;
             PublishIfWaiting(_active);
             if (_active != null && _active.IsUploadInProgress)
             {
@@ -664,35 +732,62 @@ namespace BetaHub
         private void SetAttachments(AttachmentSet attachments)
         {
             _attachments = attachments;
-            BuildRows(_rowsContainer, _rows, attachments, compact: true);
-            BuildRows(_previewList, _previewRows, attachments, compact: false);
+            ShowRowsForType();
+        }
+
+        // The rows and the left column follow the report type: a suggestion takes only the screenshot and has no steps.
+        private void ShowRowsForType()
+        {
+            _visible.Clear();
+            foreach (var item in _attachments.Items)
+            {
+                if (_reportType == ReportType.Bug || BugReportSession.TravelsWithSuggestion(item.Id)) _visible.Add(item);
+            }
+            BuildRows(_rowsContainer, _rows, _visible, compact: true);
+            BuildRows(_previewList, _previewRows, _visible, compact: false);
             for (int i = 0; i < _rows.Count; i++)
             {
                 int index = i;
                 _rows[i].Root.RegisterCallback<ClickEvent>(_ => OnRowClicked(index));
-                _rows[i].Value.RegisterCallback<ClickEvent>(e => { ToggleAttachment(index); e.StopPropagation(); });
+                _rows[i].Check.RegisterCallback<ClickEvent>(e => { OnRowCheckClicked(index); e.StopPropagation(); });
                 _previewRows[i].Root.RegisterCallback<ClickEvent>(_ => OnPreviewRowClicked(index));
+                _previewRows[i].Check.RegisterCallback<ClickEvent>(e => { OnPreviewRowCheckClicked(index); e.StopPropagation(); });
             }
-            int columns = BugReportWidgetModel.ColumnCountFor(attachments.Items.Count);
+            int columns = BugReportWidgetModel.ColumnCountFor(_visible.Count);
             _rowsContainer.EnableInClassList(RowsTwoClass, columns == 2);
-            _focus = new WidgetFocus(FieldCount, attachments.Items.Count, columns);
+            _fields = BugReportWidgetModel.FieldsFor(_reportType, TermsRequired);
+            _focus = new WidgetFocus(_fields.Count, _visible.Count, columns);
+            _previewIndex = 0;
             _paneKey = _previewPaneKey = null;
         }
 
         // the editor preview shows a terms row without turning the setting on
         private bool TermsRequired => _sample ? _sampleTerms : RequireTermsAcceptance;
-        private int FieldCount => TermsRequired ? 3 : 2;
 
-        private static void BuildRows(VisualElement container, List<RowView> views, AttachmentSet attachments, bool compact)
+        private int FieldIndex(WidgetField field)
+        {
+            int index = _fields.IndexOf(field);
+            if (index < 0) throw new ArgumentOutOfRangeException(nameof(field), field, "Not on the form for a " + _reportType + ".");
+            return index;
+        }
+
+        // The left-column item with focus, or null on an attachment.
+        private WidgetField? FocusedField => _focus.OnAttachment ? (WidgetField?)null : _fields[_focus.Index];
+
+        private FieldView ViewFor(WidgetField? field) => field == WidgetField.Description ? _description : field == WidgetField.Steps ? _steps : null;
+
+        private static void BuildRows(VisualElement container, List<RowView> views, IReadOnlyList<AttachmentDescriptor> items, bool compact)
         {
             container.Clear();
             views.Clear();
-            foreach (var item in attachments.Items)
+            foreach (var item in items)
             {
                 var row = new RowView { Root = new VisualElement() };
                 row.Root.AddToClassList(RowClass);
                 var name = new VisualElement();
                 name.AddToClassList(RowNameClass);
+                row.Check = NewCheck();
+                name.Add(row.Check);
                 row.Name = new Label(item.Name);
                 row.Name.AddToClassList(NameClass);
                 name.Add(row.Name);
@@ -719,6 +814,64 @@ namespace BetaHub
             }
         }
 
+        private static VisualElement NewCheck()
+        {
+            var check = new VisualElement();
+            check.AddToClassList(CheckClass);
+            var mark = new Label(CheckMark);
+            mark.AddToClassList(CheckMarkClass);
+            check.Add(mark);
+            return check;
+        }
+
+        private TabsView BuildTabs(VisualElement host)
+        {
+            host.Clear();
+            var view = new TabsView { Root = host };
+            view.LeftShoulder = new VisualElement();
+            view.LeftShoulder.AddToClassList(TabsShoulderClass);
+            view.LeftShoulder.AddToClassList(TabsShoulderLeftClass);
+            host.Add(view.LeftShoulder);
+            view.Report = NewTab(host, out view.ReportKey, out view.ReportText);
+            view.Attachments = NewTab(host, out view.AttachmentsKey, out var attachmentsText);
+            attachmentsText.text = Caps(Strings.AttachmentsTab);
+            var badge = new VisualElement();
+            badge.AddToClassList(TabBadgeClass);
+            view.Count = new Label();
+            badge.Add(view.Count);
+            attachmentsText.parent.Add(badge);
+            view.RightShoulder = new VisualElement();
+            view.RightShoulder.AddToClassList(TabsShoulderClass);
+            host.Add(view.RightShoulder);
+
+            // a press would take focus from the field being typed in; the tab acts on its own
+            view.Report.RegisterCallback<PointerDownEvent>(e => e.PreventDefault());
+            view.Attachments.RegisterCallback<PointerDownEvent>(e => e.PreventDefault());
+            view.Report.RegisterCallback<ClickEvent>(_ => OnTabClicked(WidgetTab.Report));
+            view.Attachments.RegisterCallback<ClickEvent>(_ => OnTabClicked(WidgetTab.Attachments));
+            return view;
+        }
+
+        private static VisualElement NewTab(VisualElement host, out VisualElement key, out Label text)
+        {
+            var tab = new VisualElement();
+            tab.AddToClassList(TabClass);
+            var line = new VisualElement();
+            line.AddToClassList(TabLineClass);
+            key = new VisualElement();
+            key.AddToClassList(TabKeyClass);
+            text = new Label();
+            text.AddToClassList(TabTextClass);
+            line.Add(key);
+            line.Add(text);
+            var mark = new VisualElement();
+            mark.AddToClassList(TabMarkClass);
+            tab.Add(line);
+            tab.Add(mark);
+            host.Add(tab);
+            return tab;
+        }
+
         // ------------------------------------------------------------------ render
 
         private bool Configured => _sample ? !_sampleUnconfigured : _reporter.IsConfigured;
@@ -726,21 +879,41 @@ namespace BetaHub
         private string SignedInName => _sample ? (_sampleSignedIn ? SampleSignedInName : null) : _reporter.UserDisplayName;
         private string IssueId => _sample ? SampleIssueId : _active?.IssueId;
         private bool Interactive => (_screen == WidgetScreen.Compose && Configured) || _screen == WidgetScreen.Sent || _screen == WidgetScreen.Preview;
-        private bool CanEmail => !SignedIn && string.IsNullOrEmpty(_pendingEmail) && (_sample || (_active != null && _active.State == ReportSubmissionState.AwaitingPublish));
+        // a suggestion takes no email: it publishes on its own
+        private bool CanEmail => !SignedIn && _reportType == ReportType.Bug && string.IsNullOrEmpty(_pendingEmail)
+            && (_sample || (_active != null && _active.State == ReportSubmissionState.AwaitingPublish));
+
+        // a suggestion shorter than the project's minimum is refused by BetaHub
+        private int MinLength => _reportType == ReportType.Suggestion ? SuggestionMinLength : 0;
 
         private bool CanSendNow()
         {
             return _screen == WidgetScreen.Compose
-                && BugReportWidgetModel.CanSend(_description.Input.value, TermsRequired, _termsAccepted, Configured);
+                && BugReportWidgetModel.CanSend(_description.Input.value, TermsRequired, _termsAccepted, Configured, MinLength);
         }
 
         private WidgetFocusKind FocusKind
         {
             get
             {
-                if (_focus.OnAttachment) return WidgetFocusKind.Attachment;
-                return TermsRequired && _focus.Index == 2 ? WidgetFocusKind.Terms : WidgetFocusKind.Field;
+                switch (FocusedField)
+                {
+                    case null: return WidgetFocusKind.Attachment;
+                    case WidgetField.Type: return WidgetFocusKind.Type;
+                    case WidgetField.Terms: return WidgetFocusKind.Terms;
+                    default: return WidgetFocusKind.Field;
+                }
             }
+        }
+
+        private int IncludedCount()
+        {
+            int included = 0;
+            foreach (var item in _visible)
+            {
+                if (_attachments.IsIncluded(item.Id)) included++;
+            }
+            return included;
         }
 
         private void Render()
@@ -773,12 +946,16 @@ namespace BetaHub
         {
             BugReportWidgetModel.Header header;
             if (_screen == WidgetScreen.Uploading) header = BugReportWidgetModel.UploadingHeader(Strings);
-            else if (_screen == WidgetScreen.Sent) header = BugReportWidgetModel.SentHeader(IssueId, SignedIn, Strings);
+            else if (_screen == WidgetScreen.Sent) header = BugReportWidgetModel.SentHeader(IssueId, SignedIn, _reportType, Strings);
             else header = BugReportWidgetModel.ComposeHeader(Configured, Debug.isDebugBuild || Application.isEditor,
-                _sample ? SampleConfigurationError : _reporter.ConfigurationError, _submissionError, SignedInName, Strings);
+                _sample ? SampleConfigurationError : _reporter.ConfigurationError, _submissionError, SignedInName, _reportType, Strings);
 
             _kicker.text = Caps(Strings.Kicker);
             _title.text = Caps(header.Title);
+            _title.EnableInClassList(HiddenClass, header.Tabs);
+            _tabs.Root.EnableInClassList(HiddenClass, !header.Tabs);
+            RenderTabs(_tabs, WidgetTab.Report);
+            RenderTabs(_previewTabs, WidgetTab.Attachments);
             _subtitle.text = header.Subtitle ?? "";
             _title.EnableInClassList(TitleErrorClass, header.Kind == BugReportWidgetModel.HeaderKind.Error);
             _title.EnableInClassList(TitleWarnClass, header.Kind == BugReportWidgetModel.HeaderKind.Warning);
@@ -786,23 +963,57 @@ namespace BetaHub
             _subtitle.EnableInClassList(SubWarnClass, header.Kind == BugReportWidgetModel.HeaderKind.Warning);
         }
 
+        private void RenderTabs(TabsView tabs, WidgetTab open)
+        {
+            tabs.ReportText.text = Caps(BugReportWidgetModel.ReportTitle(_reportType, Strings));
+            tabs.Count.text = IncludedCount().ToString();
+            tabs.Report.EnableInClassList(TabOnClass, open == WidgetTab.Report);
+            tabs.Attachments.EnableInClassList(TabOnClass, open == WidgetTab.Attachments);
+            if (tabs.KeysFor == _glyphs) return;
+            tabs.KeysFor = _glyphs;
+            // a keyboard's keys sit in the tabs; a pad's shoulder buttons either side of them
+            bool keyboard = _glyphs == GlyphSet.Keyboard;
+            var reportHost = keyboard ? tabs.ReportKey : tabs.LeftShoulder;
+            var attachmentsHost = keyboard ? tabs.AttachmentsKey : tabs.RightShoulder;
+            foreach (var host in new[] { tabs.LeftShoulder, tabs.ReportKey, tabs.AttachmentsKey, tabs.RightShoulder })
+            {
+                host.Clear();
+                host.EnableInClassList(HiddenClass, host != reportHost && host != attachmentsHost);
+            }
+            reportHost.Add(Glyph(PromptAction.TabReport));
+            attachmentsHost.Add(Glyph(PromptAction.TabAttachments));
+        }
+
         private void RenderForm()
         {
             bool focusVisible = _screen == WidgetScreen.Compose && Configured;
-            RenderField(_description, Strings.DescriptionLabel, Strings.Required, BugReportWidgetModel.DescriptionLimit, Strings.DescriptionPrompt, focusVisible && FocusKind == WidgetFocusKind.Field && _focus.Index == 0);
-            RenderField(_steps, Strings.StepsLabel, Strings.Optional, BugReportWidgetModel.StepsLimit, Strings.StepsPrompt, focusVisible && FocusKind == WidgetFocusKind.Field && _focus.Index == 1);
+            WidgetField? focused = focusVisible ? FocusedField : null;
+
+            _type.EnableInClassList(RowFocusedClass, focused == WidgetField.Type);
+            _typeLabel.text = Strings.ReportTypeLabel;
+            _typeBug.text = Caps(Strings.TypeBug);
+            _typeSuggestion.text = Caps(Strings.TypeSuggestion);
+            _typeBug.EnableInClassList(SwitchOptionOnClass, _reportType == ReportType.Bug);
+            _typeSuggestion.EnableInClassList(SwitchOptionOnClass, _reportType == ReportType.Suggestion);
+
+            string description = _description.Input.value;
+            RenderField(_description, Strings.DescriptionLabel, BugReportWidgetModel.DescriptionTag(description, MinLength, Strings),
+                BugReportWidgetModel.IsAtLimit(description.Length, BugReportWidgetModel.DescriptionLimit), Strings.DescriptionPrompt, focused == WidgetField.Description);
+            _steps.Root.EnableInClassList(HiddenClass, _reportType == ReportType.Suggestion);
+            int steps = _steps.Input.value.Length;
+            RenderField(_steps, Strings.StepsLabel, BugReportWidgetModel.FieldTag(Strings.Optional, steps, BugReportWidgetModel.StepsLimit, Strings),
+                BugReportWidgetModel.IsAtLimit(steps, BugReportWidgetModel.StepsLimit), Strings.StepsPrompt, focused == WidgetField.Steps);
 
             _terms.EnableInClassList(HiddenClass, !TermsRequired);
-            _terms.EnableInClassList(RowFocusedClass, focusVisible && FocusKind == WidgetFocusKind.Terms);
+            _terms.EnableInClassList(RowFocusedClass, focused == WidgetField.Terms);
             _termsLabel.text = Strings.TermsLabel;
-            SetValue(_termsValue, Caps(_termsAccepted ? Strings.TermsAccepted : Strings.TermsNotAccepted), _termsAccepted ? RowTone.Accent : RowTone.Muted, -1f);
+            _termsLabel.EnableInClassList(NameOffClass, !_termsAccepted);
+            _termsCheck.EnableInClassList(CheckOnClass, _termsAccepted);
 
-            int included = 0;
             for (int i = 0; i < _rows.Count; i++)
             {
-                var item = _attachments.Items[i];
+                var item = _visible[i];
                 bool on = _attachments.IsIncluded(item.Id);
-                if (on) included++;
                 RowStatus status;
                 if (_screen == WidgetScreen.Uploading && _active != null && _active.TryGetUploadState(item.Id, out var state))
                 {
@@ -818,20 +1029,26 @@ namespace BetaHub
                 }
                 var row = _rows[i];
                 row.Root.EnableInClassList(RowFocusedClass, focusVisible && _focus.OnAttachment && _focus.Index == i);
+                RenderIncluded(row, on);
                 SetValue(row.Value, Caps(status.Text), status.Tone, status.Progress);
             }
             _groupLabel.text = Caps(Strings.AttachmentsGroup);
-            _groupCount.text = Caps(string.Format(Strings.AttachmentsCount, included, _attachments.Items.Count));
-            _attachmentsGroup.EnableInClassList(HiddenClass, _attachments.Items.Count == 0);
+            _groupCount.text = Caps(string.Format(Strings.AttachmentsCount, IncludedCount(), _visible.Count));
+            _attachmentsGroup.EnableInClassList(HiddenClass, _visible.Count == 0);
         }
 
-        private void RenderField(FieldView field, string label, string note, int limit, string prompt, bool focused)
+        private static void RenderIncluded(RowView row, bool included)
+        {
+            row.Check.EnableInClassList(CheckOnClass, included);
+            row.Name.EnableInClassList(NameOffClass, !included);
+        }
+
+        private void RenderField(FieldView field, string label, string tag, bool atLimit, string prompt, bool focused)
         {
             var labels = field.Root.Q<VisualElement>(className: "bh-fld-label").Query<Label>().ToList();
             labels[0].text = Caps(label);
-            int length = field.Input.value.Length;
-            labels[1].text = BugReportWidgetModel.FieldTag(note, length, limit, Strings);
-            labels[1].EnableInClassList(TagLimitClass, BugReportWidgetModel.IsAtLimit(length, limit));
+            labels[1].text = tag;
+            labels[1].EnableInClassList(TagLimitClass, atLimit);
             bool editing = _typing == field;
             field.Root.EnableInClassList(FieldFocusedClass, focused || editing);
             field.Root.EnableInClassList(FieldEditingClass, editing);
@@ -844,20 +1061,25 @@ namespace BetaHub
             bool canEmail = CanEmail;
             bool showEmail = !SignedIn && (canEmail || !string.IsNullOrEmpty(_pendingEmail));
             _email.Root.EnableInClassList(HiddenClass, !showEmail);
-            RenderField(_email, Strings.EmailLabel, Strings.Optional, BugReportWidgetModel.EmailLimit, Strings.EmailPrompt, canEmail);
+            int email = _email.Input.value.Length;
+            RenderField(_email, Strings.EmailLabel, BugReportWidgetModel.FieldTag(Strings.Optional, email, BugReportWidgetModel.EmailLimit, Strings),
+                BugReportWidgetModel.IsAtLimit(email, BugReportWidgetModel.EmailLimit), Strings.EmailPrompt, canEmail && _sentFocus == SentFocus.Email);
             _email.Input.SetEnabled(canEmail);
+            _link.EnableInClassList(RowFocusedClass, canEmail && _typing == null && _sentFocus == SentFocus.Link);
 
             string note = _emailNote ?? (SignedIn ? Strings.SignedInNote
                 : !string.IsNullOrEmpty(_pendingEmail) ? string.Format(Strings.EmailSaved, _pendingEmail)
                 : Strings.EmailNote);
             _sentNote.text = note;
             _sentNote.EnableInClassList(NoteErrorClass, _emailNoteIsError && _emailNote != null);
+            // its notes are about an email when it's fixed, which a suggestion doesn't get
+            _sentNote.EnableInClassList(HiddenClass, _reportType == ReportType.Suggestion && _emailNote == null);
 
             _linkLabel.text = Strings.ReportLink;
-            SetValue(_linkValue, Caps(Strings.Copy), RowTone.Accent, -1f);
+            SetValue(_linkValue, Caps(_linkCopied ? Strings.LinkCopied : Strings.Copy), _linkCopied ? RowTone.Ok : RowTone.Accent, -1f);
 
             var names = new List<string>();
-            foreach (var item in _attachments.Items)
+            foreach (var item in _visible)
             {
                 if (_attachments.IsIncluded(item.Id)) names.Add(item.Name);
             }
@@ -890,7 +1112,7 @@ namespace BetaHub
         private void RenderPane()
         {
             AttachmentDescriptor item = null;
-            if (PaneShowsAttachment) item = _attachments.Items[_focus.Index];
+            if (PaneShowsAttachment) item = _visible[_focus.Index];
 
             string key = item == null ? BuiltInAttachments.Screenshot + ":frame" : item.Id;
             if (key != _paneKey)
@@ -906,7 +1128,7 @@ namespace BetaHub
             if (item != null)
             {
                 _capRight.Add(Glyph(PromptAction.Alt));
-                _capRight.Add(new Label(Strings.FullScreen));
+                _capRight.Add(new Label(Strings.AttachmentsTab));
             }
             else
             {
@@ -916,22 +1138,23 @@ namespace BetaHub
 
         private void RenderPreview()
         {
-            bool visible = _screen == WidgetScreen.Preview && _attachments.Items.Count > 0;
+            bool visible = _screen == WidgetScreen.Preview && _visible.Count > 0;
             _preview.EnableInClassList(HiddenClass, !visible);
             _screenRoot.EnableInClassList(HiddenClass, visible);
             if (!visible) return;
 
-            _previewIndex = Mathf.Clamp(_previewIndex, 0, _attachments.Items.Count - 1);
-            var item = _attachments.Items[_previewIndex];
+            _previewIndex = Mathf.Clamp(_previewIndex, 0, _visible.Count - 1);
+            var item = _visible[_previewIndex];
             _previewKicker.text = Caps(Strings.Kicker);
-            _previewTitle.text = Caps(item.Name);
-            _previewSubtitle.text = Describe(item);
-            _previewCount.text = Caps(string.Format(Strings.PreviewCount, _previewIndex + 1, _attachments.Items.Count));
+            // the tabs stand where the title was, so the subtitle names the attachment
+            _previewSubtitle.text = item.Name + Separator + Describe(item);
+            _previewCount.text = Caps(string.Format(Strings.PreviewCount, _previewIndex + 1, _visible.Count));
             for (int i = 0; i < _previewRows.Count; i++)
             {
-                bool on = _attachments.IsIncluded(_attachments.Items[i].Id);
+                bool on = _attachments.IsIncluded(_visible[i].Id);
                 var status = BugReportWidgetModel.ComposeRowStatus(on, Strings);
                 _previewRows[i].Root.EnableInClassList(RowFocusedClass, i == _previewIndex);
+                RenderIncluded(_previewRows[i], on);
                 SetValue(_previewRows[i].Value, Caps(status.Text), status.Tone, -1f);
             }
             if (item.Id != _previewPaneKey)
@@ -1082,7 +1305,12 @@ namespace BetaHub
         private void AddScrollingLog(VisualElement pane, AttachmentDescriptor item)
         {
             string text = _sample ? SampleLog : ReadLogForPreview(item);
-            var scroll = new ScrollView(ScrollViewMode.Vertical) { horizontalScrollerVisibility = ScrollerVisibility.Hidden };
+            // the scrollbar shows only when there is more than fits
+            var scroll = new ScrollView(ScrollViewMode.Vertical)
+            {
+                horizontalScrollerVisibility = ScrollerVisibility.Hidden,
+                verticalScrollerVisibility = ScrollerVisibility.Auto,
+            };
             scroll.AddToClassList(LogScrollClass);
             foreach (var line in BugReportWidgetModel.LogTail(text, int.MaxValue).Split('\n'))
             {
@@ -1090,10 +1318,15 @@ namespace BetaHub
             }
             // Stays at the end through layout passes (wrapped lines keep growing it) until the player scrolls up.
             bool atEnd = true;
-            scroll.verticalScroller.valueChanged += value => atEnd = value >= scroll.verticalScroller.highValue - LayoutEpsilon;
+            scroll.verticalScroller.valueChanged += value =>
+            {
+                atEnd = value >= scroll.verticalScroller.highValue - LayoutEpsilon;
+                UpdateLogEdges();
+            };
             EventCallback<GeometryChangedEvent> keepAtEnd = _ =>
             {
                 if (atEnd) scroll.verticalScroller.value = scroll.verticalScroller.highValue;
+                UpdateLogEdges();
             };
             scroll.contentContainer.RegisterCallback(keepAtEnd);
             scroll.contentViewport.RegisterCallback(keepAtEnd);
@@ -1111,7 +1344,27 @@ namespace BetaHub
 
         private void ScrollPreviewLog(float pages)
         {
+            if (_previewLog == null) return;
             _previewLog.verticalScroller.value += pages * LogPageFraction * _previewLog.contentViewport.layout.height;
+        }
+
+        // Older lines and Newer lines grey out at their ends; a log opens at its newest line.
+        private void ResetLogEdges()
+        {
+            _logAtTop = false;
+            _logAtEnd = true;
+        }
+
+        private void UpdateLogEdges()
+        {
+            if (_previewLog == null) return;
+            var scroller = _previewLog.verticalScroller;
+            bool top = scroller.value <= scroller.lowValue + LayoutEpsilon;
+            bool end = scroller.value >= scroller.highValue - LayoutEpsilon;
+            if (top == _logAtTop && end == _logAtEnd) return;
+            _logAtTop = top;
+            _logAtEnd = end;
+            if (IsVisible && _screen == WidgetScreen.Preview) RenderPrompts();
         }
 
         private void AddLog(VisualElement pane, AttachmentDescriptor item)
@@ -1171,15 +1424,18 @@ namespace BetaHub
                 Typing = _typing != null,
                 Gamepad = _glyphs != GlyphSet.Keyboard,
                 FocusedIncluded = _screen == WidgetScreen.Preview
-                    ? _attachments.Items.Count > 0 && _attachments.IsIncluded(_attachments.Items[Mathf.Clamp(_previewIndex, 0, _attachments.Items.Count - 1)].Id)
-                    : _focus.OnAttachment && _attachments.IsIncluded(_attachments.Items[_focus.Index].Id),
+                    ? _visible.Count > 0 && _attachments.IsIncluded(_visible[Mathf.Clamp(_previewIndex, 0, _visible.Count - 1)].Id)
+                    : _focus.OnAttachment && _attachments.IsIncluded(_visible[_focus.Index].Id),
                 TermsAccepted = _termsAccepted,
                 CanSend = CanSendNow(),
                 HasError = _submissionError != null,
                 Configured = Configured,
-                SignedIn = SignedIn,
                 CanEmail = CanEmail,
-                PreviewScrolls = _screen == WidgetScreen.Preview && _previewLog != null,
+                SentFocus = _sentFocus,
+                HasAttachments = _visible.Count > 0,
+                PreviewIsLog = _screen == WidgetScreen.Preview && _previewLog != null,
+                LogAtTop = _logAtTop,
+                LogAtEnd = _logAtEnd,
             };
             var bar = BugReportWidgetModel.Prompts(context, Strings);
             FillPrompts(_promptsLeft, bar.Left);
@@ -1207,7 +1463,9 @@ namespace BetaHub
                 {
                     item.Add(Glyph(prompt.Action));
                     var action = prompt.Action;
-                    if (!prompt.Disabled) item.RegisterCallback<ClickEvent>(e => { Act(action); e.StopPropagation(); });
+                    // Move only explains the arrows
+                    item.EnableInClassList(PromptHintClass, action == PromptAction.Move);
+                    if (!prompt.Disabled && action != PromptAction.Move) item.RegisterCallback<ClickEvent>(e => { Act(action); e.StopPropagation(); });
                 }
                 var label = new Label(prompt.Label);
                 label.AddToClassList(PromptLabelClass);
@@ -1230,9 +1488,6 @@ namespace BetaHub
                         break;
                     case GlyphPartKind.Dpad:
                         cap.AddToClassList(DpadClass);
-                        break;
-                    case GlyphPartKind.Stick:
-                        cap.AddToClassList(StickClass);
                         break;
                     case GlyphPartKind.Face:
                         string set = PadClassPrefix + GlyphSetClassNames[(int)_glyphs];
@@ -1260,26 +1515,37 @@ namespace BetaHub
 
         private void OnKeyDown(KeyDownEvent evt)
         {
-            if (!IsVisible || evt.keyCode == KeyCode.None) return;
+            if (!IsVisible) return;
+            // 1 and 2 switch the tabs when nothing is typed; on AZERTY those keys read & and é
+            WidgetTab? tab = _typing == null ? TabKey(evt) : null;
+            if (evt.keyCode == KeyCode.None && tab == null) return;
             // a floating platform keyboard types through key events; the player still holds the controller
             if (!_textEntryOpen) UseGlyphs(GlyphSet.Keyboard);
             bool send = (evt.keyCode == KeyCode.Return || evt.keyCode == KeyCode.KeypadEnter) && (evt.ctrlKey || evt.commandKey);
+            // Tab and Shift+Tab go through every item, typing or not
+            PromptAction step = evt.shiftKey ? PromptAction.Prev : PromptAction.Next;
             bool handled = true;
 
             if (send) Act(PromptAction.Send);
+            else if (tab != null) Act(tab == WidgetTab.Report ? PromptAction.TabReport : PromptAction.TabAttachments);
             else if (_typing != null)
             {
                 if (evt.keyCode == KeyCode.Escape) Act(PromptAction.Back);
-                else if (evt.keyCode == KeyCode.Tab && _screen == WidgetScreen.Compose) Act(PromptAction.Next);
+                else if (evt.keyCode == KeyCode.Tab) Act(step);
                 else if (evt.keyCode == KeyCode.Return && _typing == _email) Act(PromptAction.Send);
+                // up from the first character or down from the last leaves the field, as Tab does
+                else if (evt.keyCode == KeyCode.UpArrow && !evt.shiftKey && _typing != _email && CaretAt(_typing.Input, start: true)) Act(PromptAction.Prev);
+                else if (evt.keyCode == KeyCode.DownArrow && !evt.shiftKey && _typing != _email && CaretAt(_typing.Input, start: false)) Act(PromptAction.Next);
                 else handled = false;
             }
             else if (_screen == WidgetScreen.Preview)
             {
                 if (evt.keyCode == KeyCode.UpArrow) MovePreview(-1);
                 else if (evt.keyCode == KeyCode.DownArrow) MovePreview(1);
-                else if (evt.keyCode == KeyCode.PageUp && _previewLog != null) ScrollPreviewLog(-1f);
-                else if (evt.keyCode == KeyCode.PageDown && _previewLog != null) ScrollPreviewLog(1f);
+                else if (evt.keyCode == KeyCode.Tab) Act(step);
+                else if (evt.keyCode == KeyCode.PageUp) Act(PromptAction.ScrollUp);
+                else if (evt.keyCode == KeyCode.PageDown) Act(PromptAction.ScrollDown);
+                else if (evt.keyCode == KeyCode.P) Act(PromptAction.Alt);
                 else handled = HandleCommonKeys(evt.keyCode);
             }
             else
@@ -1288,7 +1554,7 @@ namespace BetaHub
                 else if (evt.keyCode == KeyCode.DownArrow) MoveFocus(FocusMove.Down);
                 else if (evt.keyCode == KeyCode.LeftArrow) MoveFocus(FocusMove.Left);
                 else if (evt.keyCode == KeyCode.RightArrow) MoveFocus(FocusMove.Right);
-                else if (evt.keyCode == KeyCode.Tab) Act(PromptAction.Next);
+                else if (evt.keyCode == KeyCode.Tab) Act(step);
                 else if (evt.keyCode == KeyCode.P) Act(PromptAction.Alt);
                 else handled = HandleCommonKeys(evt.keyCode);
             }
@@ -1298,6 +1564,38 @@ namespace BetaHub
                 evt.StopImmediatePropagation();
                 evt.PreventDefault();
             }
+        }
+
+        private static WidgetTab? TabKey(KeyDownEvent evt)
+        {
+            switch (evt.keyCode)
+            {
+                case KeyCode.Alpha1:
+                case KeyCode.Keypad1:
+                case KeyCode.Ampersand:
+                    return WidgetTab.Report;
+                case KeyCode.Alpha2:
+                case KeyCode.Keypad2:
+                    return WidgetTab.Attachments;
+            }
+            switch (evt.character)
+            {
+                case '1':
+                case '&':
+                    return WidgetTab.Report;
+                case '2':
+                case 'é':
+                    return WidgetTab.Attachments;
+                default:
+                    return null;
+            }
+        }
+
+        // The caret sits before the first character or after the last, with nothing selected.
+        private static bool CaretAt(TextField input, bool start)
+        {
+            if (input.cursorIndex != input.selectIndex) return false;
+            return start ? input.cursorIndex == 0 : input.cursorIndex >= input.value.Length;
         }
 
         private bool HandleCommonKeys(KeyCode key)
@@ -1357,6 +1655,16 @@ namespace BetaHub
                 if (!IsVisible) return;
             }
 
+            for (int i = 0; i < _shoulderHeld.Length; i++)
+            {
+                bool down = (i == 0 ? pad.leftShoulder : pad.rightShoulder).isPressed;
+                bool pressed = down && !_shoulderHeld[i];
+                _shoulderHeld[i] = down;
+                if (!pressed || _textEntryOpen) continue;
+                UseGlyphs(_lastPadGlyphs);
+                OnPadButton(i == 0 ? PromptAction.TabReport : PromptAction.TabAttachments);
+            }
+
             float stick = pad.rightStick.ReadValue().y;
             if (_screen == WidgetScreen.Preview && _previewLog != null && Mathf.Abs(stick) > StickScrollDeadZone)
             {
@@ -1379,6 +1687,8 @@ namespace BetaHub
             {
                 _faceHeld[i] = pad != null && FaceControl(pad, FaceButtons[i]).isPressed;
             }
+            _shoulderHeld[0] = pad != null && pad.leftShoulder.isPressed;
+            _shoulderHeld[1] = pad != null && pad.rightShoulder.isPressed;
             _padRepeat.Suppress(pad != null ? PadDirection(pad) : null);
         }
 
@@ -1435,15 +1745,87 @@ namespace BetaHub
 
         private void MoveFocus(FocusMove move)
         {
-            if (_screen != WidgetScreen.Compose || !Configured) return;
+            if (_screen == WidgetScreen.Sent)
+            {
+                // the arrows move between the email and the report link
+                if (CanEmail && _typing == null && (move == FocusMove.Up || move == FocusMove.Down))
+                {
+                    _sentFocus = move == FocusMove.Up ? SentFocus.Email : SentFocus.Link;
+                    Render();
+                }
+                return;
+            }
+            if (_screen != WidgetScreen.Compose || !Configured || _typing != null) return;
+            // left and right on the type row choose the type, as on a game's settings screen
+            if (FocusedField == WidgetField.Type && (move == FocusMove.Left || move == FocusMove.Right))
+            {
+                SetReportType(move == FocusMove.Left ? ReportType.Bug : ReportType.Suggestion);
+                return;
+            }
             if (_focus.Move(move)) Render();
+        }
+
+        // Tab, Shift+Tab, or an arrow out of a field's first or last character: the next or previous item.
+        // On a keyboard, landing on a text field types there, as in a browser.
+        private void StepFocus(int delta)
+        {
+            if (_typing != null && _typing != _email) _focus.FocusField(FieldIndex(FieldOf(_typing)));
+            _focus.Step(delta);
+            var field = ViewFor(FocusedField);
+            if (field != null && _glyphs == GlyphSet.Keyboard)
+            {
+                StartTyping(field);
+                return;
+            }
+            StopTyping();
+            Render();
+        }
+
+        private WidgetField FieldOf(FieldView field)
+        {
+            if (field == _description) return WidgetField.Description;
+            if (field == _steps) return WidgetField.Steps;
+            throw new ArgumentException("Not a field of the report form.", nameof(field));
         }
 
         private void MovePreview(int delta)
         {
-            int count = _attachments.Items.Count;
+            int count = _visible.Count;
             if (count == 0) return;
-            _previewIndex = (_previewIndex + delta + count) % count;
+            int index = (_previewIndex + delta + count) % count;
+            // one attachment: the same log stays where it was scrolled
+            if (index != _previewIndex) ResetLogEdges();
+            _previewIndex = index;
+            Render();
+        }
+
+        private void OpenPreview(int index)
+        {
+            if (_visible.Count == 0) return;
+            StopTyping();
+            _previewIndex = Mathf.Clamp(index, 0, _visible.Count - 1);
+            _previewPaneKey = null;
+            ResetLogEdges();
+            _screen = WidgetScreen.Preview;
+            Render();
+        }
+
+        // Back, P (the key that opened it) and the report tab close it, on the attachment it showed.
+        private void ClosePreview()
+        {
+            _screen = WidgetScreen.Compose;
+            if (_previewIndex < _visible.Count) _focus.FocusAttachment(_previewIndex);
+            Render();
+            FocusOverlay();
+        }
+
+        private void SetReportType(ReportType type)
+        {
+            if (_reportType == type) return;
+            StopTyping();
+            _reportType = type;
+            ShowRowsForType();
+            _focus.FocusField(FieldIndex(WidgetField.Type));
             Render();
         }
 
@@ -1453,10 +1835,12 @@ namespace BetaHub
             switch (_screen)
             {
                 case WidgetScreen.Preview:
-                    if (action == PromptAction.Back) { _screen = WidgetScreen.Compose; Render(); FocusOverlay(); }
-                    else if (action == PromptAction.Confirm) { ToggleAttachment(_previewIndex); }
-                    else if (action == PromptAction.Navigate) { MovePreview(1); }
-                    else if (action == PromptAction.Scroll && _previewLog != null) { ScrollPreviewLog(1f); }
+                    if (action == PromptAction.Back || action == PromptAction.Alt || action == PromptAction.TabReport) ClosePreview();
+                    else if (action == PromptAction.Confirm) ToggleAttachment(_previewIndex);
+                    else if (action == PromptAction.Navigate || action == PromptAction.Next) MovePreview(1);
+                    else if (action == PromptAction.Prev) MovePreview(-1);
+                    else if (action == PromptAction.ScrollUp) ScrollPreviewLog(-1f);
+                    else if (action == PromptAction.ScrollDown) ScrollPreviewLog(1f);
                     break;
 
                 case WidgetScreen.Compose:
@@ -1490,18 +1874,28 @@ namespace BetaHub
                     else Hide();
                     break;
                 case PromptAction.Next:
-                    var next = _typing == _description ? _steps : _description;
-                    _focus.FocusField(next == _description ? 0 : 1);
-                    StartTyping(next);
+                case PromptAction.Prev:
+                    StepFocus(action == PromptAction.Next ? 1 : -1);
+                    break;
+                case PromptAction.ChangeType:
+                    SetReportType(_reportType == ReportType.Bug ? ReportType.Suggestion : ReportType.Bug);
+                    break;
+                case PromptAction.TabAttachments:
+                    OpenPreview(_focus.OnAttachment ? _focus.Index : _focus.LastAttachment);
                     break;
                 case PromptAction.Confirm:
-                    if (FocusKind == WidgetFocusKind.Attachment) ToggleAttachment(_focus.Index);
-                    else if (FocusKind == WidgetFocusKind.Terms) { _termsAccepted = !_termsAccepted; Render(); }
-                    else StartTyping(_focus.Index == 0 ? _description : _steps);
+                    switch (FocusKind)
+                    {
+                        case WidgetFocusKind.Attachment: ToggleAttachment(_focus.Index); break;
+                        case WidgetFocusKind.Type: Act(PromptAction.ChangeType); break;
+                        case WidgetFocusKind.Terms: _termsAccepted = !_termsAccepted; Render(); break;
+                        default: StartTyping(ViewFor(FocusedField)); break;
+                    }
                     break;
                 case PromptAction.Alt:
-                    if (FocusKind == WidgetFocusKind.Attachment) { _previewIndex = _focus.Index; _screen = WidgetScreen.Preview; StopTyping(); Render(); }
-                    else if (FocusKind == WidgetFocusKind.Terms && !string.IsNullOrEmpty(TermsUrl)) Application.OpenURL(TermsUrl);
+                    if (FocusKind == WidgetFocusKind.Attachment) OpenPreview(_focus.Index);
+                    else if (FocusKind == WidgetFocusKind.Terms) { if (!string.IsNullOrEmpty(TermsUrl)) Application.OpenURL(TermsUrl); }
+                    else OpenPreview(_focus.LastAttachment);
                     break;
             }
         }
@@ -1515,7 +1909,15 @@ namespace BetaHub
                     else Hide();
                     break;
                 case PromptAction.Confirm:
-                    if (CanEmail) StartTyping(_email);
+                    if (CanEmail && _sentFocus == SentFocus.Link) CopyLink();
+                    else if (CanEmail) StartTyping(_email);
+                    break;
+                case PromptAction.Next:
+                case PromptAction.Prev:
+                    if (!CanEmail) break;
+                    StopTyping();
+                    _sentFocus = _sentFocus == SentFocus.Email ? SentFocus.Link : SentFocus.Email;
+                    Render();
                     break;
                 case PromptAction.Alt:
                     CopyLink();
@@ -1528,46 +1930,87 @@ namespace BetaHub
 
         private void ToggleAttachment(int index)
         {
-            if (index < 0 || index >= _attachments.Items.Count) return;
+            if (index < 0 || index >= _visible.Count) return;
             if (_screen != WidgetScreen.Compose && _screen != WidgetScreen.Preview) return;
-            _attachments.Toggle(_attachments.Items[index].Id);
+            _attachments.Toggle(_visible[index].Id);
             Render();
         }
 
+        // A click on a row selects it; its checkbox includes or leaves it out.
         private void OnRowClicked(int index)
         {
             if (_screen != WidgetScreen.Compose || !Configured) return;
-            bool alreadyFocused = _focus.OnAttachment && _focus.Index == index;
             StopTyping();
             _focus.FocusAttachment(index);
-            if (alreadyFocused) ToggleAttachment(index);
-            else Render();
+            Render();
+            FocusOverlay();
+        }
+
+        private void OnRowCheckClicked(int index)
+        {
+            if (_screen != WidgetScreen.Compose || !Configured) return;
+            StopTyping();
+            _focus.FocusAttachment(index);
+            ToggleAttachment(index);
             FocusOverlay();
         }
 
         private void OnPreviewRowClicked(int index)
         {
-            if (_screen != WidgetScreen.Preview) return;
-            if (_previewIndex == index) ToggleAttachment(index);
-            else { _previewIndex = index; Render(); }
+            if (_screen != WidgetScreen.Preview || index == _previewIndex) return;
+            MovePreview(index - _previewIndex);
         }
 
-        private void OnTermsClicked()
+        private void OnPreviewRowCheckClicked(int index)
+        {
+            if (_screen != WidgetScreen.Preview) return;
+            OnPreviewRowClicked(index);
+            ToggleAttachment(index);
+        }
+
+        private void OnTabClicked(WidgetTab tab)
+        {
+            if (tab == WidgetTab.Attachments && _screen == WidgetScreen.Compose && Configured) Act(PromptAction.TabAttachments);
+            else if (tab == WidgetTab.Report && _screen == WidgetScreen.Preview) Act(PromptAction.TabReport);
+        }
+
+        private void SelectField(WidgetField field)
         {
             if (_screen != WidgetScreen.Compose || !Configured) return;
-            bool alreadyFocused = FocusKind == WidgetFocusKind.Terms;
             StopTyping();
-            _focus.FocusField(2);
-            if (alreadyFocused) _termsAccepted = !_termsAccepted;
+            _focus.FocusField(FieldIndex(field));
             Render();
             FocusOverlay();
+        }
+
+        private void OnTypeClicked(ReportType type)
+        {
+            if (_screen != WidgetScreen.Compose || !Configured) return;
+            SelectField(WidgetField.Type);
+            SetReportType(type);
+        }
+
+        private void OnTermsCheckClicked()
+        {
+            if (_screen != WidgetScreen.Compose || !Configured) return;
+            SelectField(WidgetField.Terms);
+            _termsAccepted = !_termsAccepted;
+            Render();
+        }
+
+        private void OnLinkClicked()
+        {
+            if (_screen != WidgetScreen.Sent) return;
+            StopTyping();
+            _sentFocus = SentFocus.Link;
+            CopyLink();
+            Render();
         }
 
         private void OnFieldClicked(FieldView field)
         {
             if (!Interactive || _screen == WidgetScreen.Preview) return;
             if (field == _email && !CanEmail) return;
-            if (field != _email) _focus.FocusField(field == _description ? 0 : 1);
             StartTyping(field);
         }
 
@@ -1575,8 +2018,15 @@ namespace BetaHub
         {
             if (_typing == field) return;
             _typing = field;
-            if (field != _email) _focus.FocusField(field == _description ? 0 : 1);
+            NoteFocus(field);
             Render();
+        }
+
+        // Typing in a field puts focus there: the row for a form field, the email on the sent screen.
+        private void NoteFocus(FieldView field)
+        {
+            if (field == _email) _sentFocus = SentFocus.Email;
+            else _focus.FocusField(FieldIndex(FieldOf(field)));
         }
 
         private void OnFieldFocusOut(FieldView field)
@@ -1591,6 +2041,7 @@ namespace BetaHub
         {
             if (!IsVisible) return;
             _typing = field;
+            NoteFocus(field);
             Render();
             // A field that was display:none until this frame cannot take focus before the next style pass.
             field.Input.schedule.Execute(() =>
@@ -1685,7 +2136,11 @@ namespace BetaHub
             _screen = WidgetScreen.Sending;
             Render();
 
-            _active = _reporter.Submit(_description.Input.value, _steps.Input.value, _attachments);
+            _sentFocus = SentFocus.Email;
+            _linkCopied = false;
+            _active = _reportType == ReportType.Suggestion
+                ? _reporter.SubmitSuggestion(_description.Input.value, _attachments)
+                : _reporter.Submit(_description.Input.value, _steps.Input.value, _attachments);
             _active.StateChanged += OnSubmissionStateChanged;
             _active.ReporterEmailFailed += OnReporterEmailFailed;
             _active.AttachmentUploadChanged += OnAttachmentUploadChanged;
@@ -1793,6 +2248,7 @@ namespace BetaHub
             string url = _active?.IssueUrl;
             if (string.IsNullOrEmpty(url)) return;
             GUIUtility.systemCopyBuffer = url;
+            _linkCopied = true;
             SetValue(_linkValue, Caps(Strings.LinkCopied), RowTone.Ok, -1f);
         }
 

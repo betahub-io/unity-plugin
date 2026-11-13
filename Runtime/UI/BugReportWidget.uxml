@@ -16,11 +16,21 @@
           <ui:VisualElement class="bh-head">
             <ui:Label name="bh-kicker" class="bh-kicker" text="BETAHUB" />
             <ui:Label name="bh-title" class="bh-title" text="REPORT A BUG" />
+            <!-- the report and attachments tabs take the title's place and height; built in code -->
+            <ui:VisualElement name="bh-tabs" class="bh-tabs bh-hidden" />
             <ui:Label name="bh-subtitle" class="bh-sub" text="Goes straight to the developers" />
           </ui:VisualElement>
 
           <!-- compose -->
           <ui:VisualElement name="bh-form" class="bh-form">
+            <ui:VisualElement name="bh-type" class="bh-row">
+              <ui:VisualElement class="bh-row-name"><ui:Label name="bh-type-label" class="bh-oname" text="Report type" /></ui:VisualElement>
+              <ui:VisualElement class="bh-switch">
+                <ui:Label name="bh-type-bug" class="bh-switch-opt bh-switch-opt--on" text="BUG" />
+                <ui:Label name="bh-type-suggestion" class="bh-switch-opt" text="SUGGESTION" />
+              </ui:VisualElement>
+            </ui:VisualElement>
+
             <ui:VisualElement name="bh-fld-description" class="bh-fld">
               <ui:VisualElement class="bh-fld-label">
                 <ui:Label name="bh-description-label" text="WHAT HAPPENED" />
@@ -50,8 +60,10 @@
             </ui:VisualElement>
 
             <ui:VisualElement name="bh-terms" class="bh-row">
-              <ui:VisualElement class="bh-row-name"><ui:Label name="bh-terms-label" class="bh-oname" text="Terms of bug reporting" /></ui:VisualElement>
-              <ui:VisualElement name="bh-terms-value" class="bh-oval bh-oval--muted"><ui:Label text="NOT ACCEPTED" /></ui:VisualElement>
+              <ui:VisualElement class="bh-row-name">
+                <ui:VisualElement name="bh-terms-check" class="bh-check"><ui:Label class="bh-check-mark" text="✓" /></ui:VisualElement>
+                <ui:Label name="bh-terms-label" class="bh-oname bh-oname--off" text="I accept the terms of bug reporting" />
+              </ui:VisualElement>
             </ui:VisualElement>
           </ui:VisualElement>
 
@@ -101,13 +113,14 @@
         </ui:VisualElement>
       </ui:VisualElement>
 
-      <!-- full-screen preview of one attachment -->
+      <!-- the attachments tab: one attachment full screen -->
       <ui:VisualElement name="bh-preview" class="bh-preview bh-hidden">
         <ui:VisualElement class="bh-preview-head">
           <ui:VisualElement class="bh-head">
             <ui:Label name="bh-preview-kicker" class="bh-kicker" text="BETAHUB" />
-            <ui:Label name="bh-preview-title" class="bh-title" text="GAME LOG" />
-            <ui:Label name="bh-preview-subtitle" class="bh-sub" text="Last lines · the full file is sent" />
+            <!-- the same tabs, with Attachments open -->
+            <ui:VisualElement name="bh-preview-tabs" class="bh-tabs" />
+            <ui:Label name="bh-preview-subtitle" class="bh-sub" text="Game log · Last lines · the full file is sent" />
           </ui:VisualElement>
           <ui:Label name="bh-preview-count" class="bh-preview-count" text="3 OF 3" />
         </ui:VisualElement>

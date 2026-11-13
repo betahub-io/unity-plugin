@@ -8,13 +8,18 @@ namespace BetaHub
     {
         public string Kicker = "BetaHub";
         public string Title = "Report a bug";
+        public string SuggestTitle = "Suggest an idea";
         public string Subtitle = "Goes straight to the developers";
         public string SubtitleSignedIn = "Reporting as {0}";
-        public string ErrorTitle = "Couldn't send";
-        public string ErrorSubtitle = "{0} Your text is kept.";
+        public string ErrorSubtitle = "Couldn't send. {0} Your text is kept.";
         public string UnavailableTitle = "Bug reporting unavailable";
         public string UnavailableForPlayers = "Bug reporting isn't available right now.";
 
+        public string AttachmentsTab = "Attachments";
+
+        public string ReportTypeLabel = "Report type";
+        public string TypeBug = "Bug";
+        public string TypeSuggestion = "Suggestion";
         public string DescriptionLabel = "What happened";
         public string DescriptionPrompt = "Describe what happened";
         public string StepsLabel = "Steps to reproduce";
@@ -22,13 +27,11 @@ namespace BetaHub
         public string Required = "required";
         public string Optional = "optional";
         public string CharacterCount = "{0} / {1}";
-        public string TermsLabel = "Terms of bug reporting";
-        public string TermsAccepted = "Accepted";
-        public string TermsNotAccepted = "Not accepted";
+        public string SuggestionMinimum = "{0} / {1} min";
+        public string TermsLabel = "I accept the terms of bug reporting";
 
         public string AttachmentsGroup = "Sending along";
         public string AttachmentsCount = "{0} of {1}";
-        public string Included = "Included";
         public string LeftOut = "Left out";
         public string Queued = "Queued";
         public string Sent = "Sent";
@@ -51,16 +54,19 @@ namespace BetaHub
         public string Write = "Write";
         public string Close = "Close";
         public string Done = "Done";
-        public string NextField = "Next field";
+        public string Next = "Next";
+        public string Previous = "Previous";
+        public string Move = "Move";
+        public string BugOrSuggestion = "Bug or suggestion";
         public string Include = "Include";
         public string LeaveOut = "Leave out";
         public string Accept = "Accept";
         public string Withdraw = "Withdraw";
         public string ReadTerms = "Read terms";
-        public string FullScreen = "Full screen";
         public string Item = "Item";
-        public string Scroll = "Scroll";
-        public string BackToForm = "Back to form";
+        public string OlderLines = "Older lines";
+        public string NewerLines = "Newer lines";
+        public string BackToReport = "Back to report";
         public string SendReport = "Send report";
         public string Sending = "Sending…";
         public string TryAgain = "Try again";
@@ -73,6 +79,7 @@ namespace BetaHub
         public string UploadingTitle = "Almost there";
         public string UploadingSubtitle = "Your report is saved. Uploading attachments.";
         public string SentTitle = "Report sent";
+        public string SuggestionSentTitle = "Suggestion sent";
         public string SentAnonymous = "#{0} · saved anonymously";
         public string SentSignedIn = "#{0} · under your BetaHub reports";
         public string EmailLabel = "Email me when it's fixed";

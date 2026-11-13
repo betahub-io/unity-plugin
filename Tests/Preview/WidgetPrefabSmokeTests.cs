@@ -30,6 +30,11 @@ namespace BetaHub.Tests
         private const string XboxPadClass = "bh-pad--xbox";
         private const string GlowClass = "bh-glow";
         private const string BoxClass = "bh-box";
+        private const string HiddenClass = "bh-hidden";
+        private const string CheckOnClass = "bh-check--on";
+        private const string TabOnClass = "bh-tab--on";
+        private const string PromptDisabledClass = "bh-p--disabled";
+        private const string DpadClass = "bh-dpad";
         private const float LayoutTolerance = 0.5f;
 
         private GameObject _instance;
@@ -118,9 +123,15 @@ namespace BetaHub.Tests
             yield return null;
             StringAssert.Contains("8 OF 9", _root.Q<Label>("bh-group-count").text);
 
-            Press(KeyCode.P);            // full screen
+            Press(KeyCode.P);            // the attachments tab
             yield return null;
             Assert.IsFalse(_root.Q("bh-preview").ClassListContains("bh-hidden"), "P opens the full-screen preview");
+            Press(KeyCode.P);
+            yield return null;
+            Assert.IsTrue(_root.Q("bh-preview").ClassListContains("bh-hidden"), "the key that opened it closes it");
+            Assert.AreEqual("row3", FocusedName(), "on the attachment it showed");
+            Press(KeyCode.P);
+            yield return null;
             Press(KeyCode.Escape);
             yield return null;
             Assert.IsTrue(_root.Q("bh-preview").ClassListContains("bh-hidden"), "Esc returns to the form");
@@ -154,6 +165,22 @@ namespace BetaHub.Tests
             Press(KeyCode.UpArrow);
             yield return null;
             Assert.IsNotNull(PromptsLeft.Q(className: KeyCapClass), "a key press brings the keyboard glyphs back");
+        }
+
+        [UnityTest]
+        public IEnumerator Gamepad_ShoulderButtons_SwitchTheTabs()
+        {
+            _widget.ApplyPreview(new WidgetPreviewOptions { State = WidgetPreviewState.Compose, AttachmentCount = 3, FocusedAttachment = -1 });
+            yield return null;
+            _pad = InputSystem.AddDevice<Gamepad>();
+
+            yield return Tap(GamepadButton.RightShoulder);
+            Assert.IsTrue(PreviewOpen, "RB opens the attachments tab");
+            var shoulders = _root.Q("bh-preview-tabs").Query(className: DpadClass).ToList().Select(chip => ((Label)chip).text).ToArray();
+            CollectionAssert.AreEqual(new[] { "LB", "RB" }, shoulders, "the shoulders either side of the tabs");
+
+            yield return Tap(GamepadButton.LeftShoulder);
+            Assert.IsFalse(PreviewOpen, "LB goes back to the report");
         }
 
         [UnityTest]
@@ -427,7 +454,7 @@ namespace BetaHub.Tests
 
             Press(KeyCode.Tab);
             for (int i = 0; i < SettleFrames; i++) yield return null;
-            Press(KeyCode.Tab);
+            Press(KeyCode.Tab, EventModifiers.Shift);
             for (int i = 0; i < SettleFrames; i++) yield return null;
             TypeCharacter('c');
             yield return null;
@@ -475,9 +502,9 @@ namespace BetaHub.Tests
             VisualElement next = null;
             foreach (var item in _root.Q("bh-prompts-left").Children())
             {
-                if (item.Q<Label>(className: "bh-p-label").text == _widget.Strings.NextField) next = item;
+                if (item.Q<Label>(className: "bh-p-label").text == _widget.Strings.Next) next = item;
             }
-            Assert.IsNotNull(next, "the Next field prompt while typing What happened");
+            Assert.IsNotNull(next, "the Next prompt while typing What happened");
 
             var at = next.worldBound.center;
             SendPointer(PointerDownEvent.GetPooled(new Event { type = EventType.MouseDown, mousePosition = at, button = 0, clickCount = 1 }));
@@ -489,7 +516,7 @@ namespace BetaHub.Tests
         }
 
         [UnityTest]
-        public IEnumerator ClickingFullScreenUnderThePane_OpensThePreview()
+        public IEnumerator ClickingAttachmentsUnderThePane_OpensThePreview()
         {
             _widget.ApplyPreview(new WidgetPreviewOptions { State = WidgetPreviewState.Compose, AttachmentCount = 3, FocusedAttachment = 1 });
             yield return null;
@@ -513,12 +540,281 @@ namespace BetaHub.Tests
             Assert.Greater(end, 0f, "the sample log is longer than the pane");
             Assert.AreEqual(end, scroll.verticalScroller.value, 1f, "it opens at the newest lines");
 
+            Assert.AreEqual((false, true), (PromptOff(_widget.Strings.OlderLines), PromptOff(_widget.Strings.NewerLines)), "nothing newer at the end");
+
             Press(KeyCode.PageUp);
             yield return null;
             Assert.Less(scroll.verticalScroller.value, end - 1f, "PgUp goes back");
-            Press(KeyCode.PageDown);
+            Assert.IsFalse(PromptOff(_widget.Strings.NewerLines), "newer lines again");
+            for (int i = 0; i < 20 && scroll.verticalScroller.value > 0f; i++)
+            {
+                Press(KeyCode.PageUp);
+                yield return null;
+            }
+            Assert.AreEqual((true, false), (PromptOff(_widget.Strings.OlderLines), PromptOff(_widget.Strings.NewerLines)), "nothing older at the top");
+
+            // the sample log is under two pages, so the middle is reached by the scrollbar
+            scroll.verticalScroller.value = end / 2f;
             yield return null;
+            Assert.AreEqual((false, false), (PromptOff(_widget.Strings.OlderLines), PromptOff(_widget.Strings.NewerLines)), "both ways open mid-log");
+
+            for (int i = 0; i < 20 && scroll.verticalScroller.value < end - 1f; i++)
+            {
+                Press(KeyCode.PageDown);
+                yield return null;
+            }
             Assert.AreEqual(end, scroll.verticalScroller.value, 1f, "PgDn comes back to the end");
+        }
+
+        // --- tester report on the 2.0 form: tabs, checkboxes, the type switch, Tab order, the sent screen ---
+
+        [UnityTest]
+        public IEnumerator Tab_GoesThroughEveryItem_AndRoundAgain()
+        {
+            _widget.ApplyPreview(new WidgetPreviewOptions { State = WidgetPreviewState.Compose, AttachmentCount = 3, FocusedAttachment = -1, Terms = true });
+            yield return null;
+            Assert.AreEqual("description", FocusedName());
+
+            var path = new System.Collections.Generic.List<string>();
+            for (int i = 0; i < 8; i++)
+            {
+                Press(KeyCode.Tab);
+                for (int f = 0; f < SettleFrames; f++) yield return null;
+                path.Add(FocusedName() + (Editing() != null ? "*" : ""));
+            }
+            // * typing: Tab into a text field types there
+            CollectionAssert.AreEqual(new[] { "steps*", "terms", "row0", "row1", "row2", "type", "description*", "steps*" }, path,
+                "Tab path: " + string.Join(", ", path));
+
+            Press(KeyCode.Tab, EventModifiers.Shift);
+            for (int f = 0; f < SettleFrames; f++) yield return null;
+            Assert.AreEqual("description*", FocusedName() + (Editing() != null ? "*" : ""), "Shift+Tab goes back");
+        }
+
+        [UnityTest]
+        public IEnumerator ArrowsLeaveATextField_FromItsFirstOrLastCharacter()
+        {
+            _widget.Show();
+            for (int i = 0; i < SettleFrames + 2; i++) yield return null;
+            TypeCharacter('a');
+            TypeCharacter('b');
+            yield return null;
+
+            Press(KeyCode.DownArrow, target: Focused());
+            for (int i = 0; i < SettleFrames; i++) yield return null;
+            Assert.AreEqual("steps", Editing(), "down from the last character goes on to the next field");
+
+            Press(KeyCode.UpArrow, target: Focused());
+            for (int i = 0; i < SettleFrames; i++) yield return null;
+            Assert.AreEqual("description", Editing(), "up from the first character goes back");
+            Assert.AreEqual("ab", _root.Q<TextField>("bh-description").value);
+        }
+
+        [UnityTest]
+        public IEnumerator Keys1And2_SwitchTheTabs_AlsoOnAzerty_ButTypeWhileWriting()
+        {
+            _widget.ApplyPreview(new WidgetPreviewOptions { State = WidgetPreviewState.Compose, AttachmentCount = 3, FocusedAttachment = -1 });
+            yield return null;
+            Assert.IsTrue(Tab(0).ClassListContains(TabOnClass), "the report tab is open");
+
+            Press(KeyCode.Alpha2);
+            yield return null;
+            Assert.IsTrue(PreviewOpen, "2 opens the attachments tab");
+            Assert.IsTrue(Tab(1, "bh-preview-tabs").ClassListContains(TabOnClass));
+            Press(KeyCode.Alpha1);
+            yield return null;
+            Assert.IsFalse(PreviewOpen, "1 goes back to the report");
+
+            PressCharacter('é');
+            yield return null;
+            Assert.IsTrue(PreviewOpen, "é is AZERTY's 2");
+            PressCharacter('&');
+            yield return null;
+            Assert.IsFalse(PreviewOpen, "& is AZERTY's 1");
+
+            _widget.ApplyPreview(WidgetPreviewState.None, false);
+            yield return null;
+            _widget.Show();
+            for (int i = 0; i < SettleFrames + 2; i++) yield return null;
+            TypeCharacter('2');
+            yield return null;
+            Assert.IsFalse(PreviewOpen, "while typing, 2 is a character");
+            Assert.AreEqual("2", _root.Q<TextField>("bh-description").value);
+        }
+
+        [UnityTest]
+        public IEnumerator ClickingTheTabs_SwitchesThem()
+        {
+            _widget.ApplyPreview(new WidgetPreviewOptions { State = WidgetPreviewState.Compose, AttachmentCount = 3, FocusedAttachment = -1 });
+            yield return null;
+            Assert.AreEqual("3", Tab(1).Q(className: "bh-tab-badge").Q<Label>().text, "the badge counts what is included");
+
+            yield return Click(Tab(1));
+            Assert.IsTrue(PreviewOpen, "the attachments tab opens the preview");
+            yield return Click(Tab(0, "bh-preview-tabs"));
+            Assert.IsFalse(PreviewOpen, "the report tab goes back to the form");
+        }
+
+        [UnityTest]
+        public IEnumerator ClickingARow_SelectsIt_ItsCheckbox_IncludesOrLeavesOut()
+        {
+            _widget.ApplyPreview(new WidgetPreviewOptions { State = WidgetPreviewState.Compose, AttachmentCount = 3, FocusedAttachment = -1, Terms = true });
+            yield return null;
+            var row = _root.Q("bh-rows")[1];
+
+            yield return Click(row.Q<Label>(className: "bh-oname"));
+            Assert.AreEqual("row1", FocusedName(), "a click on the row selects it");
+            StringAssert.Contains("3 OF 3", _root.Q<Label>("bh-group-count").text, "and changes nothing");
+
+            yield return Click(row.Q(className: "bh-check"));
+            StringAssert.Contains("2 OF 3", _root.Q<Label>("bh-group-count").text, "the checkbox leaves it out");
+            Assert.IsFalse(row.Q(className: "bh-check").ClassListContains(CheckOnClass));
+
+            yield return Click(_root.Q<Label>("bh-terms-label"));
+            Assert.AreEqual("terms", FocusedName());
+            Assert.IsFalse(_root.Q("bh-terms-check").ClassListContains(CheckOnClass), "a click on the terms row only selects it");
+            yield return Click(_root.Q("bh-terms-check"));
+            Assert.IsTrue(_root.Q("bh-terms-check").ClassListContains(CheckOnClass), "its checkbox accepts");
+
+            Press(KeyCode.Alpha2);
+            yield return null;
+            var previewRow = _root.Q("bh-preview-list")[0];
+            yield return Click(previewRow.Q(className: "bh-check"));
+            StringAssert.Contains("SCREENSHOT", _root.Q<Label>("bh-preview-subtitle").text.ToUpperInvariant(), "its checkbox also shows the row");
+            Assert.IsFalse(previewRow.Q(className: "bh-check").ClassListContains(CheckOnClass), "and leaves it out");
+        }
+
+        [UnityTest]
+        public IEnumerator TypeSwitch_ClickOrLeftAndRight_PickTheType()
+        {
+            _widget.ApplyPreview(new WidgetPreviewOptions { State = WidgetPreviewState.Compose, AttachmentCount = 3, FocusedAttachment = -1 });
+            yield return null;
+
+            yield return Click(_root.Q("bh-type-suggestion"));
+            Assert.AreEqual("type", FocusedName());
+            Assert.AreEqual("SUGGEST AN IDEA", Tab(0).Q<Label>(className: "bh-tab-text").text);
+            Assert.IsTrue(_root.Q("bh-fld-steps").ClassListContains(HiddenClass), "a suggestion has no steps");
+            Assert.AreEqual(1, _root.Q("bh-rows").childCount, "and takes only the screenshot");
+            Assert.IsNotNull(PromptLabeled(_widget.Strings.BugOrSuggestion), "the switch's prompt");
+
+            Press(KeyCode.LeftArrow);
+            yield return null;
+            Assert.AreEqual("REPORT A BUG", Tab(0).Q<Label>(className: "bh-tab-text").text, "left picks Bug");
+            Assert.AreEqual(3, _root.Q("bh-rows").childCount);
+            Press(KeyCode.RightArrow);
+            yield return null;
+            Assert.AreEqual("SUGGEST AN IDEA", Tab(0).Q<Label>(className: "bh-tab-text").text, "right picks Suggestion");
+
+            yield return Click(_root.Q<Label>("bh-type-label"));
+            Assert.AreEqual("SUGGEST AN IDEA", Tab(0).Q<Label>(className: "bh-tab-text").text, "a click beside the switch only selects the row");
+        }
+
+        [UnityTest]
+        public IEnumerator Suggestion_WaitsForTheMinimumLength()
+        {
+            _widget.ApplyPreview(new WidgetPreviewOptions { State = WidgetPreviewState.Compose, AttachmentCount = 3, FocusedAttachment = -1, Type = ReportType.Suggestion });
+            yield return null;
+            _root.Q<TextField>("bh-description").value = "A map";
+            yield return null;
+            Assert.AreEqual("5 / 80 min", _root.Q<Label>("bh-description-tag").text);
+            Assert.IsTrue(_root.Q("bh-prompts-right")[0].ClassListContains(PromptDisabledClass), "Send waits for the minimum");
+
+            _root.Q<TextField>("bh-description").value = new string('x', 80);
+            yield return null;
+            Assert.IsFalse(_root.Q("bh-prompts-right")[0].ClassListContains(PromptDisabledClass));
+        }
+
+        [UnityTest]
+        public IEnumerator SentScreen_ArrowsAndTab_MoveBetweenTheEmailAndTheLink()
+        {
+            _widget.ApplyPreview(new WidgetPreviewOptions { State = WidgetPreviewState.Sent, AttachmentCount = 3, FocusedAttachment = -1 });
+            yield return null;
+            var link = _root.Q("bh-link");
+            Assert.IsTrue(_root.Q("bh-fld-email").ClassListContains(FieldFocusedClass), "the email first");
+
+            Press(KeyCode.DownArrow);
+            yield return null;
+            Assert.IsTrue(link.ClassListContains(RowFocusedClass), "down to the link");
+            Assert.IsFalse(_root.Q("bh-fld-email").ClassListContains(FieldFocusedClass));
+            Assert.IsNotNull(PromptLabeled(_widget.Strings.CopyLink), "Enter copies it");
+
+            Press(KeyCode.UpArrow);
+            yield return null;
+            Assert.IsTrue(_root.Q("bh-fld-email").ClassListContains(FieldFocusedClass), "up to the email");
+            Press(KeyCode.Tab);
+            yield return null;
+            Assert.IsTrue(link.ClassListContains(RowFocusedClass), "Tab moves too");
+        }
+
+        // A suggestion publishes on its own and takes no email.
+        [UnityTest]
+        public IEnumerator SentSuggestion_HasNoEmailStep()
+        {
+            _widget.ApplyPreview(new WidgetPreviewOptions { State = WidgetPreviewState.Sent, AttachmentCount = 3, FocusedAttachment = -1, Type = ReportType.Suggestion });
+            yield return null;
+            Assert.AreEqual("SUGGESTION SENT", _root.Q<Label>("bh-title").text);
+            Assert.IsTrue(_root.Q("bh-fld-email").ClassListContains(HiddenClass), "no email field");
+            Assert.IsTrue(_root.Q("bh-sent-note").ClassListContains(HiddenClass), "nor its note");
+            Assert.AreEqual(0, _root.Q("bh-prompts-right").childCount, "no Email me a link");
+            Assert.AreEqual(_widget.Strings.BackToGame, _root.Q("bh-prompts-left")[0].Q<Label>(className: "bh-p-label").text, "going back leads");
+        }
+
+        // A report still uploading shows a toast; opening a new form hides it and its ring.
+        [UnityTest]
+        public IEnumerator OpeningTheForm_HidesTheUploadToast()
+        {
+            _widget.ApplyPreview(new WidgetPreviewOptions { State = WidgetPreviewState.Toast, AttachmentCount = 3, FocusedAttachment = -1 });
+            yield return null;
+            Assert.IsFalse(_root.Q("bh-toast").ClassListContains(HiddenClass), "the toast is up");
+
+            _widget.Show();
+            for (int i = 0; i < SettleFrames + 2; i++) yield return null;
+            Assert.IsTrue(_widget.IsVisible);
+            var toast = _root.Q("bh-toast");
+            Assert.IsTrue(toast.ClassListContains(HiddenClass), "nothing of it over the form");
+            Assert.AreEqual(DisplayStyle.None, toast.resolvedStyle.display);
+            Assert.IsTrue(toast.Contains(_root.Q("bh-ring")), "the ring is drawn inside the toast, so it goes with it");
+        }
+
+        private bool PreviewOpen => !_root.Q("bh-preview").ClassListContains(HiddenClass);
+
+        private VisualElement Tab(int index, string host = "bh-tabs") => _root.Q(host).Query(className: "bh-tab").ToList()[index];
+
+        private VisualElement PromptLabeled(string label)
+        {
+            foreach (var side in new[] { "bh-prompts-left", "bh-prompts-right" })
+            {
+                foreach (var item in _root.Q(side).Children())
+                {
+                    if (item.Q<Label>(className: "bh-p-label")?.text == label) return item;
+                }
+            }
+            return null;
+        }
+
+        private bool PromptOff(string label)
+        {
+            var prompt = PromptLabeled(label);
+            Assert.IsNotNull(prompt, "prompt " + label);
+            return prompt.ClassListContains(PromptDisabledClass);
+        }
+
+        private IEnumerator Click(VisualElement element)
+        {
+            var at = element.worldBound.center;
+            SendPointer(PointerDownEvent.GetPooled(new Event { type = EventType.MouseDown, mousePosition = at, button = 0, clickCount = 1 }));
+            yield return null;
+            SendPointer(PointerUpEvent.GetPooled(new Event { type = EventType.MouseUp, mousePosition = at, button = 0, clickCount = 1 }));
+            for (int i = 0; i < SettleFrames; i++) yield return null;
+        }
+
+        private VisualElement Focused() => _root.panel.focusController.focusedElement as VisualElement;
+
+        private string Editing()
+        {
+            if (_root.Q("bh-fld-description").ClassListContains(FieldEditingClass)) return "description";
+            if (_root.Q("bh-fld-steps").ClassListContains(FieldEditingClass)) return "steps";
+            return null;
         }
 
         private void SendPointer(EventBase evt)
@@ -550,6 +846,8 @@ namespace BetaHub.Tests
 
         private string FocusedName()
         {
+            if (_root.Q("bh-type").ClassListContains(RowFocusedClass)) return "type";
+            if (_root.Q("bh-terms").ClassListContains(RowFocusedClass)) return "terms";
             if (_root.Q("bh-fld-description").ClassListContains(FieldFocusedClass)) return "description";
             if (_root.Q("bh-fld-steps").ClassListContains(FieldFocusedClass)) return "steps";
             var rows = _root.Q("bh-rows");
@@ -560,10 +858,21 @@ namespace BetaHub.Tests
             return "none";
         }
 
-        private void Press(KeyCode key)
+        private void Press(KeyCode key, EventModifiers modifiers = EventModifiers.None, VisualElement target = null)
+        {
+            target = target ?? _root.Q("bh-overlay");
+            using (var evt = KeyDownEvent.GetPooled('\0', key, modifiers))
+            {
+                evt.target = target;
+                target.SendEvent(evt);
+            }
+        }
+
+        // A key that types a character and has no KeyCode of its own, such as AZERTY's é.
+        private void PressCharacter(char c)
         {
             var overlay = _root.Q("bh-overlay");
-            using (var evt = KeyDownEvent.GetPooled('\0', key, EventModifiers.None))
+            using (var evt = KeyDownEvent.GetPooled(c, KeyCode.None, EventModifiers.None))
             {
                 evt.target = overlay;
                 overlay.SendEvent(evt);

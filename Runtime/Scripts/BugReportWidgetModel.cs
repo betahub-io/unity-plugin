@@ -4,10 +4,40 @@ using System.Globalization;
 
 namespace BetaHub
 {
+    /// <summary>A bug goes to BetaHub's issues, a suggestion to its feature requests.</summary>
+    public enum ReportType
+    {
+        Bug,
+        Suggestion,
+    }
+
+    /// <summary>The items in the form's left column, top to bottom.</summary>
+    public enum WidgetField
+    {
+        Type,
+        Description,
+        Steps,
+        Terms,
+    }
+
+    /// <summary>The header's tabs: the report form, and its attachments full screen.</summary>
+    public enum WidgetTab
+    {
+        Report,
+        Attachments,
+    }
+
+    /// <summary>What has focus on the sent screen.</summary>
+    public enum SentFocus
+    {
+        Email,
+        Link,
+    }
+
     public enum WidgetScreen
     {
         Compose,
-        /// <summary>One attachment full screen over the form.</summary>
+        /// <summary>The attachments tab: one attachment full screen over the form.</summary>
         Preview,
         Sending,
         Uploading,
@@ -40,12 +70,23 @@ namespace BetaHub
         Send,
         Next,
         Navigate,
-        /// <summary>Scrolls a long log in the full-screen preview.</summary>
-        Scroll,
+        /// <summary>Shift+Tab. Keyboard only.</summary>
+        Prev,
+        /// <summary>The arrow keys or the d-pad: a hint in the bar, not something to press there.</summary>
+        Move,
+        /// <summary>Left and right on the report type switch.</summary>
+        ChangeType,
+        /// <summary>The header's tabs: 1 and 2 on a keyboard, the shoulder buttons on a pad.</summary>
+        TabReport,
+        TabAttachments,
+        /// <summary>The full-screen log, a page towards its oldest or its newest line.</summary>
+        ScrollUp,
+        ScrollDown,
     }
 
     public enum WidgetFocusKind
     {
+        Type,
         Field,
         Terms,
         Attachment,
@@ -81,11 +122,15 @@ namespace BetaHub
         public bool CanSend;
         public bool HasError;
         public bool Configured;
-        public bool SignedIn;
-        /// <summary>Sent screen: an anonymous player can still leave an email.</summary>
+        /// <summary>Sent screen: an anonymous player can still leave an email (not after a suggestion or a saved one).</summary>
         public bool CanEmail;
-        /// <summary>The full-screen preview shows a log that scrolls.</summary>
-        public bool PreviewScrolls;
+        public SentFocus SentFocus;
+        public bool HasAttachments;
+        /// <summary>The full-screen preview shows a log.</summary>
+        public bool PreviewIsLog;
+        /// <summary>Where that log is scrolled: nothing older, nothing newer left to show.</summary>
+        public bool LogAtTop;
+        public bool LogAtEnd;
     }
 
     /// <summary>
@@ -114,6 +159,8 @@ namespace BetaHub
             public HeaderKind Kind;
             public string Title;
             public string Subtitle;
+            /// <summary>The report and attachments tabs stand in the title's place.</summary>
+            public bool Tabs;
         }
 
         /// <summary>From six attachments the list goes to two columns, so nine fit without scrolling.</summary>
@@ -167,13 +214,40 @@ namespace BetaHub
 
         public static bool IsAtLimit(int length, int limit) => length >= limit;
 
-        public static bool CanSend(string description, bool termsRequired, bool termsAccepted, bool configured)
+        /// <param name="minLength">Characters the description needs, spaces around it not counted: a suggestion's minimum, 0 for a bug.</param>
+        public static bool CanSend(string description, bool termsRequired, bool termsAccepted, bool configured, int minLength)
         {
             if (!configured) return false;
             if (string.IsNullOrWhiteSpace(description) || description.Length > DescriptionLimit) return false;
+            if (description.Trim().Length < minLength) return false;
             if (termsRequired && !termsAccepted) return false;
             return true;
         }
+
+        /// <summary>The description's tag: how far to the minimum while below it, then the usual note or count.</summary>
+        public static string DescriptionTag(string description, int minLength, BugReportWidgetStrings s)
+        {
+            string text = description ?? "";
+            int trimmed = text.Trim().Length;
+            if (trimmed < minLength)
+            {
+                return string.Format(CultureInfo.InvariantCulture, s.SuggestionMinimum,
+                    trimmed.ToString("N0", CultureInfo.InvariantCulture), minLength.ToString("N0", CultureInfo.InvariantCulture));
+            }
+            return FieldTag(s.Required, text.Length, DescriptionLimit, s);
+        }
+
+        /// <summary>The left column for a report type, top to bottom: a suggestion has no steps.</summary>
+        public static List<WidgetField> FieldsFor(ReportType type, bool termsRequired)
+        {
+            var fields = new List<WidgetField> { WidgetField.Type, WidgetField.Description };
+            if (type == ReportType.Bug) fields.Add(WidgetField.Steps);
+            if (termsRequired) fields.Add(WidgetField.Terms);
+            return fields;
+        }
+
+        /// <summary>"Report a bug" or "Suggest an idea": the compose title and the report tab.</summary>
+        public static string ReportTitle(ReportType type, BugReportWidgetStrings s) => type == ReportType.Suggestion ? s.SuggestTitle : s.Title;
 
         // --- headers ---
 
@@ -182,7 +256,7 @@ namespace BetaHub
         /// a banner, so the screen never changes shape.
         /// </summary>
         public static Header ComposeHeader(bool configured, bool isDevelopmentBuild, string configurationError,
-            string submissionError, string signedInAs, BugReportWidgetStrings s)
+            string submissionError, string signedInAs, ReportType type, BugReportWidgetStrings s)
         {
             if (!configured)
             {
@@ -195,15 +269,17 @@ namespace BetaHub
                         : s.UnavailableForPlayers,
                 };
             }
+            // The tabs take the title's place, so a failed send says so in the subtitle.
             if (!string.IsNullOrEmpty(submissionError))
             {
-                return new Header { Kind = HeaderKind.Error, Title = s.ErrorTitle, Subtitle = string.Format(s.ErrorSubtitle, submissionError) };
+                return new Header { Kind = HeaderKind.Error, Title = ReportTitle(type, s), Subtitle = string.Format(s.ErrorSubtitle, submissionError), Tabs = true };
             }
             return new Header
             {
                 Kind = HeaderKind.Normal,
-                Title = s.Title,
+                Title = ReportTitle(type, s),
                 Subtitle = string.IsNullOrEmpty(signedInAs) ? s.Subtitle : string.Format(s.SubtitleSignedIn, signedInAs),
+                Tabs = true,
             };
         }
 
@@ -212,22 +288,23 @@ namespace BetaHub
             return new Header { Kind = HeaderKind.Normal, Title = s.UploadingTitle, Subtitle = s.UploadingSubtitle };
         }
 
-        public static Header SentHeader(string issueId, bool signedIn, BugReportWidgetStrings s)
+        public static Header SentHeader(string issueId, bool signedIn, ReportType type, BugReportWidgetStrings s)
         {
             return new Header
             {
                 Kind = HeaderKind.Normal,
-                Title = s.SentTitle,
+                Title = type == ReportType.Suggestion ? s.SuggestionSentTitle : s.SentTitle,
                 Subtitle = string.Format(signedIn ? s.SentSignedIn : s.SentAnonymous, issueId ?? ""),
             };
         }
 
         // --- attachment rows ---
 
+        /// <summary>The row's checkbox shows it is included; only leaving something out is spelt out.</summary>
         public static RowStatus ComposeRowStatus(bool included, BugReportWidgetStrings s)
         {
             return included
-                ? new RowStatus { Text = s.Included, Tone = RowTone.Accent, Progress = NoProgress }
+                ? new RowStatus { Text = "", Tone = RowTone.Accent, Progress = NoProgress }
                 : new RowStatus { Text = s.LeftOut, Tone = RowTone.Muted, Progress = NoProgress };
         }
 
@@ -255,16 +332,21 @@ namespace BetaHub
 
         // --- prompt bar ---
 
+        /// <summary>The prompt bar. Back is always the first prompt, so it never moves between screens.</summary>
         public static PromptBar Prompts(PromptContext c, BugReportWidgetStrings s)
         {
             var bar = new PromptBar();
             switch (c.Screen)
             {
                 case WidgetScreen.Preview:
+                    bar.Left.Add(P(PromptAction.Back, s.BackToReport));
                     bar.Left.Add(P(PromptAction.Navigate, s.Item));
-                    if (c.PreviewScrolls) bar.Left.Add(P(PromptAction.Scroll, s.Scroll));
+                    if (c.PreviewIsLog)
+                    {
+                        bar.Left.Add(new Prompt { Action = PromptAction.ScrollUp, Label = s.OlderLines, Disabled = c.LogAtTop });
+                        bar.Left.Add(new Prompt { Action = PromptAction.ScrollDown, Label = s.NewerLines, Disabled = c.LogAtEnd });
+                    }
                     bar.Left.Add(P(PromptAction.Confirm, c.FocusedIncluded ? s.LeaveOut : s.Include));
-                    bar.Left.Add(P(PromptAction.Back, s.BackToForm));
                     break;
 
                 case WidgetScreen.Sending:
@@ -276,18 +358,7 @@ namespace BetaHub
                     break;
 
                 case WidgetScreen.Sent:
-                    if (!c.SignedIn && c.CanEmail)
-                    {
-                        bar.Left.Add(P(PromptAction.Confirm, s.Write));
-                        bar.Left.Add(P(PromptAction.Alt, s.CopyLink));
-                        bar.Left.Add(P(PromptAction.Back, s.BackToGame));
-                        bar.Right.Add(new Prompt { Action = PromptAction.Send, Label = s.EmailMeALink, Primary = true });
-                    }
-                    else
-                    {
-                        bar.Left.Add(P(PromptAction.Alt, s.CopyLink));
-                        bar.Right.Add(new Prompt { Action = PromptAction.Back, Label = s.BackToGame, Primary = true });
-                    }
+                    AddSentPrompts(bar, c, s);
                     break;
 
                 default:
@@ -295,6 +366,35 @@ namespace BetaHub
                     break;
             }
             return bar;
+        }
+
+        private static void AddSentPrompts(PromptBar bar, PromptContext c, BugReportWidgetStrings s)
+        {
+            if (!c.CanEmail)
+            {
+                bar.Left.Add(new Prompt { Action = PromptAction.Back, Label = s.BackToGame, Primary = true });
+                bar.Left.Add(P(PromptAction.Alt, s.CopyLink));
+                return;
+            }
+            if (c.Typing)
+            {
+                bar.Left.Add(P(PromptAction.Back, s.Done));
+            }
+            else
+            {
+                bar.Left.Add(P(PromptAction.Back, s.BackToGame));
+                bar.Left.Add(P(PromptAction.Move, s.Move));
+                if (c.SentFocus == SentFocus.Link)
+                {
+                    bar.Left.Add(P(PromptAction.Confirm, s.CopyLink));
+                }
+                else
+                {
+                    bar.Left.Add(P(PromptAction.Confirm, s.Write));
+                    bar.Left.Add(P(PromptAction.Alt, s.CopyLink));
+                }
+            }
+            bar.Right.Add(new Prompt { Action = PromptAction.Send, Label = s.EmailMeALink, Primary = true });
         }
 
         private static void AddComposePrompts(PromptBar bar, PromptContext c, BugReportWidgetStrings s)
@@ -306,24 +406,34 @@ namespace BetaHub
             else if (c.Typing)
             {
                 bar.Left.Add(P(PromptAction.Back, s.Done));
-                if (!c.Gamepad) bar.Left.Add(P(PromptAction.Next, s.NextField));
-            }
-            else if (c.Focus == WidgetFocusKind.Attachment)
-            {
-                bar.Left.Add(P(PromptAction.Confirm, c.FocusedIncluded ? s.LeaveOut : s.Include));
-                bar.Left.Add(P(PromptAction.Alt, s.FullScreen));
-                bar.Left.Add(P(PromptAction.Back, s.Close));
-            }
-            else if (c.Focus == WidgetFocusKind.Terms)
-            {
-                bar.Left.Add(P(PromptAction.Confirm, c.TermsAccepted ? s.Withdraw : s.Accept));
-                bar.Left.Add(P(PromptAction.Alt, s.ReadTerms));
-                bar.Left.Add(P(PromptAction.Back, s.Close));
+                if (!c.Gamepad)
+                {
+                    bar.Left.Add(P(PromptAction.Next, s.Next));
+                    bar.Left.Add(P(PromptAction.Prev, s.Previous));
+                }
             }
             else
             {
-                bar.Left.Add(P(PromptAction.Confirm, s.Write));
                 bar.Left.Add(P(PromptAction.Back, s.Close));
+                bar.Left.Add(P(PromptAction.Move, s.Move));
+                switch (c.Focus)
+                {
+                    case WidgetFocusKind.Attachment:
+                        bar.Left.Add(P(PromptAction.Confirm, c.FocusedIncluded ? s.LeaveOut : s.Include));
+                        bar.Left.Add(P(PromptAction.Alt, s.AttachmentsTab));
+                        break;
+                    case WidgetFocusKind.Type:
+                        bar.Left.Add(P(PromptAction.ChangeType, s.BugOrSuggestion));
+                        break;
+                    case WidgetFocusKind.Terms:
+                        bar.Left.Add(P(PromptAction.Confirm, c.TermsAccepted ? s.Withdraw : s.Accept));
+                        bar.Left.Add(P(PromptAction.Alt, s.ReadTerms));
+                        break;
+                    default:
+                        bar.Left.Add(P(PromptAction.Confirm, s.Write));
+                        if (c.HasAttachments) bar.Left.Add(P(PromptAction.Alt, s.AttachmentsTab));
+                        break;
+                }
             }
 
             bar.Right.Add(new Prompt
@@ -384,10 +494,19 @@ namespace BetaHub
         private static readonly string[] PreviewKey = { "P" };
         private static readonly string[] CtrlEnter = { "Ctrl", "Enter" };
         private static readonly string[] Tab = { "Tab" };
+        private static readonly string[] ShiftTab = { "Shift", "Tab" };
         private static readonly string[] UpDown = { "↑", "↓" };
-        private static readonly string[] PageKeys = { "PgUp", "PgDn" };
+        private static readonly string[] Arrows = { "↑", "↓", "←", "→" };
+        private static readonly string[] LeftRight = { "←", "→" };
+        private static readonly string[] ReportTabKey = { "1" };
+        private static readonly string[] AttachmentsTabKey = { "2" };
+        private static readonly string[] PageUp = { "PgUp" };
+        private static readonly string[] PageDown = { "PgDn" };
         private const string DpadUpDown = "▲ ▼";
-        private const string RightStick = "R";
+        private const string DpadAll = "▲ ▼ ◀ ▶";
+        private const string DpadLeftRight = "◀ ▶";
+        private const string RightStickUp = "R ▲";
+        private const string RightStickDown = "R ▼";
 
         public static GlyphPart[] For(GlyphSet set, PromptAction action)
         {
@@ -398,17 +517,21 @@ namespace BetaHub
                 for (int i = 0; i < keys.Length; i++) parts[i] = new GlyphPart { Kind = GlyphPartKind.Key, Text = keys[i] };
                 return parts;
             }
-            if (action == PromptAction.Navigate)
+            switch (action)
             {
-                return new[] { new GlyphPart { Kind = GlyphPartKind.Dpad, Text = DpadUpDown } };
-            }
-            if (action == PromptAction.Scroll)
-            {
-                return new[] { new GlyphPart { Kind = GlyphPartKind.Stick, Text = RightStick } };
+                case PromptAction.Navigate: return Chip(DpadUpDown);
+                case PromptAction.Move: return Chip(DpadAll);
+                case PromptAction.ChangeType: return Chip(DpadLeftRight);
+                case PromptAction.ScrollUp: return Chip(RightStickUp);
+                case PromptAction.ScrollDown: return Chip(RightStickDown);
+                case PromptAction.TabReport: return Chip(PadLayout.Shoulder(set, left: true));
+                case PromptAction.TabAttachments: return Chip(PadLayout.Shoulder(set, left: false));
             }
             var button = PadLayout.ButtonFor(set, action);
             return new[] { new GlyphPart { Kind = GlyphPartKind.Face, Text = PadLayout.Label(set, button), Button = button } };
         }
+
+        private static GlyphPart[] Chip(string text) => new[] { new GlyphPart { Kind = GlyphPartKind.Dpad, Text = text } };
 
         public static string[] Keyboard(PromptAction action)
         {
@@ -419,8 +542,14 @@ namespace BetaHub
                 case PromptAction.Alt: return PreviewKey;
                 case PromptAction.Send: return CtrlEnter;
                 case PromptAction.Next: return Tab;
+                case PromptAction.Prev: return ShiftTab;
                 case PromptAction.Navigate: return UpDown;
-                case PromptAction.Scroll: return PageKeys;
+                case PromptAction.Move: return Arrows;
+                case PromptAction.ChangeType: return LeftRight;
+                case PromptAction.TabReport: return ReportTabKey;
+                case PromptAction.TabAttachments: return AttachmentsTabKey;
+                case PromptAction.ScrollUp: return PageUp;
+                case PromptAction.ScrollDown: return PageDown;
                 default: throw new ArgumentOutOfRangeException(nameof(action), action, null);
             }
         }
@@ -446,6 +575,8 @@ namespace BetaHub
 
         public bool OnAttachment { get; private set; }
         public int Index { get; private set; }
+        /// <summary>The attachment focus last left: where the attachments tab opens from a field.</summary>
+        public int LastAttachment => _lastAttachment;
 
         public WidgetFocus(int fieldCount, int attachmentCount, int columns)
         {
@@ -493,6 +624,16 @@ namespace BetaHub
             if (OnAttachment) MoveInAttachments(move);
             else MoveInFields(move);
             return wasAttachment != OnAttachment || was != Index;
+        }
+
+        /// <summary>Tab and Shift+Tab: every field, then every attachment, and round again.</summary>
+        public void Step(int delta)
+        {
+            int count = _fieldCount + _attachmentCount;
+            int current = OnAttachment ? _fieldCount + Index : Index;
+            int target = ((current + delta) % count + count) % count;
+            if (target < _fieldCount) FocusField(target);
+            else FocusAttachment(target - _fieldCount);
         }
 
         private void MoveInFields(FocusMove move)

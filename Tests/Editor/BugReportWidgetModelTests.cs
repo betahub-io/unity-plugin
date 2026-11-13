@@ -73,28 +73,63 @@ namespace BetaHub.Tests
         [Test]
         public void CanSend_RequiresNonBlankDescription()
         {
-            Assert.IsFalse(BugReportWidgetModel.CanSend("", termsRequired: false, termsAccepted: false, configured: true));
-            Assert.IsFalse(BugReportWidgetModel.CanSend("   \n", false, false, true));
-            Assert.IsTrue(BugReportWidgetModel.CanSend("It broke", false, false, true));
+            Assert.IsFalse(BugReportWidgetModel.CanSend("", termsRequired: false, termsAccepted: false, configured: true, minLength: 0));
+            Assert.IsFalse(BugReportWidgetModel.CanSend("   \n", false, false, true, 0));
+            Assert.IsTrue(BugReportWidgetModel.CanSend("It broke", false, false, true, 0));
         }
 
         [Test]
         public void CanSend_TermsGateOnlyWhenRequired()
         {
-            Assert.IsFalse(BugReportWidgetModel.CanSend("It broke", termsRequired: true, termsAccepted: false, configured: true));
-            Assert.IsTrue(BugReportWidgetModel.CanSend("It broke", termsRequired: true, termsAccepted: true, configured: true));
+            Assert.IsFalse(BugReportWidgetModel.CanSend("It broke", termsRequired: true, termsAccepted: false, configured: true, minLength: 0));
+            Assert.IsTrue(BugReportWidgetModel.CanSend("It broke", termsRequired: true, termsAccepted: true, configured: true, minLength: 0));
         }
 
         [Test]
         public void CanSend_NeverWhenNotConfigured()
         {
-            Assert.IsFalse(BugReportWidgetModel.CanSend("It broke", false, false, configured: false));
+            Assert.IsFalse(BugReportWidgetModel.CanSend("It broke", false, false, configured: false, minLength: 0));
         }
 
         [Test]
         public void CanSend_NeverOverTheLimit()
         {
-            Assert.IsFalse(BugReportWidgetModel.CanSend(new string('x', BugReportWidgetModel.DescriptionLimit + 1), false, false, true));
+            Assert.IsFalse(BugReportWidgetModel.CanSend(new string('x', BugReportWidgetModel.DescriptionLimit + 1), false, false, true, 0));
+        }
+
+        // BetaHub refuses a suggestion shorter than the project's minimum; spaces around it don't count.
+        [Test]
+        public void CanSend_NotBelowTheMinimum()
+        {
+            Assert.IsFalse(BugReportWidgetModel.CanSend("  " + new string('x', 79) + "  ", false, false, true, minLength: 80));
+            Assert.IsTrue(BugReportWidgetModel.CanSend(new string('x', 80), false, false, true, minLength: 80));
+        }
+
+        [Test]
+        public void DescriptionTag_CountsUpToTheMinimum_ThenIsTheUsualTag()
+        {
+            Assert.AreEqual("12 / 80 min", BugReportWidgetModel.DescriptionTag(" twelve chars ", 80, S));
+            Assert.AreEqual(S.Required, BugReportWidgetModel.DescriptionTag(new string('x', 80), 80, S));
+            Assert.AreEqual(S.Required, BugReportWidgetModel.DescriptionTag("", 0, S), "no minimum: a bug report");
+            Assert.AreEqual("1,600 / 2,000", BugReportWidgetModel.DescriptionTag(new string('x', 1600), 80, S));
+        }
+
+        // --- fields and types ---
+
+        [Test]
+        public void FieldsFor_ABugHasSteps_ASuggestionDoesNot_TermsLast()
+        {
+            CollectionAssert.AreEqual(new[] { WidgetField.Type, WidgetField.Description, WidgetField.Steps },
+                BugReportWidgetModel.FieldsFor(ReportType.Bug, termsRequired: false));
+            CollectionAssert.AreEqual(new[] { WidgetField.Type, WidgetField.Description, WidgetField.Terms },
+                BugReportWidgetModel.FieldsFor(ReportType.Suggestion, termsRequired: true));
+        }
+
+        [Test]
+        public void ReportTitle_NamesTheType()
+        {
+            Assert.AreEqual(S.Title, BugReportWidgetModel.ReportTitle(ReportType.Bug, S));
+            Assert.AreEqual(S.SuggestTitle, BugReportWidgetModel.ReportTitle(ReportType.Suggestion, S));
         }
 
         // --- columns ---
@@ -153,33 +188,40 @@ namespace BetaHub.Tests
         [Test]
         public void ComposeHeader_Anonymous_SaysWhereItGoes()
         {
-            var header = BugReportWidgetModel.ComposeHeader(configured: true, isDevelopmentBuild: false, configurationError: null, submissionError: null, signedInAs: null, S);
-            Assert.AreEqual((BugReportWidgetModel.HeaderKind.Normal, S.Title, S.Subtitle), (header.Kind, header.Title, header.Subtitle));
+            var header = BugReportWidgetModel.ComposeHeader(configured: true, isDevelopmentBuild: false, configurationError: null, submissionError: null, signedInAs: null, ReportType.Bug, S);
+            Assert.AreEqual((BugReportWidgetModel.HeaderKind.Normal, S.Title, S.Subtitle, true), (header.Kind, header.Title, header.Subtitle, header.Tabs));
         }
 
         [Test]
         public void ComposeHeader_SignedIn_NamesTheReporter()
         {
-            var header = BugReportWidgetModel.ComposeHeader(true, false, null, null, signedInAs: "Kasia_P", S);
+            var header = BugReportWidgetModel.ComposeHeader(true, false, null, null, signedInAs: "Kasia_P", ReportType.Bug, S);
             Assert.AreEqual("Reporting as Kasia_P", header.Subtitle);
         }
 
         [Test]
-        public void ComposeHeader_SubmissionError_TakesTheTitle_AndKeepsText()
+        // The tabs stand where the title was, so the subtitle says the send failed.
+        public void ComposeHeader_SubmissionError_IsTheSubtitle_UnderTheTabs()
         {
-            var header = BugReportWidgetModel.ComposeHeader(true, false, null, submissionError: "No connection.", signedInAs: null, S);
-            Assert.AreEqual(BugReportWidgetModel.HeaderKind.Error, header.Kind);
-            Assert.AreEqual(S.ErrorTitle, header.Title);
-            Assert.AreEqual("No connection. Your text is kept.", header.Subtitle);
+            var header = BugReportWidgetModel.ComposeHeader(true, false, null, submissionError: "No connection.", signedInAs: null, ReportType.Bug, S);
+            Assert.AreEqual((BugReportWidgetModel.HeaderKind.Error, true), (header.Kind, header.Tabs));
+            Assert.AreEqual("Couldn't send. No connection. Your text is kept.", header.Subtitle);
+        }
+
+        [Test]
+        public void ComposeHeader_Suggestion_IsTitledSo()
+        {
+            var header = BugReportWidgetModel.ComposeHeader(true, false, null, null, null, ReportType.Suggestion, S);
+            Assert.AreEqual(S.SuggestTitle, header.Title);
         }
 
         [Test]
         public void ComposeHeader_Misconfiguration_DetailOnlyInDevelopmentBuilds()
         {
-            var dev = BugReportWidgetModel.ComposeHeader(configured: false, isDevelopmentBuild: true, configurationError: "Project ID is not set.", submissionError: null, signedInAs: null, S);
-            var player = BugReportWidgetModel.ComposeHeader(configured: false, isDevelopmentBuild: false, configurationError: "Project ID is not set.", submissionError: null, signedInAs: null, S);
+            var dev = BugReportWidgetModel.ComposeHeader(configured: false, isDevelopmentBuild: true, configurationError: "Project ID is not set.", submissionError: null, signedInAs: null, ReportType.Bug, S);
+            var player = BugReportWidgetModel.ComposeHeader(configured: false, isDevelopmentBuild: false, configurationError: "Project ID is not set.", submissionError: null, signedInAs: null, ReportType.Bug, S);
 
-            Assert.AreEqual((BugReportWidgetModel.HeaderKind.Warning, S.UnavailableTitle), (dev.Kind, dev.Title));
+            Assert.AreEqual((BugReportWidgetModel.HeaderKind.Warning, S.UnavailableTitle, false), (dev.Kind, dev.Title, dev.Tabs));
             StringAssert.Contains("Project ID", dev.Subtitle);
             StringAssert.Contains("console", dev.Subtitle);
             Assert.AreEqual(S.UnavailableForPlayers, player.Subtitle);
@@ -188,17 +230,19 @@ namespace BetaHub.Tests
         [Test]
         public void SentHeader_NamesTheReportAndWhereItLives()
         {
-            Assert.AreEqual("#4821 · saved anonymously", BugReportWidgetModel.SentHeader("4821", signedIn: false, S).Subtitle);
-            Assert.AreEqual("#4821 · under your BetaHub reports", BugReportWidgetModel.SentHeader("4821", signedIn: true, S).Subtitle);
-            Assert.AreEqual(S.SentTitle, BugReportWidgetModel.SentHeader("4821", false, S).Title);
+            Assert.AreEqual("#4821 · saved anonymously", BugReportWidgetModel.SentHeader("4821", signedIn: false, ReportType.Bug, S).Subtitle);
+            Assert.AreEqual("#4821 · under your BetaHub reports", BugReportWidgetModel.SentHeader("4821", signedIn: true, ReportType.Bug, S).Subtitle);
+            Assert.AreEqual(S.SentTitle, BugReportWidgetModel.SentHeader("4821", false, ReportType.Bug, S).Title);
+            Assert.AreEqual(S.SuggestionSentTitle, BugReportWidgetModel.SentHeader("12", false, ReportType.Suggestion, S).Title);
         }
 
         // --- attachment row values ---
 
         [Test]
-        public void ComposeRow_ShowsIncludedOrLeftOut()
+        // The row's checkbox shows it is included; only leaving something out is spelt out.
+        public void ComposeRow_SpellsOutOnlyLeftOut()
         {
-            Assert.AreEqual((S.Included, RowTone.Accent), Pair(BugReportWidgetModel.ComposeRowStatus(true, S)));
+            Assert.AreEqual(("", RowTone.Accent), Pair(BugReportWidgetModel.ComposeRowStatus(true, S)));
             Assert.AreEqual((S.LeftOut, RowTone.Muted), Pair(BugReportWidgetModel.ComposeRowStatus(false, S)));
         }
 
@@ -248,7 +292,7 @@ namespace BetaHub.Tests
 
         private static PromptContext Compose(WidgetFocusKind focus = WidgetFocusKind.Field) => new PromptContext
         {
-            Screen = WidgetScreen.Compose, Focus = focus, CanSend = true, Configured = true, FocusedIncluded = true,
+            Screen = WidgetScreen.Compose, Focus = focus, CanSend = true, Configured = true, FocusedIncluded = true, HasAttachments = true,
         };
 
         private static string Describe(PromptBar bar)
@@ -258,10 +302,21 @@ namespace BetaHub.Tests
             return Side(bar.Left) + " | " + Side(bar.Right);
         }
 
+        private static string Describe(PromptContext context) => Describe(BugReportWidgetModel.Prompts(context, S));
+
+        // Back is the first prompt on every screen, so it never moves; Move explains the arrows.
         [Test]
         public void Compose_FieldFocused()
         {
-            Assert.AreEqual("Confirm:Write, Back:Close | Send:Send report*", Describe(BugReportWidgetModel.Prompts(Compose(), S)));
+            Assert.AreEqual("Back:Close, Move:Move, Confirm:Write, Alt:Attachments | Send:Send report*", Describe(Compose()));
+        }
+
+        [Test]
+        public void Compose_FieldFocused_NoAttachments_NoAttachmentsPrompt()
+        {
+            var context = Compose();
+            context.HasAttachments = false;
+            Assert.AreEqual("Back:Close, Move:Move, Confirm:Write | Send:Send report*", Describe(context));
         }
 
         [Test]
@@ -269,39 +324,45 @@ namespace BetaHub.Tests
         {
             var context = Compose();
             context.CanSend = false;
-            Assert.AreEqual("Confirm:Write, Back:Close | Send:Send report(off)", Describe(BugReportWidgetModel.Prompts(context, S)));
+            Assert.AreEqual("Back:Close, Move:Move, Confirm:Write, Alt:Attachments | Send:Send report(off)", Describe(context));
         }
 
         [Test]
-        public void Compose_Typing_OffersDoneAndNextField_OnKeyboardOnly()
+        public void Compose_Typing_OffersDoneNextAndPrevious_OnKeyboardOnly()
         {
             var keyboard = Compose();
             keyboard.Typing = true;
             var gamepad = keyboard;
             gamepad.Gamepad = true;
 
-            Assert.AreEqual("Back:Done, Next:Next field | Send:Send report*", Describe(BugReportWidgetModel.Prompts(keyboard, S)));
-            Assert.AreEqual("Back:Done | Send:Send report*", Describe(BugReportWidgetModel.Prompts(gamepad, S)));
+            Assert.AreEqual("Back:Done, Next:Next, Prev:Previous | Send:Send report*", Describe(keyboard));
+            Assert.AreEqual("Back:Done | Send:Send report*", Describe(gamepad));
         }
 
         [Test]
-        public void Compose_AttachmentFocused_TogglesAndPreviews()
+        public void Compose_AttachmentFocused_TogglesAndOpensAttachments()
         {
             var included = Compose(WidgetFocusKind.Attachment);
             var leftOut = included;
             leftOut.FocusedIncluded = false;
 
-            Assert.AreEqual("Confirm:Leave out, Alt:Full screen, Back:Close | Send:Send report*", Describe(BugReportWidgetModel.Prompts(included, S)));
-            Assert.AreEqual("Confirm:Include, Alt:Full screen, Back:Close | Send:Send report*", Describe(BugReportWidgetModel.Prompts(leftOut, S)));
+            Assert.AreEqual("Back:Close, Move:Move, Confirm:Leave out, Alt:Attachments | Send:Send report*", Describe(included));
+            Assert.AreEqual("Back:Close, Move:Move, Confirm:Include, Alt:Attachments | Send:Send report*", Describe(leftOut));
         }
 
         [Test]
         public void Compose_TermsFocused()
         {
             var context = Compose(WidgetFocusKind.Terms);
-            Assert.AreEqual("Confirm:Accept, Alt:Read terms, Back:Close | Send:Send report*", Describe(BugReportWidgetModel.Prompts(context, S)));
+            Assert.AreEqual("Back:Close, Move:Move, Confirm:Accept, Alt:Read terms | Send:Send report*", Describe(context));
             context.TermsAccepted = true;
-            Assert.AreEqual("Confirm:Withdraw, Alt:Read terms, Back:Close | Send:Send report*", Describe(BugReportWidgetModel.Prompts(context, S)));
+            Assert.AreEqual("Back:Close, Move:Move, Confirm:Withdraw, Alt:Read terms | Send:Send report*", Describe(context));
+        }
+
+        [Test]
+        public void Compose_TypeFocused_ChoosesWithLeftAndRight()
+        {
+            Assert.AreEqual("Back:Close, Move:Move, ChangeType:Bug or suggestion | Send:Send report*", Describe(Compose(WidgetFocusKind.Type)));
         }
 
         [Test]
@@ -309,7 +370,7 @@ namespace BetaHub.Tests
         {
             var context = Compose();
             context.HasError = true;
-            Assert.AreEqual("Confirm:Write, Back:Close | Send:Try again*", Describe(BugReportWidgetModel.Prompts(context, S)));
+            Assert.AreEqual("Back:Close, Move:Move, Confirm:Write, Alt:Attachments | Send:Try again*", Describe(context));
         }
 
         [Test]
@@ -318,58 +379,66 @@ namespace BetaHub.Tests
             var context = Compose();
             context.Configured = false;
             context.CanSend = false;
-            Assert.AreEqual("Back:Close | Send:Send report(off)", Describe(BugReportWidgetModel.Prompts(context, S)));
+            Assert.AreEqual("Back:Close | Send:Send report(off)", Describe(context));
         }
 
         [Test]
         public void Preview()
         {
             var context = new PromptContext { Screen = WidgetScreen.Preview, FocusedIncluded = true };
-            Assert.AreEqual("Navigate:Item, Confirm:Leave out, Back:Back to form | ", Describe(BugReportWidgetModel.Prompts(context, S)));
+            Assert.AreEqual("Back:Back to report, Navigate:Item, Confirm:Leave out | ", Describe(context));
         }
 
-        // A long log scrolls in the full-screen preview; up and down still switch items.
+        // A log opens at its newest line: nothing newer to show, so that prompt is greyed out.
         [Test]
-        public void Preview_OfALog_AddsScroll()
+        public void Preview_OfALog_OffersOlderAndNewerLines_EachOffAtItsEnd()
         {
-            var context = new PromptContext { Screen = WidgetScreen.Preview, FocusedIncluded = true, PreviewScrolls = true };
-            Assert.AreEqual("Navigate:Item, Scroll:Scroll, Confirm:Leave out, Back:Back to form | ", Describe(BugReportWidgetModel.Prompts(context, S)));
-        }
+            var atEnd = new PromptContext { Screen = WidgetScreen.Preview, FocusedIncluded = true, PreviewIsLog = true, LogAtEnd = true };
+            var atTop = atEnd;
+            atTop.LogAtEnd = false;
+            atTop.LogAtTop = true;
 
-        [Test]
-        public void Scroll_IsPageKeysOrTheRightStick()
-        {
-            CollectionAssert.AreEqual(new[] { "PgUp", "PgDn" }, PromptGlyphs.Keyboard(PromptAction.Scroll));
-            var pad = PromptGlyphs.For(GlyphSet.Xbox, PromptAction.Scroll);
-            Assert.AreEqual(1, pad.Length);
-            Assert.AreEqual(GlyphPartKind.Stick, pad[0].Kind);
-            Assert.AreEqual("R", pad[0].Text);
+            Assert.AreEqual("Back:Back to report, Navigate:Item, ScrollUp:Older lines, ScrollDown:Newer lines(off), Confirm:Leave out | ", Describe(atEnd));
+            Assert.AreEqual("Back:Back to report, Navigate:Item, ScrollUp:Older lines(off), ScrollDown:Newer lines, Confirm:Leave out | ", Describe(atTop));
         }
 
         [Test]
         public void Sending_IsOneBusyPrompt()
         {
             var context = new PromptContext { Screen = WidgetScreen.Sending };
-            Assert.AreEqual(" | Send:Sending…(busy)", Describe(BugReportWidgetModel.Prompts(context, S)));
+            Assert.AreEqual(" | Send:Sending…(busy)", Describe(context));
         }
 
         [Test]
         public void Uploading_CanLeave()
         {
             var context = new PromptContext { Screen = WidgetScreen.Uploading };
-            Assert.AreEqual("Back:Back to game · the upload continues | ", Describe(BugReportWidgetModel.Prompts(context, S)));
+            Assert.AreEqual("Back:Back to game · the upload continues | ", Describe(context));
         }
 
         [Test]
-        public void Sent_Anonymous_OffersEmail_SignedIn_DoesNot()
+        public void Sent_WithEmail_FollowsFocus_BetweenTheEmailAndTheLink()
         {
-            var anonymous = new PromptContext { Screen = WidgetScreen.Sent, CanEmail = true };
-            var signedIn = new PromptContext { Screen = WidgetScreen.Sent, SignedIn = true };
+            var email = new PromptContext { Screen = WidgetScreen.Sent, CanEmail = true, SentFocus = SentFocus.Email };
+            var link = email;
+            link.SentFocus = SentFocus.Link;
+            var typing = email;
+            typing.Typing = true;
 
-            Assert.AreEqual("Confirm:Write, Alt:Copy link, Back:Back to game | Send:Email me a link*", Describe(BugReportWidgetModel.Prompts(anonymous, S)));
-            Assert.AreEqual("Alt:Copy link | Back:Back to game*", Describe(BugReportWidgetModel.Prompts(signedIn, S)));
+            Assert.AreEqual("Back:Back to game, Move:Move, Confirm:Write, Alt:Copy link | Send:Email me a link*", Describe(email));
+            Assert.AreEqual("Back:Back to game, Move:Move, Confirm:Copy link | Send:Email me a link*", Describe(link));
+            Assert.AreEqual("Back:Done | Send:Email me a link*", Describe(typing));
         }
 
+        // Signed in, after the email was saved, or a suggestion: going back is the main thing left.
+        [Test]
+        public void Sent_NoEmail_BackToGameLeads()
+        {
+            var context = new PromptContext { Screen = WidgetScreen.Sent, CanEmail = false };
+            Assert.AreEqual("Back:Back to game*, Alt:Copy link | ", Describe(context));
+        }
+
+        // Prev (Shift+Tab) is only ever offered on a keyboard.
         [Test]
         public void EveryActionHasAGlyphOnEveryDevice()
         {
@@ -377,17 +446,48 @@ namespace BetaHub.Tests
             {
                 foreach (PromptAction action in System.Enum.GetValues(typeof(PromptAction)))
                 {
+                    if (set != GlyphSet.Keyboard && action == PromptAction.Prev) continue;
                     CollectionAssert.IsNotEmpty(PromptGlyphs.For(set, action), set + " " + action);
                 }
             }
             CollectionAssert.AreEqual(new[] { "Ctrl", "Enter" }, PromptGlyphs.Keyboard(PromptAction.Send));
+            CollectionAssert.AreEqual(new[] { "Shift", "Tab" }, PromptGlyphs.Keyboard(PromptAction.Prev));
         }
 
         [Test]
-        public void Sent_AfterTheEmailWasSaved_LooksLikeSignedIn()
+        public void Keyboard_ArrowsPagesAndTabKeys()
         {
-            var context = new PromptContext { Screen = WidgetScreen.Sent, CanEmail = false };
-            Assert.AreEqual("Alt:Copy link | Back:Back to game*", Describe(BugReportWidgetModel.Prompts(context, S)));
+            CollectionAssert.AreEqual(new[] { "↑", "↓", "←", "→" }, PromptGlyphs.Keyboard(PromptAction.Move));
+            CollectionAssert.AreEqual(new[] { "←", "→" }, PromptGlyphs.Keyboard(PromptAction.ChangeType));
+            CollectionAssert.AreEqual(new[] { "PgUp" }, PromptGlyphs.Keyboard(PromptAction.ScrollUp));
+            CollectionAssert.AreEqual(new[] { "PgDn" }, PromptGlyphs.Keyboard(PromptAction.ScrollDown));
+            CollectionAssert.AreEqual(new[] { "1" }, PromptGlyphs.Keyboard(PromptAction.TabReport));
+            CollectionAssert.AreEqual(new[] { "2" }, PromptGlyphs.Keyboard(PromptAction.TabAttachments));
+        }
+
+        // A pad shows chips: the d-pad, the right stick's direction, and each pad's own shoulder names.
+        [Test]
+        public void Pad_ChipsForDirectionsAndShoulders()
+        {
+            var chips = new[]
+            {
+                (GlyphSet.Xbox, PromptAction.Move, "▲ ▼ ◀ ▶"),
+                (GlyphSet.Xbox, PromptAction.ChangeType, "◀ ▶"),
+                (GlyphSet.Xbox, PromptAction.ScrollUp, "R ▲"),
+                (GlyphSet.Xbox, PromptAction.ScrollDown, "R ▼"),
+                (GlyphSet.Xbox, PromptAction.TabReport, "LB"),
+                (GlyphSet.Xbox, PromptAction.TabAttachments, "RB"),
+                (GlyphSet.PlayStation, PromptAction.TabReport, "L1"),
+                (GlyphSet.PlayStation, PromptAction.TabAttachments, "R1"),
+                (GlyphSet.Switch, PromptAction.TabReport, "L"),
+                (GlyphSet.Switch, PromptAction.TabAttachments, "R"),
+            };
+            foreach (var (set, action, text) in chips)
+            {
+                var glyph = PromptGlyphs.For(set, action);
+                Assert.AreEqual(1, glyph.Length, set + " " + action);
+                Assert.AreEqual((GlyphPartKind.Dpad, text), (glyph[0].Kind, glyph[0].Text), set + " " + action);
+            }
         }
     }
 
@@ -476,6 +576,38 @@ namespace BetaHub.Tests
             Assert.AreEqual("a2", At(f));
             f.Resize(2, 0, 1);
             Assert.AreEqual("f1", At(f), "attachments gone: last field");
+        }
+
+        // Tab and Shift+Tab: every field, then every attachment, and round again.
+        [Test]
+        public void Step_WalksFieldsThenAttachments_AndWraps()
+        {
+            var f = new WidgetFocus(3, 2, 2);
+            var path = new System.Collections.Generic.List<string>();
+            for (int i = 0; i < 5; i++) { f.Step(1); path.Add(At(f)); }
+            CollectionAssert.AreEqual(new[] { "f1", "f2", "a0", "a1", "f0" }, path);
+
+            f.Step(-1);
+            Assert.AreEqual("a1", At(f), "back from the first field to the last attachment");
+        }
+
+        [Test]
+        public void Step_NoAttachments_WrapsInTheFields()
+        {
+            var f = new WidgetFocus(2, 0, 1);
+            f.Step(1); f.Step(1);
+            Assert.AreEqual("f0", At(f));
+        }
+
+        // The attachments tab opens from a field on the attachment last visited.
+        [Test]
+        public void LastAttachment_IsTheOneFocusLeft()
+        {
+            var f = new WidgetFocus(2, 3, 1);
+            Assert.AreEqual(0, f.LastAttachment);
+            f.FocusAttachment(2);
+            f.FocusField(0);
+            Assert.AreEqual(2, f.LastAttachment);
         }
 
         [Test]

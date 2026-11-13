@@ -93,7 +93,7 @@ Join our [Discord server](https://discord.gg/g2wpRtG) for support, feedback, and
 The `BugReportWidget` prefab carries these components on one GameObject:
 
 - `BetaHubReporter`: headless core. Configuration (Project ID, Auth Token, release, upload mode), attachments, custom fields, recording policy and submission. Your code talks to this one.
-- `BugReportWidget` + `UIDocument`: the shipped form, built with UI Toolkit (`Runtime/UI/BugReportWidget.uxml` and `.uss`). A full-screen view over the reporter: what happened on the left, what gets sent on the right, actions in a prompt bar. Sized for a 1080p TV (30 px field text, 64 px tall controls, a safe area), scaled to the screen height.
+- `BugReportWidget` + `UIDocument`: the shipped form, built with UI Toolkit (`Runtime/UI/BugReportWidget.uxml` and `.uss`). A full-screen view over the reporter: what happened on the left, what gets sent on the right, actions in a prompt bar. The player picks a bug report or a suggestion, and ticks what goes with it; a second tab, Attachments, shows each one full screen. Sized for a 1080p TV (30 px field text, 64 px tall controls, a safe area), scaled to the screen height.
 - `GameRecorder`, `CustomFieldValidator`: recording and custom field checks.
 
 The older uGUI form (`BugReportingFormCanvas` prefab with `BugReportUI`) still works and still talks to the same reporter, but new features land in the UI Toolkit widget.
@@ -111,6 +111,8 @@ Configuration mistakes are reported once in the Unity console at startup, prefix
 ### Controllers
 
 With the Input System package active, the widget takes a gamepad: the d-pad or left stick moves focus (hold to repeat) and the face buttons follow the prompt bar. The bar draws the buttons of the device used last: key caps for keyboard and mouse, Xbox letters (also on Steam Deck and for unknown pads), PlayStation symbols, or Switch letters with A to confirm and B to go back. Without the Input System package the form takes keyboard and mouse only.
+
+On a keyboard, the arrows move focus, Tab and Shift+Tab go through every item in order (a text field types as soon as Tab lands on it), and 1 and 2 switch between the report and its attachments. While typing, up from the first character or down from the last leaves the field. On a pad the shoulder buttons switch the tabs.
 
 F12 opens the form. Controller players have no F12: open it from your pause menu with `Show()`, or add a gamepad binding to the widget's **Shortcut Action**.
 
@@ -206,7 +208,9 @@ submission.StateChanged += s =>
 reporter.NotifyReportWindowHidden();
 ```
 
-Each included row reports `Queued`, `Uploading` (with progress), `Sent` or `Failed`; a failed row does not stop the report. The legacy `Submit(description, steps, BugReportOptions)` overload still works: it collects the list and applies the three toggles.
+Each included row reports `Queued`, `Uploading` (with progress), `Sent` or `Failed`; a failed row does not stop the report.
+
+`reporter.SubmitSuggestion(description, attachments)` sends a suggestion (a BetaHub feature request) instead: the description and, if included, the screenshot. It returns the same handle, has no email step and publishes on its own. BetaHub refuses suggestions shorter than the project's minimum (80 characters unless changed); the widget's **Suggestion Min Length** keeps Send off until then. The legacy `Submit(description, steps, BugReportOptions)` overload still works: it collects the list and applies the three toggles.
 
 States: `Preparing`, `CreatingDraft`, `UploadingMedia` (WaitForUpload mode only), `AwaitingPublish`, `Publishing`, `Published`, `Failed`. Signed-in users (device authentication) skip `AwaitingPublish`; the report publishes automatically. A misconfigured reporter returns a handle already in `Failed` with the reason in `Error`.
 
