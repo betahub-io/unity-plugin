@@ -1,5 +1,6 @@
 #if UNITY_EDITOR
 using System.Collections;
+using System.Linq;
 using NUnit.Framework;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -8,12 +9,16 @@ using UnityEngine.TestTools;
 
 namespace BetaHub.Tests
 {
-    // Plays the example scene a new studio opens first: it holds the widget and nothing else that
-    // reports bugs, and the widget opens. An error logged while loading or opening fails the test.
-    public class ExampleScenePlayTests
+    // Plays the demo a new studio opens first: the game builds itself from code, and the widget opens.
+    // An error logged while loading or playing fails the test.
+    public class DemoScenePlayTests
     {
         // the workspace links the package's Samples~ in as Samples
-        private const string ScenePath = "Assets/Samples/ExampleScene/SampleScene.unity";
+        private const string ScenePath = "Assets/Samples/Demo/BugReportDemo.unity";
+        // the sample's script compiles into the game's assembly, out of the tests' reach
+        private const string GameTypeName = "DemoGame";
+        // four walls, five coins and the player
+        private const int GameSprites = 10;
         private const int SettleFrames = 5;
 
         private Scene _scene;
@@ -23,7 +28,7 @@ namespace BetaHub.Tests
         {
             yield return EditorSceneManager.LoadSceneAsyncInPlayMode(ScenePath, new LoadSceneParameters(LoadSceneMode.Additive));
             _scene = SceneManager.GetSceneByPath(ScenePath);
-            Assert.IsTrue(_scene.isLoaded, "Example scene not loaded from " + ScenePath);
+            Assert.IsTrue(_scene.isLoaded, "Demo scene not loaded from " + ScenePath);
             for (int i = 0; i < SettleFrames; i++) yield return null;
         }
 
@@ -37,11 +42,12 @@ namespace BetaHub.Tests
         }
 
         [UnityTest]
-        public IEnumerator OpensTheWidget()
+        public IEnumerator TheGameBuildsItself_AndTheWidgetOpens()
         {
+            Assert.AreEqual(1, Object.FindObjectsOfType<MonoBehaviour>().Count(b => b.GetType().Name == GameTypeName), "DemoGame instances");
+            Assert.AreEqual(GameSprites, Object.FindObjectsOfType<SpriteRenderer>().Length, "the game's sprites");
             var widgets = Object.FindObjectsOfType<BugReportWidget>();
             Assert.AreEqual(1, widgets.Length, "BugReportWidget instances");
-            Assert.IsEmpty(Object.FindObjectsOfType<BugReportUI>(), "the legacy form is gone");
             Assert.AreEqual(1, Object.FindObjectsOfType<BetaHubReporter>().Length, "BetaHubReporter instances");
 
             widgets[0].Show();

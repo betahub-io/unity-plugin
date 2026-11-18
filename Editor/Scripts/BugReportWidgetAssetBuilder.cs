@@ -1,3 +1,5 @@
+// Maintainers only: it writes into the package. The development workspace defines BETAHUB_PLUGIN_DEVELOPMENT.
+#if BETAHUB_PLUGIN_DEVELOPMENT
 using System.IO;
 using UnityEditor;
 using UnityEngine;
@@ -156,3 +158,4 @@ namespace BetaHub.Editor
         }
     }
 }
+#endif

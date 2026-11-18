@@ -99,7 +99,7 @@ namespace BetaHub.Editor
             return path;
         }
 
-        [MenuItem("BetaHub/Regenerate Theme Stylesheets")]
+        [MenuItem("Window/BetaHub/Regenerate Theme Stylesheets", false, 10010)]
         public static void RegenerateAll()
         {
             string[] guids = AssetDatabase.FindAssets("t:" + nameof(BugReportThemeAsset));

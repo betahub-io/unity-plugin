@@ -11,7 +11,8 @@ This is a Unity plugin for BetaHub bug reporting that enables in-game bug submis
 ### Core Components
 
 - **GameRecorder** (`Runtime/Scripts/GameRecorder.cs`): Handles video recording using FFmpeg with optimized GPU-based capture
-- **BugReportUI** (`Runtime/Scripts/BugReportUI.cs`): Main UI component for bug report submission form
+- **BetaHubReporter** (`Runtime/Scripts/BetaHubReporter.cs`): Headless core: configuration, attachments, custom fields, submission
+- **BugReportWidget** (`Runtime/Scripts/BugReportWidget.cs`): The shipped UI Toolkit form over the reporter (see UI Toolkit Widget below)
 - **Issue** (`Runtime/Scripts/Issue.cs`): Data model representing bug reports and their upload state
 - **VideoEncoder** (`Runtime/Scripts/VideoEncoder.cs`): FFmpeg wrapper for video encoding with segmented recording
 - **Process Wrappers**: Platform-specific process handling for FFmpeg
@@ -50,10 +51,7 @@ This project follows Unity Package Manager conventions:
 
 ### Testing
 
-The plugin includes a working demo scene in `Samples~/ExampleScene/` with:
-- Sample scene setup
-- Example integration with `RotateCube.cs` script
-- Pre-configured demo project settings for immediate testing
+Two samples ship (package.json `samples`): `Samples~/Demo` (a tiny coin game with a deliberate bug, `DemoGame.cs` builds its sprites and sounds in code so the scene works in Built-in and URP) and `Samples~/ApiExamples` (custom fields, device sign-in). `BugReportDemo.unity` is generated: **BetaHub > Build Demo Scene** or `-executeMethod BetaHub.Editor.DemoSceneBuilder.Build`. `DemoSceneTests` fails when the scene refers to anything the package doesn't ship (the 1.x scene carried URP 2D components, a local test script and a missing material).
 
 ### FFmpeg Integration
 
@@ -73,14 +71,14 @@ When building with IL2CPP scripting backend:
 
 ### Demo Project
 
-The plugin comes pre-configured with demo project credentials (`DEMO_PROJECT_ID = "pr-5287510306"`) for immediate testing. Reports submitted to the demo project are only visible to the submitter via email links.
+The plugin comes pre-configured with demo project credentials (`DEMO_PROJECT_ID = "pr-5287510306"`) for immediate testing. Reports submitted to the demo project are visible only through their link (shown on the Sent screen).
 
 ## Fast Test Loop (seconds)
 
 `Tools~/EditTests/` is a dotnet SDK project that compiles `Runtime/Scripts` + `Tests/Editor` against Unity's DLLs and runs the plain-C# NUnit tests without launching Unity. Use it as the inner red/green loop:
 
 ```bash
-cd Tools~/EditTests && dotnet test --filter "FullyQualifiedName~BugReportSessionTests|FullyQualifiedName~ReportSubmissionTests|FullyQualifiedName~ReporterConfigurationTests|FullyQualifiedName~BugReportWidget|FullyQualifiedName~AttachmentSetTests|FullyQualifiedName~ColorMathTests|FullyQualifiedName~ThemeRecipeTests|FullyQualifiedName~ThemeUssWriterTests|FullyQualifiedName~ThumbnailRingTests|FullyQualifiedName~PreviewFrameSizeTests|FullyQualifiedName~WidgetStylesheetTests|FullyQualifiedName~ThemeAssetTests|FullyQualifiedName~FeatureRequestTests|FullyQualifiedName~DescriptionMinimumsTests|FullyQualifiedName~FfmpegCommandTests"
+cd Tools~/EditTests && dotnet test --filter "FullyQualifiedName~BugReportSessionTests|FullyQualifiedName~ReportSubmissionTests|FullyQualifiedName~ReporterConfigurationTests|FullyQualifiedName~BugReportWidget|FullyQualifiedName~AttachmentSetTests|FullyQualifiedName~ColorMathTests|FullyQualifiedName~ThemeRecipeTests|FullyQualifiedName~ThemeUssWriterTests|FullyQualifiedName~ThumbnailRingTests|FullyQualifiedName~PreviewFrameSizeTests|FullyQualifiedName~WidgetStylesheetTests|FullyQualifiedName~ThemeAssetTests|FullyQualifiedName~FeatureRequestTests|FullyQualifiedName~DescriptionMinimumsTests|FullyQualifiedName~FfmpegCommandTests|FullyQualifiedName~DemoSceneTests|FullyQualifiedName~PackageManifestTests"
 ```
 
 Add new pure-C# suites to the filter. Tests that touch the Unity runtime (e.g. `VideoEncoderCleanupTests`) only run in Unity. The NUnit adapter in that project silently drops `[TestCase]` methods with enum arguments; use a table inside a plain `[Test]` instead. Before finishing, confirm with the real Unity EditMode run:
@@ -97,7 +95,7 @@ If any Unity batchmode run exits 0 after only a few dozen log lines, check for `
 
 ## UI Toolkit Widget
 
-The shipped UI is `Runtime/Prefabs/BugReportWidget.prefab`: `UIDocument` + `BugReportWidget` view over `BetaHubReporter`, markup in `Runtime/UI/BugReportWidget.uxml` and layout in `.uss` (px at 1920x1080, panel matched on height). Colors are `--bh-*` variables from a theme stylesheet in `Runtime/UI/Themes/`, written by `ThemeUssWriter` from `BugReportThemeLibrary`. Rows, panes, prompts and the header's tabs are built in `BugReportWidget.cs`; screen/prompt/row/focus decisions live in the pure `BugReportWidgetModel` and `WidgetFocus`. The form follows the Unreal plugin's report screen (`../unreal-plugin`, `BH_ReportScreenModel.cpp`): keep texts, keys and prompt order in step when either changes. A suggestion (Report type switch) goes through `BetaHubReporter.SubmitSuggestion()` and the `FeatureRequest` client: screenshot only, no email step. Send waits for the project's minimum description length per type (`BetaHubReporter.LoadDescriptionMinimums()`, GET `projects/{id}.json`; a private project refuses a project token, then the inspector's Bug/Suggestion Min Length apply). `DescriptionMinimumsJsonTests` use JsonUtility and run in Unity only. The prefab, `Runtime/UI/BugReportPanelSettings.asset`, `Runtime/UI/BetaHubRuntimeTheme.tss` and the theme stylesheets are generated, never hand-edited: menu **BetaHub > Build Widget Assets** or
+The shipped UI is `Runtime/Prefabs/BugReportWidget.prefab`: `UIDocument` + `BugReportWidget` view over `BetaHubReporter`, markup in `Runtime/UI/BugReportWidget.uxml` and layout in `.uss` (px at 1920x1080, panel matched on height). Colors are `--bh-*` variables from a theme stylesheet in `Runtime/UI/Themes/`, written by `ThemeUssWriter` from `BugReportThemeLibrary`. Rows, panes, prompts and the header's tabs are built in `BugReportWidget.cs`; screen/prompt/row/focus decisions live in the pure `BugReportWidgetModel` and `WidgetFocus`. The form follows the Unreal plugin's report screen (`../unreal-plugin`, `BH_ReportScreenModel.cpp`): keep texts, keys and prompt order in step when either changes. A suggestion (Report type switch) goes through `BetaHubReporter.SubmitSuggestion()` and the `FeatureRequest` client: screenshot only, no email step. Send waits for the project's minimum description length per type (`BetaHubReporter.LoadDescriptionMinimums()`, GET `projects/{id}.json`; a private project refuses a project token, then the inspector's Bug/Suggestion Min Length apply). `DescriptionMinimumsJsonTests` use JsonUtility and run in Unity only. The prefab, `Runtime/UI/BugReportPanelSettings.asset`, `Runtime/UI/BetaHubRuntimeTheme.tss` and the theme stylesheets are generated, never hand-edited: menu **BetaHub > Build Widget Assets** (maintainers only: this menu and Build Demo Scene compile under `BETAHUB_PLUGIN_DEVELOPMENT`, which the workspace defines for Standalone and WebGL; users never see them) or
 
 ```bash
 Unity -batchmode -nographics -quit -projectPath "<workspace>" -executeMethod BetaHub.Editor.BugReportWidgetAssetBuilder.Build -logFile /tmp/unity_build_assets.log
@@ -132,4 +130,6 @@ For non-WebGL compilation check (no full build, just opens the project and compi
 ## Development Notes
 
 - Do not generate meta files, let Unity do this
+- User documentation lives in one place: the Unity section of the BetaHub docs (`../betahub-docs/integrations/game-engines.md`). The README stays short (demo, add to your game, upgrade, link); the package ships no Documentation.html. Keep this file in `.claude/`: Unity skips dot folders, so it never shows in a user's project
+- Users' menus: `Window > BetaHub` (Download FFmpeg, Regenerate Theme Stylesheets) and `GameObject > BetaHub > Bug Report Widget`. A missing FFmpeg is offered once on import (`FfmpegFirstRunPrompt`, never in batch mode)
 - Use `ruby validate_prefab.rb <prefab_path>` to validate Unity prefabs for duplicate IDs and broken references
