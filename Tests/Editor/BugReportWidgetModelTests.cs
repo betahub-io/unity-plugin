@@ -97,7 +97,7 @@ namespace BetaHub.Tests
             Assert.IsFalse(BugReportWidgetModel.CanSend(new string('x', BugReportWidgetModel.DescriptionLimit + 1), false, false, true, 0));
         }
 
-        // BetaHub refuses a suggestion shorter than the project's minimum; spaces around it don't count.
+        // BetaHub refuses a description shorter than the project's minimum; spaces around it don't count.
         [Test]
         public void CanSend_NotBelowTheMinimum()
         {
@@ -110,7 +110,8 @@ namespace BetaHub.Tests
         {
             Assert.AreEqual("12 / 80 min", BugReportWidgetModel.DescriptionTag(" twelve chars ", 80, S));
             Assert.AreEqual(S.Required, BugReportWidgetModel.DescriptionTag(new string('x', 80), 80, S));
-            Assert.AreEqual(S.Required, BugReportWidgetModel.DescriptionTag("", 0, S), "no minimum: a bug report");
+            Assert.AreEqual("5 / 50 min", BugReportWidgetModel.DescriptionTag("short", 50, S), "a bug's minimum counts the same way");
+            Assert.AreEqual(S.Required, BugReportWidgetModel.DescriptionTag("", 0, S), "no minimum");
             Assert.AreEqual("1,600 / 2,000", BugReportWidgetModel.DescriptionTag(new string('x', 1600), 80, S));
         }
 
@@ -126,10 +127,20 @@ namespace BetaHub.Tests
         }
 
         [Test]
-        public void ReportTitle_NamesTheType()
+        public void TextsFor_ABug_SpeakOfAReport()
         {
-            Assert.AreEqual(S.Title, BugReportWidgetModel.ReportTitle(ReportType.Bug, S));
-            Assert.AreEqual(S.SuggestTitle, BugReportWidgetModel.ReportTitle(ReportType.Suggestion, S));
+            var bug = BugReportWidgetModel.TextsFor(ReportType.Bug, S);
+            Assert.AreEqual(("Report a bug", "What happened", "Describe what happened", "Send report", "Report link", "Sent with this report", "Report sent"),
+                (bug.Title, bug.DescriptionLabel, bug.DescriptionPrompt, bug.Send, bug.Link, bug.SentWith, bug.SentTitle));
+        }
+
+        // A suggestion is not a report of something that happened.
+        [Test]
+        public void TextsFor_ASuggestion_SpeakOfTheIdea()
+        {
+            var idea = BugReportWidgetModel.TextsFor(ReportType.Suggestion, S);
+            Assert.AreEqual(("Suggest an idea", "Your idea", "Describe your idea", "Send suggestion", "Suggestion link", "Sent with this suggestion", "Suggestion sent"),
+                (idea.Title, idea.DescriptionLabel, idea.DescriptionPrompt, idea.Send, idea.Link, idea.SentWith, idea.SentTitle));
         }
 
         // --- columns ---
@@ -206,6 +217,14 @@ namespace BetaHub.Tests
             var header = BugReportWidgetModel.ComposeHeader(true, false, null, submissionError: "No connection.", signedInAs: null, ReportType.Bug, S);
             Assert.AreEqual((BugReportWidgetModel.HeaderKind.Error, true), (header.Kind, header.Tabs));
             Assert.AreEqual("Couldn't send. No connection. Your text is kept.", header.Subtitle);
+        }
+
+        // BetaHub's messages can end in a space; the sentences keep one between them.
+        [Test]
+        public void ComposeHeader_SubmissionError_TrimsTheServerMessage()
+        {
+            var header = BugReportWidgetModel.ComposeHeader(true, false, null, submissionError: " Description must be at least 50 characters long. ", signedInAs: null, ReportType.Bug, S);
+            Assert.AreEqual("Couldn't send. Description must be at least 50 characters long. Your text is kept.", header.Subtitle);
         }
 
         [Test]
@@ -363,6 +382,16 @@ namespace BetaHub.Tests
         public void Compose_TypeFocused_ChoosesWithLeftAndRight()
         {
             Assert.AreEqual("Back:Close, Move:Move, ChangeType:Bug or suggestion | Send:Send report*", Describe(Compose(WidgetFocusKind.Type)));
+        }
+
+        [Test]
+        public void Compose_Suggestion_SendsASuggestion()
+        {
+            var context = Compose();
+            context.Type = ReportType.Suggestion;
+            Assert.AreEqual("Back:Close, Move:Move, Confirm:Write, Alt:Attachments | Send:Send suggestion*", Describe(context));
+            context.HasError = true;
+            Assert.AreEqual("Back:Close, Move:Move, Confirm:Write, Alt:Attachments | Send:Try again*", Describe(context));
         }
 
         [Test]

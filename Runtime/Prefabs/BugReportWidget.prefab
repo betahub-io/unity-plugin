@@ -145,6 +145,7 @@ MonoBehaviour:
   Theme: {fileID: 7433441132597879392, guid: 5457cb9c6205a43b7879669c326bce2f, type: 3}
   RequireTermsAcceptance: 0
   TermsUrl: 
+  BugMinLength: 50
   SuggestionMinLength: 80
   Strings:
     Kicker: BetaHub
@@ -161,12 +162,14 @@ MonoBehaviour:
     TypeSuggestion: Suggestion
     DescriptionLabel: What happened
     DescriptionPrompt: Describe what happened
+    SuggestionLabel: Your idea
+    SuggestionPrompt: Describe your idea
     StepsLabel: Steps to reproduce
     StepsPrompt: Add steps if you can. It helps a lot.
     Required: required
     Optional: optional
     CharacterCount: '{0} / {1}'
-    SuggestionMinimum: '{0} / {1} min'
+    DescriptionMinimum: '{0} / {1} min'
     TermsLabel: I accept the terms of bug reporting
     AttachmentsGroup: Sending along
     AttachmentsCount: '{0} of {1}'
@@ -204,6 +207,7 @@ MonoBehaviour:
     NewerLines: Newer lines
     BackToReport: Back to report
     SendReport: Send report
+    SendSuggestion: Send suggestion
     Sending: "Sending\u2026"
     TryAgain: Try again
     BackToGame: Back to game
@@ -225,8 +229,10 @@ MonoBehaviour:
     EmailFailed: Couldn't save your email. Try again or just go back.
     SignedInNote: We'll notify you on BetaHub when it's fixed.
     ReportLink: Report link
+    SuggestionLink: Suggestion link
     Copy: Copy
     SentWith: Sent with this report
+    SentWithSuggestion: Sent with this suggestion
     TextOnly: Text only
     ToastUploading: Uploading your report
     ToastUploadingSub: "{0}% \xB7 the game continues"

@@ -36,6 +36,9 @@ namespace BetaHub.Tests
         private const string PromptDisabledClass = "bh-p--disabled";
         private const string DpadClass = "bh-dpad";
         private const float LayoutTolerance = 0.5f;
+        // Opening the form reads the project's minimums; nothing listens here, so the read fails at once
+        // and the tests never reach BetaHub.
+        private const string UnreachableEndpoint = "http://127.0.0.1:9";
 
         private GameObject _instance;
         private BugReportWidget _widget;
@@ -47,6 +50,7 @@ namespace BetaHub.Tests
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath);
             Assert.IsNotNull(prefab, "Prefab missing at " + PrefabPath + ". Run BetaHub > Build Widget Assets.");
             _instance = Object.Instantiate(prefab);
+            _instance.GetComponent<BetaHubReporter>().SubmitEndpoint = UnreachableEndpoint;
             _widget = _instance.GetComponent<BugReportWidget>();
             _root = _instance.GetComponent<UIDocument>().rootVisualElement;
             for (int i = 0; i < SettleFrames; i++) yield return null;
@@ -724,6 +728,36 @@ namespace BetaHub.Tests
             Assert.IsFalse(_root.Q("bh-prompts-right")[0].ClassListContains(PromptDisabledClass));
         }
 
+        // BetaHub refuses a bug report under 50 characters unless the project says otherwise; the
+        // inspector's minimum stands in while the project's own can't be read.
+        [UnityTest]
+        public IEnumerator Bug_WaitsForItsMinimumLength()
+        {
+            _widget.ApplyPreview(new WidgetPreviewOptions { State = WidgetPreviewState.Compose, AttachmentCount = 3, FocusedAttachment = -1 });
+            yield return null;
+            _root.Q<TextField>("bh-description").value = "A map";
+            yield return null;
+            Assert.AreEqual("5 / 50 min", _root.Q<Label>("bh-description-tag").text);
+            Assert.IsTrue(_root.Q("bh-prompts-right")[0].ClassListContains(PromptDisabledClass), "Send waits for the minimum");
+
+            _root.Q<TextField>("bh-description").value = new string('x', 50);
+            yield return null;
+            Assert.AreEqual(_widget.Strings.Required, _root.Q<Label>("bh-description-tag").text);
+            Assert.IsFalse(_root.Q("bh-prompts-right")[0].ClassListContains(PromptDisabledClass));
+        }
+
+        // A suggestion is no report of something that happened.
+        [UnityTest]
+        public IEnumerator Suggestion_AsksForTheIdea()
+        {
+            _widget.ApplyPreview(new WidgetPreviewOptions { State = WidgetPreviewState.Compose, AttachmentCount = 3, FocusedAttachment = -1, Type = ReportType.Suggestion });
+            yield return null;
+            Assert.AreEqual("YOUR IDEA", _root.Q<Label>("bh-description-label").text);
+            Assert.AreEqual("Describe your idea", _root.Q<Label>("bh-description-prompt").text);
+            Assert.IsNotNull(PromptLabeled(_widget.Strings.SendSuggestion), "Send suggestion");
+            Assert.IsNull(PromptLabeled(_widget.Strings.SendReport));
+        }
+
         [UnityTest]
         public IEnumerator SentScreen_ArrowsAndTab_MoveBetweenTheEmailAndTheLink()
         {
@@ -757,6 +791,8 @@ namespace BetaHub.Tests
             Assert.IsTrue(_root.Q("bh-sent-note").ClassListContains(HiddenClass), "nor its note");
             Assert.AreEqual(0, _root.Q("bh-prompts-right").childCount, "no Email me a link");
             Assert.AreEqual(_widget.Strings.BackToGame, _root.Q("bh-prompts-left")[0].Q<Label>(className: "bh-p-label").text, "going back leads");
+            Assert.AreEqual("Suggestion link", _root.Q<Label>("bh-link-label").text);
+            Assert.AreEqual("SENT WITH THIS SUGGESTION", _root.Q<Label>("bh-sent-with-label").text);
         }
 
         // A report still uploading shows a toast; opening a new form hides it and its ring.
@@ -768,6 +804,7 @@ namespace BetaHub.Tests
             Assert.IsFalse(_root.Q("bh-toast").ClassListContains(HiddenClass), "the toast is up");
 
             _widget.Show();
+            Assert.IsTrue(_root.Q("bh-toast").ClassListContains(HiddenClass), "gone in the frame that is captured, or it is in the shot");
             for (int i = 0; i < SettleFrames + 2; i++) yield return null;
             Assert.IsTrue(_widget.IsVisible);
             var toast = _root.Q("bh-toast");

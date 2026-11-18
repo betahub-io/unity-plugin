@@ -125,10 +125,11 @@ namespace BetaHub
             var items = new List<AttachmentDescriptor>();
             if (_frameScreenshot != null)
             {
+                // Kept after upload, so Try again sends it again; the next capture writes over it.
                 items.Add(new AttachmentDescriptor
                 {
                     Id = BuiltInAttachments.Screenshot, Name = "Screenshot", Meta = "this frame",
-                    Kind = AttachmentKind.Image, FilePath = _frameScreenshot, RemoveAfterUpload = true,
+                    Kind = AttachmentKind.Image, FilePath = _frameScreenshot, RemoveAfterUpload = false,
                 });
             }
 

@@ -59,6 +59,13 @@ namespace BetaHub
             public float SecondsBeforeNewest;
         }
 
+        /// <summary>
+        /// Render format of the preview frames: one without alpha, since a camera's clear alpha (near 0 in Unity's
+        /// default camera) would let the pane show through the game. 11-11-10 float where it renders, else 5-6-5.
+        /// </summary>
+        public static RenderTextureFormat PreviewFrameFormat() =>
+            SystemInfo.SupportsRenderTextureFormat(RenderTextureFormat.RGB111110Float) ? RenderTextureFormat.RGB111110Float : RenderTextureFormat.RGB565;
+
         /// <summary>Preview frame size for a capture of the given size: a fixed height, the game's aspect.</summary>
         public static Vector2Int PreviewFrameSize(int sourceWidth, int sourceHeight)
         {
@@ -497,7 +504,7 @@ namespace BetaHub
             if (frame == null || frame.width != size.x || frame.height != size.y)
             {
                 if (frame != null) frame.Release();
-                frame = _previewFrames[slot] = new RenderTexture(size.x, size.y, 0, RenderTextureFormat.ARGB32);
+                frame = _previewFrames[slot] = new RenderTexture(size.x, size.y, 0, PreviewFrameFormat());
             }
             // The capture holds the top row first, the order FFmpeg reads, so as a texture it is upside down.
             // MirrorVertically means it is not, and the encoder flips it instead.

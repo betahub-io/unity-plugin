@@ -22,12 +22,14 @@ namespace BetaHub
         public string TypeSuggestion = "Suggestion";
         public string DescriptionLabel = "What happened";
         public string DescriptionPrompt = "Describe what happened";
+        public string SuggestionLabel = "Your idea";
+        public string SuggestionPrompt = "Describe your idea";
         public string StepsLabel = "Steps to reproduce";
         public string StepsPrompt = "Add steps if you can. It helps a lot.";
         public string Required = "required";
         public string Optional = "optional";
         public string CharacterCount = "{0} / {1}";
-        public string SuggestionMinimum = "{0} / {1} min";
+        public string DescriptionMinimum = "{0} / {1} min";
         public string TermsLabel = "I accept the terms of bug reporting";
 
         public string AttachmentsGroup = "Sending along";
@@ -68,6 +70,7 @@ namespace BetaHub
         public string NewerLines = "Newer lines";
         public string BackToReport = "Back to report";
         public string SendReport = "Send report";
+        public string SendSuggestion = "Send suggestion";
         public string Sending = "Sending…";
         public string TryAgain = "Try again";
         public string BackToGame = "Back to game";
@@ -90,8 +93,10 @@ namespace BetaHub
         public string EmailFailed = "Couldn't save your email. Try again or just go back.";
         public string SignedInNote = "We'll notify you on BetaHub when it's fixed.";
         public string ReportLink = "Report link";
+        public string SuggestionLink = "Suggestion link";
         public string Copy = "Copy";
         public string SentWith = "Sent with this report";
+        public string SentWithSuggestion = "Sent with this suggestion";
         public string TextOnly = "Text only";
 
         public string ToastUploading = "Uploading your report";

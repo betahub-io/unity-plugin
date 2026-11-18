@@ -67,7 +67,8 @@ namespace BetaHub
         private const float SpinnerDegreesPerTick = 6f;
         private const float PaneAspect = 9f / 16f;
         private const int MaxSampleAttachments = 9;
-        // BetaHub's default for a project's shortest suggestion
+        // BetaHub's defaults for a project's shortest bug report and suggestion
+        private const int DefaultBugMinLength = 50;
         private const int DefaultSuggestionMinLength = 80;
         private const string TimeFormat = "HH:mm:ss";
         private const string Separator = " · ";
@@ -229,7 +230,11 @@ namespace BetaHub
         [Tooltip("Opened from the terms row. Leave empty to show the row without a link.")]
         public string TermsUrl = "";
 
-        [Tooltip("Shortest suggestion BetaHub accepts: your project's setting, 80 characters unless you changed it. Send stays off below it.")]
+        [Tooltip("Shortest bug description, used when the project's own minimum can't be read: a private project hides it from a project token. BetaHub's default is 50. Send stays off below it.")]
+        [Min(0)]
+        public int BugMinLength = DefaultBugMinLength;
+
+        [Tooltip("Shortest suggestion, used when the project's own minimum can't be read: a private project hides it from a project token. BetaHub's default is 80. Send stays off below it.")]
         [Min(0)]
         public int SuggestionMinLength = DefaultSuggestionMinLength;
 
@@ -354,6 +359,8 @@ namespace BetaHub
         {
             // UIDocument rebuilds its tree when re-enabled; bind again on next use.
             _bound = false;
+            var reporter = GetComponent<BetaHubReporter>();
+            if (reporter != null) reporter.DescriptionMinimumsLoaded += OnDescriptionMinimumsLoaded;
     #if ENABLE_INPUT_SYSTEM
             if (Application.isPlaying && InputSystem.settings != null)
             {
@@ -366,6 +373,8 @@ namespace BetaHub
         void OnDisable()
         {
             StopListeningForKeys();
+            var reporter = GetComponent<BetaHubReporter>();
+            if (reporter != null) reporter.DescriptionMinimumsLoaded -= OnDescriptionMinimumsLoaded;
     #if ENABLE_INPUT_SYSTEM
             ShortcutAction.performed -= OnShortcutPerformed;
             ShortcutAction.Disable();
@@ -693,6 +702,9 @@ namespace BetaHub
 
         private IEnumerator CaptureAndShow()
         {
+            // a toast of an earlier report would be in the shot
+            HideToast();
+            _reporter.LoadDescriptionMinimums();
             yield return _reporter.CaptureScreenshot();
 
             _sample = false;
@@ -723,7 +735,6 @@ namespace BetaHub
             ReleaseTextures();
             SetAttachments(_reporter.CollectAttachments());
 
-            HideToast();
             SetOverlayVisible(true);
             Render();
             StartTyping(_description);
@@ -884,7 +895,14 @@ namespace BetaHub
             && (_sample || (_active != null && _active.State == ReportSubmissionState.AwaitingPublish));
 
         // a suggestion shorter than the project's minimum is refused by BetaHub
-        private int MinLength => _reportType == ReportType.Suggestion ? SuggestionMinLength : 0;
+        // the project's own, once read; the inspector's until then and for a private project
+        private int MinLength => _reporter.DescriptionMinimums?.For(_reportType)
+            ?? (_reportType == ReportType.Suggestion ? SuggestionMinLength : BugMinLength);
+
+        private void OnDescriptionMinimumsLoaded()
+        {
+            if (IsVisible) Render();
+        }
 
         private bool CanSendNow()
         {
@@ -965,7 +983,7 @@ namespace BetaHub
 
         private void RenderTabs(TabsView tabs, WidgetTab open)
         {
-            tabs.ReportText.text = Caps(BugReportWidgetModel.ReportTitle(_reportType, Strings));
+            tabs.ReportText.text = Caps(BugReportWidgetModel.TextsFor(_reportType, Strings).Title);
             tabs.Count.text = IncludedCount().ToString();
             tabs.Report.EnableInClassList(TabOnClass, open == WidgetTab.Report);
             tabs.Attachments.EnableInClassList(TabOnClass, open == WidgetTab.Attachments);
@@ -997,8 +1015,9 @@ namespace BetaHub
             _typeSuggestion.EnableInClassList(SwitchOptionOnClass, _reportType == ReportType.Suggestion);
 
             string description = _description.Input.value;
-            RenderField(_description, Strings.DescriptionLabel, BugReportWidgetModel.DescriptionTag(description, MinLength, Strings),
-                BugReportWidgetModel.IsAtLimit(description.Length, BugReportWidgetModel.DescriptionLimit), Strings.DescriptionPrompt, focused == WidgetField.Description);
+            var texts = BugReportWidgetModel.TextsFor(_reportType, Strings);
+            RenderField(_description, texts.DescriptionLabel, BugReportWidgetModel.DescriptionTag(description, MinLength, Strings),
+                BugReportWidgetModel.IsAtLimit(description.Length, BugReportWidgetModel.DescriptionLimit), texts.DescriptionPrompt, focused == WidgetField.Description);
             _steps.Root.EnableInClassList(HiddenClass, _reportType == ReportType.Suggestion);
             int steps = _steps.Input.value.Length;
             RenderField(_steps, Strings.StepsLabel, BugReportWidgetModel.FieldTag(Strings.Optional, steps, BugReportWidgetModel.StepsLimit, Strings),
@@ -1075,7 +1094,7 @@ namespace BetaHub
             // its notes are about an email when it's fixed, which a suggestion doesn't get
             _sentNote.EnableInClassList(HiddenClass, _reportType == ReportType.Suggestion && _emailNote == null);
 
-            _linkLabel.text = Strings.ReportLink;
+            _linkLabel.text = BugReportWidgetModel.TextsFor(_reportType, Strings).Link;
             SetValue(_linkValue, Caps(_linkCopied ? Strings.LinkCopied : Strings.Copy), _linkCopied ? RowTone.Ok : RowTone.Accent, -1f);
 
             var names = new List<string>();
@@ -1083,7 +1102,7 @@ namespace BetaHub
             {
                 if (_attachments.IsIncluded(item.Id)) names.Add(item.Name);
             }
-            _sentWithLabel.text = Caps(Strings.SentWith);
+            _sentWithLabel.text = Caps(BugReportWidgetModel.TextsFor(_reportType, Strings).SentWith);
             _sentWithCount.text = names.Count.ToString();
             _sentList.text = names.Count > 0 ? string.Join(Separator, names) : Strings.TextOnly;
         }
@@ -1421,6 +1440,7 @@ namespace BetaHub
             {
                 Screen = _screen,
                 Focus = FocusKind,
+                Type = _reportType,
                 Typing = _typing != null,
                 Gamepad = _glyphs != GlyphSet.Keyboard,
                 FocusedIncluded = _screen == WidgetScreen.Preview
@@ -2085,7 +2105,7 @@ namespace BetaHub
             if (_glyphs == GlyphSet.Keyboard || TextEntry == null || _textEntryOpen) return;
             var request = new TextEntryRequest
             {
-                Label = field == _description ? Strings.DescriptionLabel : field == _steps ? Strings.StepsLabel : Strings.EmailLabel,
+                Label = field == _description ? BugReportWidgetModel.TextsFor(_reportType, Strings).DescriptionLabel : field == _steps ? Strings.StepsLabel : Strings.EmailLabel,
                 Text = field.Input.value,
                 Multiline = field.Input.multiline,
                 Email = field == _email,

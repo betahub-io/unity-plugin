@@ -108,11 +108,24 @@ namespace BetaHub
         public readonly List<Prompt> Right = new List<Prompt>();
     }
 
+    /// <summary>The texts that change with the report type. See <see cref="BugReportWidgetModel.TextsFor"/>.</summary>
+    public struct TypeTexts
+    {
+        public string Title;
+        public string DescriptionLabel;
+        public string DescriptionPrompt;
+        public string Send;
+        public string Link;
+        public string SentWith;
+        public string SentTitle;
+    }
+
     /// <summary>Everything the prompt bar depends on.</summary>
     public struct PromptContext
     {
         public WidgetScreen Screen;
         public WidgetFocusKind Focus;
+        public ReportType Type;
         /// <summary>A text field has the keyboard.</summary>
         public bool Typing;
         public bool Gamepad;
@@ -214,7 +227,7 @@ namespace BetaHub
 
         public static bool IsAtLimit(int length, int limit) => length >= limit;
 
-        /// <param name="minLength">Characters the description needs, spaces around it not counted: a suggestion's minimum, 0 for a bug.</param>
+        /// <param name="minLength">Characters the description needs, spaces around it not counted: the project's minimum for the report type.</param>
         public static bool CanSend(string description, bool termsRequired, bool termsAccepted, bool configured, int minLength)
         {
             if (!configured) return false;
@@ -231,7 +244,7 @@ namespace BetaHub
             int trimmed = text.Trim().Length;
             if (trimmed < minLength)
             {
-                return string.Format(CultureInfo.InvariantCulture, s.SuggestionMinimum,
+                return string.Format(CultureInfo.InvariantCulture, s.DescriptionMinimum,
                     trimmed.ToString("N0", CultureInfo.InvariantCulture), minLength.ToString("N0", CultureInfo.InvariantCulture));
             }
             return FieldTag(s.Required, text.Length, DescriptionLimit, s);
@@ -246,8 +259,23 @@ namespace BetaHub
             return fields;
         }
 
-        /// <summary>"Report a bug" or "Suggest an idea": the compose title and the report tab.</summary>
-        public static string ReportTitle(ReportType type, BugReportWidgetStrings s) => type == ReportType.Suggestion ? s.SuggestTitle : s.Title;
+        /// <summary>The words that follow the report type: a suggestion is no report of something that happened.</summary>
+        public static TypeTexts TextsFor(ReportType type, BugReportWidgetStrings s)
+        {
+            if (type == ReportType.Suggestion)
+            {
+                return new TypeTexts
+                {
+                    Title = s.SuggestTitle, DescriptionLabel = s.SuggestionLabel, DescriptionPrompt = s.SuggestionPrompt,
+                    Send = s.SendSuggestion, Link = s.SuggestionLink, SentWith = s.SentWithSuggestion, SentTitle = s.SuggestionSentTitle,
+                };
+            }
+            return new TypeTexts
+            {
+                Title = s.Title, DescriptionLabel = s.DescriptionLabel, DescriptionPrompt = s.DescriptionPrompt,
+                Send = s.SendReport, Link = s.ReportLink, SentWith = s.SentWith, SentTitle = s.SentTitle,
+            };
+        }
 
         // --- headers ---
 
@@ -272,12 +300,12 @@ namespace BetaHub
             // The tabs take the title's place, so a failed send says so in the subtitle.
             if (!string.IsNullOrEmpty(submissionError))
             {
-                return new Header { Kind = HeaderKind.Error, Title = ReportTitle(type, s), Subtitle = string.Format(s.ErrorSubtitle, submissionError), Tabs = true };
+                return new Header { Kind = HeaderKind.Error, Title = TextsFor(type, s).Title, Subtitle = string.Format(s.ErrorSubtitle, submissionError.Trim()), Tabs = true };
             }
             return new Header
             {
                 Kind = HeaderKind.Normal,
-                Title = ReportTitle(type, s),
+                Title = TextsFor(type, s).Title,
                 Subtitle = string.IsNullOrEmpty(signedInAs) ? s.Subtitle : string.Format(s.SubtitleSignedIn, signedInAs),
                 Tabs = true,
             };
@@ -293,7 +321,7 @@ namespace BetaHub
             return new Header
             {
                 Kind = HeaderKind.Normal,
-                Title = type == ReportType.Suggestion ? s.SuggestionSentTitle : s.SentTitle,
+                Title = TextsFor(type, s).SentTitle,
                 Subtitle = string.Format(signedIn ? s.SentSignedIn : s.SentAnonymous, issueId ?? ""),
             };
         }
@@ -439,7 +467,7 @@ namespace BetaHub
             bar.Right.Add(new Prompt
             {
                 Action = PromptAction.Send,
-                Label = c.HasError && c.Configured ? s.TryAgain : s.SendReport,
+                Label = c.HasError && c.Configured ? s.TryAgain : TextsFor(c.Type, s).Send,
                 Primary = c.CanSend,
                 Disabled = !c.CanSend,
             });

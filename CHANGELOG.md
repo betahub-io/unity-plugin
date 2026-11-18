@@ -21,13 +21,15 @@
 - With only the new Input System active and no EventSystem in the scene, the widget adds one (`InputSystemUIInputModule`) while the form is open; without it UI Toolkit ignored mouse clicks.
 - Long text: What happened grows to 6 lines and Steps to reproduce to 4, then each scrolls inside and shows its first lines again when left. From 80% of a field's limit its label shows the character count.
 - The full-screen log preview shows the whole tail it reads (up to 64 KB), opens at the newest lines and scrolls with the mouse wheel, PgUp/PgDn or the right stick.
-- Suggestions: the widget's Report type switch (Bug / Suggestion) sends an idea as a BetaHub feature request through `BetaHubReporter.SubmitSuggestion()`, with only the screenshot attached, no steps and no email step. Send waits for **Suggestion Min Length** (80 characters, BetaHub's default).
+- Suggestions: the widget's Report type switch (Bug / Suggestion) sends an idea as a BetaHub feature request through `BetaHubReporter.SubmitSuggestion()`, with only the screenshot attached, no steps and no email step. The form speaks of an idea there: Your idea, Send suggestion, Suggestion link.
+- Minimum description length: the widget keeps Send off until the description reaches the project's minimum for its type, and counts towards it ("12 / 50 min"). `BetaHubReporter.LoadDescriptionMinimums()` reads both minimums from the project when the form opens. A private project hides them from a project token; the widget then uses **Bug Min Length** (50) and **Suggestion Min Length** (80), BetaHub's defaults. Before, a short bug report went out and came back refused.
 
 ### Changed
 - Split `BugReportUI` into a headless `BetaHubReporter` component (configuration, attachments, custom fields, recording policy, submission) and a pure view. Custom UIs call `BetaHubReporter.Submit()` and follow the returned `ReportSubmission` handle instead of driving coroutines. `Issue` is now a thin HTTP client; publish/email sequencing lives in `ReportSubmission`.
 - Breaking: `ProjectID`, `AuthToken`, `SubmitEndpoint`, release, upload mode, include flags, `DefaultEmailAddress`, provider references and the attachment/custom field API moved from `BugReportUI` to `BetaHubReporter`. `GeolocationProvider` and `LatencyProvider` auto-attach to `BetaHubReporter`. `ReportSubmittedUI.Show` takes a `ReportSubmission`.
 - The example scene opens the new `BugReportWidget` instead of the uGUI form, and has no EventSystem, so it also runs with only the new Input System.
 - Widget, from a tester's run of the form (as in the Unreal plugin 2.0): the header has two tabs, the report and its Attachments (the full-screen preview), switched with 1 and 2 (& and é on AZERTY) or the shoulder buttons; P closes the preview it opened. Back is the first prompt on every screen. Attachment rows and the terms row have a checkbox: it includes or leaves out, a click elsewhere only selects. Tab and Shift+Tab go through every item and round again, and the arrows leave a text field from its first or last character. A Move prompt explains the arrows. On the sent screen the arrows and Tab move between the email and the report link. The full-screen log offers Older lines and Newer lines, each greyed out at its end, with a scrollbar in the theme's colors.
+- The report's screenshot stays on disk after it is sent, until the next capture writes over it, so Try again after a failed publish sends it again instead of a report without it.
 - Upgraded scenes that still store Project ID, Auth Token, Submit Endpoint or the Device Auth Manager on `BugReportUI` keep their values: `BugReportUI` hands them to `BetaHubReporter` at startup, instead of the reporter falling back to the demo project, and logs a warning to move them.
 
 ### Improved
@@ -36,6 +38,10 @@
 - Publish failures now put the submission in a Failed state with the server message.
 
 ### Fixed
+- With recording diagnostics on (`RecordingDiagnostics` or `BETAHUB_DEBUG`), the second report of a session froze the game: diagnostics keep `temp_concat.mp4`, and FFmpeg stopped to ask whether to overwrite it while the game waited. FFmpeg now overwrites its own files and never reads the console when joining segments or adding the audio.
+- The clip preview showed the pane through the game where the camera clears with a transparent color (Unity's default camera): the preview frames now drop the alpha.
+- A failed send's header could show two spaces before "Your text is kept." when BetaHub's message ended with a space.
+- Opening the form while an earlier report was still uploading could put the upload toast in the new screenshot: the toast now goes before the capture.
 - `GameRecorder.RenderCursor` read the legacy `Input.mousePosition`, which throws when only the new Input System is active; it reads `Mouse.current` there.
 
 ## 1.8.3

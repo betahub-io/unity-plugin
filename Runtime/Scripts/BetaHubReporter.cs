@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
+using UnityEngine.Networking;
 
 namespace BetaHub
 {
@@ -31,6 +32,8 @@ namespace BetaHub
         private const string ScreenshotFileName = "screenshot.png";
         // ScreenCapture writes the file at the end of the frame; two frames is what the views always waited.
         private const int ScreenshotFrames = 2;
+        // The minimums only hold Send back; BetaHub checks the length again when the report arrives.
+        private const int MinimumsTimeoutSeconds = 5;
 
         private static BetaHubReporter _instance;
         private static Logger _logger;
@@ -85,6 +88,19 @@ namespace BetaHub
         private bool _duplicate;
         private bool _reportWindowVisible;
         private readonly List<ReportSubmission> _submissions = new List<ReportSubmission>();
+        private bool _minimumsInFlight;
+        // read, refused, or answered without them: asking again would not change it
+        private bool _minimumsSettled;
+        private bool _minimumsWarned;
+
+        /// <summary>
+        /// The project's shortest accepted descriptions, once <see cref="LoadDescriptionMinimums"/> read them.
+        /// Null before that, and when the project cannot be read with this token (a private project).
+        /// </summary>
+        public DescriptionMinimums DescriptionMinimums { get; private set; }
+
+        /// <summary>Raised when <see cref="DescriptionMinimums"/> arrives.</summary>
+        public event Action DescriptionMinimumsLoaded;
 
         /// <summary>True while the user is signed in through device authentication.</summary>
         public bool IsUserAuthenticated => deviceAuthManager != null && deviceAuthManager.IsAuthenticated();
@@ -215,6 +231,8 @@ namespace BetaHub
         public IEnumerator CaptureScreenshot()
         {
             string path = Path.Combine(Application.persistentDataPath, ScreenshotFileName);
+            // The last report's shot stays for its Try again; gone now, a capture that fails can't pass it off as new.
+            if (File.Exists(path)) File.Delete(path);
             ScreenCapture.CaptureScreenshot(path);
             for (int i = 0; i < ScreenshotFrames; i++)
             {
@@ -228,6 +246,60 @@ namespace BetaHub
             }
             ScreenshotPath = path;
             Session.SetFrameScreenshot(path);
+        }
+
+        /// <summary>
+        /// Reads the project's minimum description lengths into <see cref="DescriptionMinimums"/>, so a form
+        /// can hold Send until the text is long enough. Call it when your form opens. Does nothing while a read
+        /// is under way, once one succeeded, or after BetaHub refused it: a private project hides itself from a
+        /// project token. BetaHub checks the length again when the report arrives.
+        /// </summary>
+        public void LoadDescriptionMinimums()
+        {
+            if (_minimumsInFlight || _minimumsSettled || !IsConfigured) return;
+            _minimumsInFlight = true;
+            StartCoroutine(ReadDescriptionMinimums(GetEffectiveAuthToken()));
+        }
+
+        private IEnumerator ReadDescriptionMinimums(string authToken)
+        {
+            string endpoint = SubmitEndpoint.EndsWith("/") ? SubmitEndpoint : SubmitEndpoint + "/";
+            using (var www = UnityWebRequest.Get($"{endpoint}projects/{ProjectID}.json"))
+            {
+                www.timeout = MinimumsTimeoutSeconds;
+                if (!string.IsNullOrEmpty(authToken)) www.SetRequestHeader("Authorization", "FormUser " + authToken);
+                www.SetRequestHeader("BetaHub-Project-ID", ProjectID);
+                www.SetRequestHeader("Accept", "application/json");
+                yield return www.SendWebRequest();
+                _minimumsInFlight = false;
+
+                if (www.result != UnityWebRequest.Result.Success)
+                {
+                    bool refused = DescriptionMinimums.IsRefusal(www.responseCode);
+                    _minimumsSettled = refused;
+                    WarnMinimumsOnce(refused
+                        ? $"BetaHub did not show this token the project's minimum description lengths ({www.responseCode}): a private project hides them from a project token. The form uses its own."
+                        : $"Could not read the project's minimum description lengths: {www.error}. The form uses its own and asks again when it next opens.");
+                    yield break;
+                }
+
+                var minimums = DescriptionMinimums.FromProjectJson(www.downloadHandler.text);
+                _minimumsSettled = true;
+                if (minimums == null)
+                {
+                    WarnMinimumsOnce("BetaHub's project reply has no minimum description lengths. The form uses its own.");
+                    yield break;
+                }
+                DescriptionMinimums = minimums;
+                DescriptionMinimumsLoaded?.Invoke();
+            }
+        }
+
+        private void WarnMinimumsOnce(string message)
+        {
+            if (_minimumsWarned) return;
+            _minimumsWarned = true;
+            Log.Warning(message);
         }
 
         /// <summary>

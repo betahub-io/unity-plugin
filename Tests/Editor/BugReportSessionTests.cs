@@ -109,7 +109,7 @@ namespace BetaHub.Tests
             var shot = Item(set, BuiltInAttachments.Screenshot);
             Assert.AreEqual(AttachmentKind.Image, shot.Kind);
             Assert.AreEqual(ShotPath, shot.FilePath);
-            Assert.IsTrue(shot.RemoveAfterUpload);
+            Assert.IsFalse(shot.RemoveAfterUpload, "kept until the next capture overwrites it, so Try again sends it again");
 
             var clip = Item(set, BuiltInAttachments.Recording);
             Assert.AreEqual(AttachmentKind.Clip, clip.Kind);
@@ -389,7 +389,7 @@ namespace BetaHub.Tests
             var uploads = _session.BuildReport(Description, Steps, set).Uploads;
 
             Assert.AreEqual(5, uploads.Count);
-            Assert.AreEqual((UploadKind.Screenshot, ShotPath, true), (uploads[0].Kind, uploads[0].Path, uploads[0].RemoveAfterUpload));
+            Assert.AreEqual((UploadKind.Screenshot, ShotPath, false), (uploads[0].Kind, uploads[0].Path, uploads[0].RemoveAfterUpload));
             Assert.AreEqual(UploadKind.Recording, uploads[1].Kind);
             Assert.IsNull(uploads[1].Path);
             Assert.AreEqual((UploadKind.Log, PlayerLogPath, false), (uploads[2].Kind, uploads[2].Path, uploads[2].RemoveAfterUpload));
@@ -443,7 +443,7 @@ namespace BetaHub.Tests
             Assert.AreEqual(Description, draft.Description);
             Assert.AreEqual("", draft.Steps);
             var upload = draft.Uploads.Single();
-            Assert.AreEqual((BuiltInAttachments.Screenshot, UploadKind.Screenshot, ShotPath, true),
+            Assert.AreEqual((BuiltInAttachments.Screenshot, UploadKind.Screenshot, ShotPath, false),
                 (upload.AttachmentId, upload.Kind, upload.Path, upload.RemoveAfterUpload));
             Assert.AreEqual(0, draft.InlineAttachmentIds.Count);
             Assert.AreEqual(0, draft.CustomFields.Count);
