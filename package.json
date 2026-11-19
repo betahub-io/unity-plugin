@@ -1,6 +1,6 @@
 {
   "name": "com.betahub.bugreporter",
-  "version": "1.8.3",
+  "version": "2.0.0",
   "displayName": "BetaHub Bug Reporter",
   "description": "In-game bug reports and suggestions for BetaHub. The player describes what happened; the report carries a screenshot, the last 60 seconds of play as video with sound, and the game log. Works with keyboard, mouse and controllers.",
   "unity": "2022.3",

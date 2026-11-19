@@ -1,5 +1,11 @@
 # BetaHub Bug Reporter for Unity
 
+![The report form over the demo game](Documentation~/images/report-form.webp)
+
+> **Version 2.0 brings a new report form** and replaces the 1.x uGUI form. To move an existing project, see
+> [Upgrading from 1.x](#upgrading-from-1x); to stay on 1.x, install
+> `https://github.com/betahub-io/unity-plugin.git#v1.8.3`, the last 1.x release.
+
 In-game bug reports and suggestions for [BetaHub](https://betahub.io). The player presses F12 (or a button you choose) and says what happened. The report reaches your BetaHub project with a screenshot, the last 60 seconds of play as video with sound, and the game log. The form works with keyboard, mouse and controllers.
 
 ## Try the demo
@@ -7,14 +13,17 @@ In-game bug reports and suggestions for [BetaHub](https://betahub.io). The playe
 1. In Unity 2022.3 or later, open **Window > Package Manager**, click **+ > Add package from git URL** and enter `https://github.com/betahub-io/unity-plugin.git`.
 2. When Unity offers to download FFmpeg, click **Download**. Video in reports needs it.
 3. In the Package Manager, select **BetaHub Bug Reporter**, open **Samples** and import **Demo**. Open the `BugReportDemo` scene it adds and press Play.
-4. Collect the coins. One of them is broken: press **F12** (or **Start** on a controller), describe the bug and send it. The last screen gives you a link to your report.
+4. Collect the coins. One of them is broken: press **F12** (or **Start** on a controller), describe the bug and send it. On the last screen, copy the link to your report.
 
 The demo reports go to BetaHub's public demo project. Each report there is visible only through its link, and the project has a shared quota, so test with your own project once you have one.
 
 ## Add it to your game
 
 1. **GameObject > BetaHub > Bug Report Widget** adds the form to the open scene. It stays loaded across scenes, so add it to your first scene.
-2. On its **BetaHub Reporter** component, replace the demo project's **Project ID** and **Auth Token** with your own. Both are in your BetaHub project under **Settings → Integrations → Auth Tokens**.
+2. On its **BetaHub Reporter** component, replace the demo project's **Project ID** and **Auth Token** with your own. Both are in your BetaHub project under **Settings → Integrations → Auth Tokens**. The token needs the `can_create_bug_report` permission, and `can_create_feature_request` (off by default) if players send suggestions.
+
+   <img src="Documentation~/images/inspector.webp" alt="The widget's BetaHub Reporter and Bug Report Widget in the Inspector" width="470">
+
 3. Press Play and F12.
 
 Controller players have no F12: open the form from your pause menu with `bugReportWidget.Show()`.
@@ -29,7 +38,7 @@ The [Unity guide in the BetaHub docs](https://betahub.io/docs/integrations/game-
 
 2.0 replaces the uGUI form (`BugReportingFormCanvas`) with the widget above.
 
-1. Before you update, copy the Project ID and Auth Token from the `BugReportingFormCanvas` in your scenes.
+1. Before you update, copy the Project ID, Auth Token and any other BetaHub settings you changed from the `BugReportingFormCanvas` in your scenes.
 2. After updating, delete the missing prefab, add the widget (**GameObject > BetaHub > Bug Report Widget**) and enter the two values on its BetaHub Reporter.
 3. Code that used `BugReportUI` now talks to `BetaHubReporter` (settings, attachments, custom fields) and `BugReportWidget` (`Show()`, `Hide()` and the window events).
 

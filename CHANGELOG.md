@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.0.0
 
 ### Added
 - New default UI: `BugReportWidget` prefab built with UI Toolkit (`Runtime/UI/BugReportWidget.uxml` + `.uss`). One panel, six states, attachments shown as cards with a real screenshot thumbnail, background upload toast, inline optional email after sending, errors in the header instead of banners, keyboard shortcuts and gamepad focus. Reskin by overriding USS variables; light theme included; all strings editable; inspector preview of every screen without Play mode.
