@@ -396,12 +396,21 @@ namespace BetaHub
             return bar;
         }
 
+        /// <summary>
+        /// Whether the Sent screen's link row has focus: confirming then copies the link. Without the email
+        /// step the link is the only row, so it always has.
+        /// </summary>
+        public static bool LinkFocused(bool canEmail, bool typing, SentFocus focus)
+        {
+            return !canEmail || (!typing && focus == SentFocus.Link);
+        }
+
         private static void AddSentPrompts(PromptBar bar, PromptContext c, BugReportWidgetStrings s)
         {
             if (!c.CanEmail)
             {
                 bar.Left.Add(new Prompt { Action = PromptAction.Back, Label = s.BackToGame, Primary = true });
-                bar.Left.Add(P(PromptAction.Alt, s.CopyLink));
+                bar.Left.Add(P(PromptAction.Confirm, s.CopyLink));
                 return;
             }
             if (c.Typing)

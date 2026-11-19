@@ -230,7 +230,7 @@ namespace BetaHub
         [Tooltip("Opened from the terms row. Leave empty to show the row without a link.")]
         public string TermsUrl = "";
 
-        [Tooltip("Shortest bug description, used when the project's own minimum can't be read: a private project hides it from a project token. BetaHub's default is 50. Send stays off below it.")]
+        [Tooltip("Shortest bug description, used when the project's own minimum can't be read: a private project hides it from a project token. BetaHub's default is 50; set 0 if your project's description check is off. Send stays off below it.")]
         [Min(0)]
         public int BugMinLength = DefaultBugMinLength;
 
@@ -322,6 +322,8 @@ namespace BetaHub
         private StyleSheet _appliedSheet;
 
         private bool _wasVisible;
+        // Show() is capturing the frame and the form isn't up yet: a second press must not open it again.
+        private bool _opening;
         private bool _cursorStateChanged;
         private CursorLockMode _previousCursorLockMode;
 
@@ -373,6 +375,8 @@ namespace BetaHub
         void OnDisable()
         {
             StopListeningForKeys();
+            // disabling stops the capture coroutine
+            _opening = false;
             var reporter = GetComponent<BetaHubReporter>();
             if (reporter != null) reporter.DescriptionMinimumsLoaded -= OnDescriptionMinimumsLoaded;
     #if ENABLE_INPUT_SYSTEM
@@ -444,7 +448,8 @@ namespace BetaHub
         /// <summary>Captures the current frame, collects the attachments, then opens the form.</summary>
         public void Show()
         {
-            if (!EnsureBound() || IsVisible) return;
+            if (!EnsureBound() || IsVisible || _opening) return;
+            _opening = true;
             StartCoroutine(CaptureAndShow());
         }
 
@@ -705,7 +710,9 @@ namespace BetaHub
             // a toast of an earlier report would be in the shot
             HideToast();
             _reporter.LoadDescriptionMinimums();
-            yield return _reporter.CaptureScreenshot();
+            // a capture that throws (a screenshot file still locked by an upload) must not lock the shortcut
+            try { yield return _reporter.CaptureScreenshot(); }
+            finally { _opening = false; }
 
             _sample = false;
             ApplyStyleSheet(Theme);
@@ -1084,7 +1091,7 @@ namespace BetaHub
             RenderField(_email, Strings.EmailLabel, BugReportWidgetModel.FieldTag(Strings.Optional, email, BugReportWidgetModel.EmailLimit, Strings),
                 BugReportWidgetModel.IsAtLimit(email, BugReportWidgetModel.EmailLimit), Strings.EmailPrompt, canEmail && _sentFocus == SentFocus.Email);
             _email.Input.SetEnabled(canEmail);
-            _link.EnableInClassList(RowFocusedClass, canEmail && _typing == null && _sentFocus == SentFocus.Link);
+            _link.EnableInClassList(RowFocusedClass, BugReportWidgetModel.LinkFocused(canEmail, _typing != null, _sentFocus));
 
             string note = _emailNote ?? (SignedIn ? Strings.SignedInNote
                 : !string.IsNullOrEmpty(_pendingEmail) ? string.Format(Strings.EmailSaved, _pendingEmail)
@@ -1929,8 +1936,8 @@ namespace BetaHub
                     else Hide();
                     break;
                 case PromptAction.Confirm:
-                    if (CanEmail && _sentFocus == SentFocus.Link) CopyLink();
-                    else if (CanEmail) StartTyping(_email);
+                    if (BugReportWidgetModel.LinkFocused(CanEmail, _typing != null, _sentFocus)) CopyLink();
+                    else StartTyping(_email);
                     break;
                 case PromptAction.Next:
                 case PromptAction.Prev:

@@ -368,6 +368,36 @@ namespace BetaHub.Tests
             yield return null;
         }
 
+        // signed in there is no email step, so the link is the only row and has focus without a key press
+        [UnityTest]
+        public IEnumerator Sent_WithoutTheEmailStep_FocusesTheLink()
+        {
+            _widget.ApplyPreview(new WidgetPreviewOptions { State = WidgetPreviewState.Sent, AttachmentCount = 3, SignedIn = true, FocusedAttachment = -1 });
+            for (int i = 0; i < SettleFrames; i++) yield return null;
+            Assert.IsTrue(_root.Q("bh-link").ClassListContains(RowFocusedClass), "the link row has focus");
+
+            _widget.ApplyPreview(new WidgetPreviewOptions { State = WidgetPreviewState.Sent, AttachmentCount = 3, SignedIn = false, FocusedAttachment = -1 });
+            for (int i = 0; i < SettleFrames; i++) yield return null;
+            Assert.IsFalse(_root.Q("bh-link").ClassListContains(RowFocusedClass), "with the email step the email comes first");
+        }
+
+        [UnityTest]
+        public IEnumerator SecondShow_WhileTheFirstCaptures_LeavesTheOpenFormAlone()
+        {
+            // a double press of the shortcut: the second comes while the first still captures the frame
+            var description = _root.Q<TextField>("bh-description");
+            // the window event fires in Update, before the frame's coroutines resume
+            _widget.OnBugReportWindowShown.AddListener(() => description.value = "typed");
+            _widget.Show();
+            yield return null;
+            Assert.IsFalse(_widget.IsVisible, "still capturing");
+            _widget.Show();
+            for (int i = 0; i < SettleFrames + 2; i++) yield return null;
+
+            Assert.IsTrue(_widget.IsVisible);
+            Assert.AreEqual("typed", description.value, "the second press doesn't clear the open form");
+        }
+
         [UnityTest]
         public IEnumerator ClickingTheFieldBeingTyped_StillTakesTyping()
         {

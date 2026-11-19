@@ -459,12 +459,22 @@ namespace BetaHub.Tests
             Assert.AreEqual("Back:Done | Send:Email me a link*", Describe(typing));
         }
 
-        // Signed in, after the email was saved, or a suggestion: going back is the main thing left.
+        // Signed in, after the email was saved, or a suggestion: going back is the main thing left, and
+        // the link is the only row, so confirming copies it as it does after a bug report.
         [Test]
-        public void Sent_NoEmail_BackToGameLeads()
+        public void Sent_NoEmail_BackToGameLeads_ConfirmCopiesTheLink()
         {
             var context = new PromptContext { Screen = WidgetScreen.Sent, CanEmail = false };
-            Assert.AreEqual("Back:Back to game*, Alt:Copy link | ", Describe(context));
+            Assert.AreEqual("Back:Back to game*, Confirm:Copy link | ", Describe(context));
+        }
+
+        [Test]
+        public void SentLink_IsFocused_WhenItIsTheOnlyRow_OrChosen()
+        {
+            Assert.IsTrue(BugReportWidgetModel.LinkFocused(canEmail: false, typing: false, SentFocus.Email), "the only row");
+            Assert.IsTrue(BugReportWidgetModel.LinkFocused(canEmail: true, typing: false, SentFocus.Link));
+            Assert.IsFalse(BugReportWidgetModel.LinkFocused(canEmail: true, typing: false, SentFocus.Email));
+            Assert.IsFalse(BugReportWidgetModel.LinkFocused(canEmail: true, typing: true, SentFocus.Link), "typing the email");
         }
 
         // Prev (Shift+Tab) is only ever offered on a keyboard.

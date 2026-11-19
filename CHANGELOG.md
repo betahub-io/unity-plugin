@@ -24,7 +24,7 @@
 - Suggestions: the widget's Report type switch (Bug / Suggestion) sends an idea as a BetaHub feature request through `BetaHubReporter.SubmitSuggestion()`, with only the screenshot attached, no steps and no email step. The form speaks of an idea there: Your idea, Send suggestion, Suggestion link.
 - **GameObject > BetaHub > Bug Report Widget** adds the widget to the open scene, or selects the reporter already there.
 - When FFmpeg is missing, the editor offers to download it once after the package arrives (Download, Not now, Don't ask again); never in batch mode.
-- Minimum description length: the widget keeps Send off until the description reaches the project's minimum for its type, and counts towards it ("12 / 50 min"). `BetaHubReporter.LoadDescriptionMinimums()` reads both minimums from the project when the form opens. A private project hides them from a project token; the widget then uses **Bug Min Length** (50) and **Suggestion Min Length** (80), BetaHub's defaults. Before, a short bug report went out and came back refused.
+- Minimum description length: the widget keeps Send off until the description reaches the project's minimum for its type, and counts towards it ("12 / 50 min"). `BetaHubReporter.LoadDescriptionMinimums()` reads both minimums from the project when the form opens. A private project hides them from a project token; the widget then uses **Bug Min Length** (50) and **Suggestion Min Length** (80), BetaHub's defaults; set Bug Min Length to 0 there if the project's description check is off. Before, a short bug report went out and came back refused.
 
 ### Changed
 - Breaking: the uGUI form is gone: the `BugReportingFormCanvas` prefab and `BugReportUI`, `ReportSubmittedUI`, `LinkOpener` and the unused `PerformanceSampler`. Its settings and API live on `BetaHubReporter`, the form is `BugReportWidget`. Upgraded scenes show the old prefab as missing: copy its Project ID and Auth Token before updating, then add the widget (README, Upgrading from 1.x). `DeviceAuthCanvas` stays for player sign-in.
@@ -34,6 +34,7 @@
 - Documentation moved to the BetaHub docs; the README keeps the demo, adding the widget and upgrading from 1.x, and the package no longer ships `Documentation.html`. `package.json` links the docs, changelog and license.
 - Menus: everything for users sits under **Window > BetaHub** (Download FFmpeg, Regenerate Theme Stylesheets) and **GameObject > BetaHub > Bug Report Widget**; the maintainers' asset builders no longer show in users' projects.
 - Widget, from a tester's run of the form (as in the Unreal plugin 2.0): the header has two tabs, the report and its Attachments (the full-screen preview), switched with 1 and 2 (& and é on AZERTY) or the shoulder buttons; P closes the preview it opened. Back is the first prompt on every screen. Attachment rows and the terms row have a checkbox: it includes or leaves out, a click elsewhere only selects. Tab and Shift+Tab go through every item and round again, and the arrows leave a text field from its first or last character. A Move prompt explains the arrows. On the sent screen the arrows and Tab move between the email and the report link. The full-screen log offers Older lines and Newer lines, each greyed out at its end, with a scrollbar in the theme's colors.
+- Sent screen without the email step (a suggestion, a signed-in player, an email already given): the link is the only row, so it has focus and Enter (A, ✕) copies it, as after a bug report. P still copies.
 - The report's screenshot stays on disk after it is sent, until the next capture writes over it, so Try again after a failed publish sends it again instead of a report without it.
 
 ### Improved
@@ -47,6 +48,7 @@
 - The clip preview showed the pane through the game where the camera clears with a transparent color (Unity's default camera): the preview frames now drop the alpha.
 - A failed send's header could show two spaces before "Your text is kept." when BetaHub's message ended with a space.
 - Opening the form while an earlier report was still uploading could put the upload toast in the new screenshot: the toast now goes before the capture.
+- Two quick presses of the shortcut opened the form twice, and the second opening cleared what the player had started to type. A press while the form is still opening is ignored.
 - `GameRecorder.RenderCursor` read the legacy `Input.mousePosition`, which throws when only the new Input System is active; it reads `Mouse.current` there.
 
 ## 1.8.3
