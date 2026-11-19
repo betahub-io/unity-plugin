@@ -99,63 +99,38 @@ namespace BetaHub
 
         private void ValidateFields(CustomIssueField[] existingFields, List<CustomFieldRequirement> requiredFields, string betahubEndpoint, string projectId)
         {
-            Dictionary<string, CustomIssueField> existingFieldsDict = new Dictionary<string, CustomIssueField>();
-            
+            string fieldsUrl = betahubEndpoint.TrimEnd('/') + $"/projects/{projectId}/custom_issue_fields";
+            foreach (var problem in FieldProblems(existingFields, requiredFields, fieldsUrl))
+            {
+                Debug.LogWarning(problem);
+            }
+        }
+
+        /// <summary>
+        /// What is wrong with the project's custom fields for these values, one message per field. A missing field
+        /// is fine: BetaHub creates it (text, for developers) with the first report that carries it, and values
+        /// arrive as issue[custom], which fills a field whether or not testers can set it. A field of another
+        /// type may refuse the value.
+        /// </summary>
+        public static List<string> FieldProblems(CustomIssueField[] existingFields, IEnumerable<CustomFieldRequirement> requiredFields, string fieldsUrl)
+        {
+            var existing = new Dictionary<string, CustomIssueField>();
             foreach (var field in existingFields)
             {
-                if (!string.IsNullOrEmpty(field.name))
-                {
-                    existingFieldsDict[field.name] = field;
-                }
+                if (!string.IsNullOrEmpty(field.name)) existing[field.name] = field;
             }
 
-            string baseUrl = betahubEndpoint.TrimEnd('/') + $"/projects/{projectId}/custom_issue_fields";
-            bool hasErrors = false;
-
+            var problems = new List<string>();
             foreach (var requirement in requiredFields)
             {
-                string requiredFieldName = requirement.name;
-                string requiredFieldType = requirement.type;
-                string fieldDescription = requirement.description;
-                string fieldWithDescription = string.IsNullOrEmpty(fieldDescription) ? 
-                    $"'{requiredFieldName}'" : 
-                    $"'{requiredFieldName}' ({fieldDescription})";
-                
-                if (!existingFieldsDict.ContainsKey(requiredFieldName))
+                string label = string.IsNullOrEmpty(requirement.description) ? $"'{requirement.name}'" : $"'{requirement.name}' ({requirement.description})";
+                if (existing.TryGetValue(requirement.name, out var field)
+                    && !string.Equals(field.field_type, requirement.type, StringComparison.OrdinalIgnoreCase))
                 {
-                    Debug.LogError($"CustomFieldValidator: Custom field {fieldWithDescription} is missing. Please create it as type '{requiredFieldType}' with tester_settable. Visit: {baseUrl}");
-                    hasErrors = true;
-                }
-                else
-                {
-                    CustomIssueField existingField = existingFieldsDict[requiredFieldName];
-                    bool typeMatches = string.Equals(existingField.field_type, requiredFieldType, StringComparison.OrdinalIgnoreCase);
-                    
-                    if (!typeMatches)
-                    {
-                        Debug.LogError($"CustomFieldValidator: Custom field {fieldWithDescription} exists but is type '{existingField.field_type}' (expected: '{requiredFieldType}'). Please update it. Visit: {baseUrl}");
-                        hasErrors = true;
-                    }
-                    else if (!existingField.tester_settable)
-                    {
-                        Debug.LogError($"CustomFieldValidator: Custom field {fieldWithDescription} exists but is not tester_settable. Please update it. Visit: {baseUrl}");
-                        hasErrors = true;
-                    }
-                    else
-                    {
-#if BETAHUB_DEBUG
-                        Debug.Log($"CustomFieldValidator: Custom field {fieldWithDescription} is correctly configured (type: {existingField.field_type}, tester_settable: true)");
-#endif
-                    }
+                    problems.Add($"BetaHub: custom field {label} is type '{field.field_type}', but the plugin sends {requirement.type}; its values may be refused. Make it a {requirement.type} field: {fieldsUrl}");
                 }
             }
-
-            if (!hasErrors)
-            {
-#if BETAHUB_DEBUG
-                Debug.Log("CustomFieldValidator: All required custom fields are properly configured");
-#endif
-            }
+            return problems;
         }
     }
 }

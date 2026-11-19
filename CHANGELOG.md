@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.0.1
+
+### Fixed
+- Custom fields go to BetaHub as `issue[custom]`, as from the Unreal plugin: BetaHub creates a field the project doesn't have yet (text, for developers) instead of dropping its value. The diagnostic fields (`country`, `asn`, `latency`) no longer need creating first; the startup check only warns about a field of another type.
+- The form offered "Last 60 s of play" even when nothing was recorded (no FFmpeg, an IL2CPP build without `ENABLE_BETAHUB_FFMPEG`, a disabled Game Recorder), and its upload then failed. `GameRecorder.CanRecord` says whether recording started; without it the row isn't offered.
+- `GeolocationProvider` and `LatencyProvider` attach to the reporter in `OnEnable`, before any `Start`, so the reporter's startup check of their fields no longer depends on which `Start` Unity runs first.
+
 ## 2.0.0
 
 ### Added
