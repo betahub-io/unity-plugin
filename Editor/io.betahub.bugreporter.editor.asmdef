@@ -1,7 +1,9 @@
 {
     "name": "io.betahub.bugreporter.editor",
     "rootNamespace": "",
-    "references": [],
+    "references": [
+        "GUID:c015ab2f026f14b0d8cd2e7fdc5b377c"
+    ],
     "includePlatforms": [
         "Editor"
     ],

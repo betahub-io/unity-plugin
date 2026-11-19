@@ -366,6 +366,16 @@ namespace BetaHub
             }
         }
 
+        // Every file FFmpeg writes here is ours: overwrite it, and never read the console. Once, a leftover
+        // temp_concat.mp4 made FFmpeg ask "Overwrite? [y/N]" and the game waited on it for good.
+        private static readonly string[] Unattended = { "-nostdin", "-y" };
+
+        /// <summary>Arguments that join the segments listed in a concat file into one video, unchanged.</summary>
+        public static string[] ConcatCommand(string concatFilePath, string outputPath)
+        {
+            return Unattended.Concat(new[] { "-f", "concat", "-safe", "0", "-i", concatFilePath, "-c", "copy", outputPath }).ToArray();
+        }
+
         private string MergeSegments(string audioFilePath = null, float audioTailSeconds = 0f)
         {
             string ffmpegPath = GetFfmpegPath();
@@ -401,10 +411,7 @@ namespace BetaHub
                 if (!hasAudio)
                 {
                     var mergeProcess = CreateProcessWrapper();
-                    mergeProcess.Start(ffmpegPath, new[] {
-                        "-f", "concat", "-safe", "0", "-i", concatFilePath,
-                        "-c", "copy", mergedFilePath
-                    });
+                    mergeProcess.Start(ffmpegPath, ConcatCommand(concatFilePath, mergedFilePath));
                     mergeProcess.WaitForExit();
 
                     if (mergeProcess.ExitCode != 0)
@@ -423,10 +430,7 @@ namespace BetaHub
                     string tempVideoPath = Path.Combine(outputDir, "temp_concat.mp4");
 
                     var concatProcess = CreateProcessWrapper();
-                    concatProcess.Start(ffmpegPath, new[] {
-                        "-f", "concat", "-safe", "0", "-i", concatFilePath,
-                        "-c", "copy", tempVideoPath
-                    });
+                    concatProcess.Start(ffmpegPath, ConcatCommand(concatFilePath, tempVideoPath));
                     concatProcess.WaitForExit();
 
                     if (concatProcess.ExitCode != 0)
@@ -491,7 +495,7 @@ namespace BetaHub
                                 ((atempo <= 0.5001 || atempo >= 1.9999) ? " [CLAMPED - drift exceeds correction range]" : ""));
                     }
 
-                    var muxArgs = new List<string> {
+                    var muxArgs = new List<string>(Unattended) {
                         "-i", tempVideoPath,
                         "-sseof", "-" + sseofValue.ToString("F2", CultureInfo.InvariantCulture),
                         "-i", audioFilePath,
@@ -830,7 +834,7 @@ namespace BetaHub
             if (!File.Exists(path))
             {
                 UnityEngine.Debug.LogWarning("FFmpeg binary not found, BetaHub video recording will not work. " +
-                    "You can download it by clicking on the Windows/BetaHub/Download FFmpeg menu item. " +
+                    "Download it in the editor from Window > BetaHub > Download FFmpeg. " +
                     "If that doesn't work, you can download it manually from https://ffmpeg.org/download.html " +
                     "and place the executable in the StreamingAssets/BetaHub/" + platformFolder + " directory. " +
                     "If you don't want to see this warning, set the Include Video property to false.");

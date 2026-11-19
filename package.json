@@ -1,17 +1,29 @@
 {
   "name": "com.betahub.bugreporter",
-  "version": "1.8.3",
+  "version": "2.0.0",
   "displayName": "BetaHub Bug Reporter",
-  "description": "A tool for recording gameplay videos and submitting bug reports directly to BetaHub.",
+  "description": "In-game bug reports and suggestions for BetaHub. The player describes what happened; the report carries a screenshot, the last 60 seconds of play as video with sound, and the game log. Works with keyboard, mouse and controllers.",
   "unity": "2022.3",
+  "documentationUrl": "https://betahub.io/docs/integrations/game-engines/#unity-plugin",
+  "changelogUrl": "https://github.com/betahub-io/unity-plugin/blob/master/CHANGELOG.md",
+  "licensesUrl": "https://github.com/betahub-io/unity-plugin/blob/master/LICENSE.txt",
+  "author": {
+    "name": "BetaHub",
+    "url": "https://betahub.io"
+  },
   "dependencies": {
     "com.unity.textmeshpro": "3.0.6"
   },
   "samples": [
     {
-      "displayName": "Exaple Scene",
-      "path": "Samples~/ExampleScene"
+      "displayName": "Demo",
+      "description": "A tiny game with a broken coin. Press Play, find the bug, then press F12 (or Start on a controller) to report it to BetaHub's public demo project.",
+      "path": "Samples~/Demo"
+    },
+    {
+      "displayName": "API Examples",
+      "description": "Scripts that add custom fields to reports and sign players in to BetaHub through their browser (device authentication).",
+      "path": "Samples~/ApiExamples"
     }
   ]
 }
-

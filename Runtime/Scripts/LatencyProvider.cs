@@ -509,20 +509,20 @@ namespace BetaHub
             }
 #endif
 
-            // Try to auto-attach to BugReportUI on the same GameObject
-            var bugReportUI = GetComponent<BugReportUI>();
-            if (bugReportUI != null)
+            // Try to auto-attach to BetaHubReporter on the same GameObject
+            var reporter = GetComponent<BetaHubReporter>();
+            if (reporter != null)
             {
-                bugReportUI.SetLatencyProvider(this);
+                reporter.SetLatencyProvider(this);
                 #if BETAHUB_DEBUG
-                Debug.Log("LatencyProvider: Successfully attached to BugReportUI on the same GameObject.");
+                Debug.Log("LatencyProvider: Successfully attached to BetaHubReporter on the same GameObject.");
                 #endif
             }
             else
             {
-                Debug.LogWarning("LatencyProvider: No BugReportUI found on the same GameObject. " +
+                Debug.LogWarning("LatencyProvider: No BetaHubReporter found on the same GameObject. " +
                     "Latency data will not be included in bug reports. " +
-                    "Please attach BugReportUI to the same GameObject or manually call SetLatencyProvider().");
+                    "Please attach BetaHubReporter to the same GameObject or manually call SetLatencyProvider().");
             }
             
             // Start continuous ping collection if enabled
@@ -791,10 +791,10 @@ namespace BetaHub
         void OnValidate()
         {
             // Provide editor-time validation feedback
-            var bugReportUI = GetComponent<BugReportUI>();
-            if (bugReportUI == null)
+            var reporter = GetComponent<BetaHubReporter>();
+            if (reporter == null)
             {
-                Debug.LogWarning("LatencyProvider: For automatic setup, attach BugReportUI to the same GameObject. " +
+                Debug.LogWarning("LatencyProvider: For automatic setup, attach BetaHubReporter to the same GameObject. " +
                     "Otherwise, you'll need to manually call SetLatencyProvider().", this);
             }
         }

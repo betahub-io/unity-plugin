@@ -1,0 +1,312 @@
+/* BetaHub bug report widget, layout only. Sizes are px at 1920x1080; the PanelSettings match the
+   screen height, so text keeps its TV size on any aspect ratio and widths are percentages.
+   Every color is a --bh-* variable from a theme stylesheet (Runtime/UI/Themes). Override the
+   variables to reskin; override these rules to restyle.
+   Game-size rules: field text 30px, labels 26px, secondary 24px, anything focusable >= 64px tall,
+   content 96px from the sides and 54px from top and bottom. USS has no gap, text-transform or
+   aspect-ratio: spacing is margins, capitals come from code, the 16:9 pane is sized in code. */
+
+/* neutralize runtime theme defaults. Bare type selectors: lowest specificity, so any .bh-* rule wins.
+   The stylesheet is scoped to this tree, so nothing outside the widget is affected. */
+Label { margin: 0; padding: 0; white-space: normal; color: var(--bh-text); }
+TextField { margin: 0; padding: 0; }
+#unity-text-input { margin: 0; padding: 0; border-width: 0; background-color: rgba(0, 0, 0, 0); color: var(--bh-text); --unity-cursor-color: var(--bh-text); }
+
+.bh-hidden { display: none; }
+
+.bh-layer {
+  position: absolute; left: 0; top: 0; right: 0; bottom: 0;
+  -unity-font-definition: url("Fonts/Barlow-Regular.ttf");
+  color: var(--bh-text);
+  font-size: 24px;
+}
+
+.bh-overlay { position: absolute; left: 0; top: 0; right: 0; bottom: 0; }
+/* the game stays faintly visible on the right, as on a pause screen */
+.bh-scrim { position: absolute; left: 0; top: 0; right: 0; bottom: 0; background-color: var(--bh-scrim); }
+/* the edge sits in the gap between the columns at any aspect ratio */
+.bh-scrim-left { position: absolute; left: 0; top: 0; bottom: 0; width: 51.5%; background-color: var(--bh-ground); opacity: 0.55; }
+
+/* ------------------------------------------------------------------ two columns */
+
+.bh-screen {
+  position: absolute; left: 96px; right: 96px; top: 54px; bottom: 144px;
+  flex-direction: row; justify-content: space-between;
+}
+/* the 7px side gutter keeps the field glow inside the clip; content still lines up at 96px */
+.bh-left { width: 47.8%; margin-left: -7px; padding: 0 7px; flex-direction: column; overflow: hidden; }
+.bh-right { width: 44.4%; flex-direction: column; overflow: hidden; }
+
+/* long text scrolls inside its field, so the header and fields never give up height */
+.bh-head { margin-bottom: 29px; flex-shrink: 0; }
+.bh-kicker { -unity-font-definition: url("Fonts/BarlowSemiCondensed-Bold.ttf"); font-size: 24px; letter-spacing: 3.8px; color: var(--bh-accent); }
+.bh-title { -unity-font-definition: url("Fonts/BarlowSemiCondensed-Bold.ttf"); font-size: 48px; letter-spacing: 1px; margin: 10px 0 9px 0; color: var(--bh-text); }
+.bh-title--error { color: var(--bh-err); }
+.bh-title--warn { color: var(--bh-warn); }
+.bh-sub { font-size: 24px; color: var(--bh-muted); }
+.bh-sub--error { color: var(--bh-err); }
+.bh-sub--warn { color: var(--bh-warn); }
+
+/* header tabs: the report and its attachments. The title's height and margins, so the form stays where
+   it is under either. A keyboard's 1 and 2 sit inside the tabs, a pad's shoulder buttons either side. */
+.bh-tabs { flex-direction: row; align-items: flex-end; height: 58px; margin: 10px 0 9px 0; flex-shrink: 0; }
+.bh-tabs-shoulder { flex-direction: row; align-self: center; }
+.bh-tabs-shoulder--left { margin-right: 18px; }
+.bh-tab { flex-direction: column; margin-right: 34px; }
+.bh-tab-line { flex-direction: row; align-items: center; margin-bottom: 6px; }
+.bh-tab-key { flex-direction: row; align-items: center; margin-right: 12px; }
+.bh-tab-text { -unity-font-definition: url("Fonts/BarlowSemiCondensed-Bold.ttf"); font-size: 38px; letter-spacing: 1px; color: var(--bh-muted); white-space: nowrap; }
+.bh-tab--on .bh-tab-text { color: var(--bh-text); }
+.bh-pointer .bh-tab:hover .bh-tab-text { color: var(--bh-text); }
+.bh-tab-mark { height: 5px; }
+.bh-tab--on > .bh-tab-mark { background-color: var(--bh-accent); }
+.bh-tab-badge { margin-left: 12px; padding: 1px 11px; border-radius: 14px; background-color: var(--bh-line); }
+.bh-tab-badge > Label { -unity-font-definition: url("Fonts/BarlowSemiCondensed-Bold.ttf"); font-size: 22px; color: var(--bh-text); }
+.bh-tab--on .bh-tab-badge { background-color: var(--bh-accent); }
+.bh-tab--on .bh-tab-badge > Label { color: var(--bh-on-accent); }
+
+.bh-locked .bh-form, .bh-locked .bh-rows { opacity: 0.55; }
+
+/* ------------------------------------------------------------------ fields */
+
+.bh-form { flex-direction: column; }
+/* the type and terms rows keep the fields' spacing */
+.bh-form > .bh-row { margin-bottom: 20px; flex-shrink: 0; }
+.bh-fld { margin-bottom: 20px; flex-shrink: 0; }
+.bh-fld-label { flex-direction: row; justify-content: space-between; align-items: flex-end; margin-bottom: 9px; }
+.bh-fld-label > Label { -unity-font-definition: url("Fonts/BarlowSemiCondensed-SemiBold.ttf"); font-size: 26px; letter-spacing: 1.5px; color: var(--bh-muted); }
+.bh-fld-label > .bh-tag { -unity-font-definition: url("Fonts/Barlow-Medium.ttf"); font-size: 24px; letter-spacing: 0; }
+.bh-fld .bh-fld-label > .bh-tag--limit { color: var(--bh-warn); }
+.bh-fld--focused .bh-fld-label > Label { color: var(--bh-text); -unity-font-definition: url("Fonts/BarlowSemiCondensed-Bold.ttf"); }
+.bh-fld--focused .bh-fld-label > .bh-tag { -unity-font-definition: url("Fonts/Barlow-Medium.ttf"); }
+
+.bh-box {
+  min-height: 64px;
+  padding: 14px 17px;
+  background-color: var(--bh-field);
+  border-width: 3px; border-color: var(--bh-line);
+  border-radius: var(--bh-radius);
+}
+.bh-box--multi { min-height: 146px; }
+/* mouse hover: lighter than focus, no accent; .bh-pointer is on while the mouse and keys are in use */
+.bh-pointer .bh-box:hover { border-color: var(--bh-muted); }
+.bh-fld--focused .bh-box { border-width: 5px; border-color: var(--bh-accent); background-color: var(--bh-field-hi); padding: 12px 15px; }
+.bh-pointer .bh-fld--focused .bh-box:hover { border-color: var(--bh-accent); }
+.bh-locked.bh-pointer .bh-box:hover { border-color: var(--bh-line); }
+/* the glow is the box's previous sibling so it is drawn behind the field, as a ring around it */
+.bh-glow { position: absolute; left: -7px; top: -7px; right: -7px; bottom: -7px; border-radius: var(--bh-radius); background-color: var(--bh-accent); opacity: 0.24; display: none; }
+.bh-fld--editing .bh-glow { display: flex; }
+
+.bh-input { flex-grow: 1; }
+.bh-input > #unity-text-input { font-size: 30px; white-space: normal; -unity-font-definition: url("Fonts/Barlow-Regular.ttf"); padding: 0 2px 0 0; }
+/* lines of 30 px Barlow are 36 px: What happened grows to 6, Steps to reproduce to 4 */
+.bh-input--multi > #unity-text-input { min-height: 112px; max-height: 216px; -unity-text-align: upper-left; }
+.bh-input--steps > #unity-text-input { max-height: 144px; }
+/* the scroller inside a long field: a thin bar in the theme's colors, no arrow buttons
+   (four classes, so it wins over Unity's default runtime theme) */
+.bh-input .unity-scroller--vertical .unity-scroller__low-button,
+.bh-input .unity-scroller--vertical .unity-scroller__high-button,
+.bh-log-scroll .unity-scroller--vertical .unity-scroller__low-button,
+.bh-log-scroll .unity-scroller--vertical .unity-scroller__high-button { display: none; }
+.bh-input .unity-scroller.unity-scroller--vertical,
+.bh-log-scroll .unity-scroller.unity-scroller--vertical { width: 10px; min-width: 10px; margin-left: 8px; border-width: 0; background-color: rgba(0, 0, 0, 0); }
+.bh-input .unity-scroller--vertical .unity-scroller__slider .unity-base-slider__tracker,
+.bh-log-scroll .unity-scroller--vertical .unity-scroller__slider .unity-base-slider__tracker { background-color: rgba(0, 0, 0, 0); border-width: 0; }
+.bh-input .unity-scroller--vertical .unity-scroller__slider .unity-base-slider__dragger,
+.bh-log-scroll .unity-scroller--vertical .unity-scroller__slider .unity-base-slider__dragger { left: 0; width: 10px; border-width: 0; border-radius: 5px; background-color: var(--bh-line); }
+.bh-input .unity-scroller--vertical .unity-scroller__slider .unity-base-slider__dragger:hover,
+.bh-log-scroll .unity-scroller--vertical .unity-scroller__slider .unity-base-slider__dragger:hover { background-color: var(--bh-muted); }
+.bh-input .unity-scroller--vertical .unity-scroller__slider .unity-base-slider__dragger:active,
+.bh-log-scroll .unity-scroller--vertical .unity-scroller__slider .unity-base-slider__dragger:active { background-color: var(--bh-accent); }
+.bh-input .unity-scroller--vertical .unity-scroller__slider .unity-base-slider__dragger-border,
+.bh-log-scroll .unity-scroller--vertical .unity-scroller__slider .unity-base-slider__dragger-border { display: none; }
+.bh-prompt { position: absolute; left: 17px; top: 14px; right: 17px; font-size: 30px; color: var(--bh-muted); }
+.bh-fld--focused .bh-prompt { left: 15px; top: 12px; }
+
+/* ------------------------------------------------------------------ settings-style rows */
+
+.bh-group { flex-direction: row; justify-content: space-between; margin: 7px 0 12px 0; }
+.bh-group > Label { -unity-font-definition: url("Fonts/BarlowSemiCondensed-SemiBold.ttf"); font-size: 26px; letter-spacing: 1.5px; color: var(--bh-muted); }
+
+.bh-rows { flex-direction: row; flex-wrap: wrap; justify-content: space-between; }
+.bh-row {
+  width: 100%;
+  min-height: 64px;
+  margin-bottom: 4px;
+  padding: 0 19px;
+  flex-direction: row; align-items: center; justify-content: space-between;
+  background-color: var(--bh-surface);
+  border-width: 3px; border-color: rgba(0, 0, 0, 0);
+  border-radius: var(--bh-radius);
+}
+.bh-rows--two > .bh-row { width: 49.6%; }
+.bh-pointer .bh-row:hover { background-color: var(--bh-surface-hi); }
+.bh-locked.bh-pointer .bh-row:hover { background-color: var(--bh-surface); }
+.bh-row--focused { background-color: var(--bh-surface-hi); border-width: 5px; border-color: var(--bh-accent); padding: 0 17px; }
+
+.bh-row-name { flex-direction: row; align-items: center; flex-shrink: 1; overflow: hidden; margin-right: 15px; }
+.bh-oname { -unity-font-definition: url("Fonts/Barlow-Medium.ttf"); font-size: 28px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 1; }
+.bh-row--focused .bh-oname { -unity-font-definition: url("Fonts/Barlow-Bold.ttf"); }
+.bh-ometa { font-size: 24px; color: var(--bh-muted); margin-left: 15px; white-space: nowrap; flex-shrink: 0; }
+.bh-rows--two .bh-ometa { display: none; }
+.bh-rows--two .bh-oname { font-size: 26px; }
+
+.bh-oname--off { color: var(--bh-muted); }
+
+/* include or leave out: a box ticked in the accent colour. The tick is JetBrains Mono's, the only
+   bundled font that has one; unticked it is drawn clear. */
+.bh-check { width: 38px; height: 38px; margin-right: 18px; flex-shrink: 0; align-items: center; justify-content: center; border-width: 3px; border-color: var(--bh-muted); border-radius: 7px; }
+.bh-check-mark { -unity-font-definition: url("Fonts/JetBrainsMono-Regular.ttf"); font-size: 28px; -unity-text-align: middle-center; color: rgba(0, 0, 0, 0); }
+.bh-pointer .bh-check:hover { border-color: var(--bh-text); }
+.bh-locked.bh-pointer .bh-check:hover { border-color: var(--bh-muted); }
+.bh-check.bh-check--on { background-color: var(--bh-accent); border-color: var(--bh-accent); }
+.bh-check--on > .bh-check-mark { color: var(--bh-on-accent); }
+
+/* the report type: both values in view, the chosen one filled */
+.bh-switch { flex-direction: row; flex-shrink: 0; padding: 4px; border-radius: 8px; background-color: var(--bh-field); }
+.bh-switch-opt { padding: 7px 18px; border-radius: 6px; -unity-font-definition: url("Fonts/BarlowSemiCondensed-Bold.ttf"); font-size: 24px; letter-spacing: 1.3px; color: var(--bh-muted); white-space: nowrap; }
+.bh-pointer .bh-switch-opt:hover { color: var(--bh-text); }
+.bh-switch-opt.bh-switch-opt--on { background-color: var(--bh-accent); color: var(--bh-on-accent); }
+
+.bh-oval { flex-direction: row; align-items: center; flex-shrink: 0; }
+.bh-oval > Label { -unity-font-definition: url("Fonts/BarlowSemiCondensed-Bold.ttf"); font-size: 26px; letter-spacing: 1.3px; color: var(--bh-accent); white-space: nowrap; }
+.bh-rows--two .bh-oval > Label { font-size: 24px; }
+.bh-oval--muted > Label { color: var(--bh-muted); }
+.bh-oval--ok > Label { color: var(--bh-ok); }
+.bh-oval--error > Label { color: var(--bh-err); }
+.bh-mini { width: 86px; height: 10px; margin-right: 12px; background-color: var(--bh-line); }
+.bh-mini-fill { position: absolute; left: 0; top: 0; bottom: 0; background-color: var(--bh-accent); }
+
+/* ------------------------------------------------------------------ preview pane */
+
+.bh-pane {
+  width: 100%;
+  overflow: hidden;
+  background-color: var(--bh-field);
+  border-width: 3px; border-color: var(--bh-line);
+  border-radius: var(--bh-radius);
+}
+/* scale-to-fit: a game that isn't 16:9 shows its whole frame, with bars, instead of a cropped one */
+.bh-pane-image { position: absolute; left: 0; top: 0; right: 0; bottom: 0; -unity-background-scale-mode: scale-to-fit; }
+.bh-pane-empty { position: absolute; left: 0; top: 0; right: 0; bottom: 0; -unity-text-align: middle-center; font-size: 24px; color: var(--bh-muted); }
+.bh-pane-frames { position: absolute; left: 12px; top: 12px; right: 12px; bottom: 12px; justify-content: space-between; }
+.bh-frame-row { height: 49%; flex-direction: row; justify-content: space-between; }
+.bh-frame { width: 32.6%; -unity-background-scale-mode: scale-and-crop; opacity: 0.85; justify-content: flex-end; padding: 6px 8px; background-color: var(--bh-surface); }
+.bh-frame--last { opacity: 1; border-width: 3px; border-color: var(--bh-accent); }
+/* thumbnails fill their cells; full screen shows each whole frame */
+.bh-preview-main .bh-frame { -unity-background-scale-mode: scale-to-fit; }
+.bh-frame--empty { visibility: hidden; }
+/* a dark chip: the time stays readable over a bright floor or sky */
+.bh-frame > Label { -unity-font-definition: url("Fonts/JetBrainsMono-Regular.ttf"); font-size: 17px; color: #ffffff; align-self: flex-start; padding: 1px 6px; border-radius: 4px; background-color: rgba(0, 0, 0, 0.62); }
+.bh-pane-log { position: absolute; left: 0; top: 0; right: 0; bottom: 0; padding: 19px 23px; overflow: hidden; }
+.bh-pane-log > Label { -unity-font-definition: url("Fonts/JetBrainsMono-Regular.ttf"); font-size: 20px; color: var(--bh-muted); white-space: nowrap; overflow: hidden; margin-bottom: 3px; }
+.bh-pane-log > .bh-log--warn { color: var(--bh-warn); }
+.bh-pane-log > .bh-log--err { color: var(--bh-err); }
+/* full-screen preview: the whole tail, wrapped, scrolling */
+.bh-log-scroll { position: absolute; left: 0; top: 0; right: 0; bottom: 0; padding: 19px 8px 19px 23px; }
+.bh-log-scroll Label { -unity-font-definition: url("Fonts/JetBrainsMono-Regular.ttf"); font-size: 20px; color: var(--bh-muted); white-space: normal; margin-bottom: 3px; }
+.bh-log-scroll .bh-log--warn { color: var(--bh-warn); }
+.bh-log-scroll .bh-log--err { color: var(--bh-err); }
+.bh-pane-kv { position: absolute; left: 0; top: 0; right: 0; bottom: 0; padding: 23px 27px; }
+.bh-kv { flex-direction: row; margin-bottom: 13px; }
+.bh-kv > Label { -unity-font-definition: url("Fonts/JetBrainsMono-Regular.ttf"); font-size: 22px; }
+.bh-kv-key { width: 27%; color: var(--bh-muted); margin-right: 20px; }
+.bh-kv-value { flex-shrink: 1; flex-grow: 1; color: var(--bh-text); }
+.bh-pane-note { -unity-font-definition: url("Fonts/Barlow-Regular.ttf"); font-size: 24px; color: var(--bh-muted); margin-bottom: 18px; }
+
+.bh-cap { flex-direction: row; justify-content: space-between; align-items: center; margin: 15px 0 25px 0; }
+.bh-cap > Label { -unity-font-definition: url("Fonts/BarlowSemiCondensed-SemiBold.ttf"); font-size: 24px; letter-spacing: 1.4px; color: var(--bh-muted); flex-shrink: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* padding with matching negative margins leaves room for the hover pill without moving the caption */
+.bh-cap-right { flex-direction: row; align-items: center; flex-shrink: 0; margin: -4px -10px -4px 19px; padding: 4px 10px; border-radius: var(--bh-radius); }
+.bh-pointer .bh-cap-right--action:hover { background-color: var(--bh-surface); }
+.bh-cap-right > Label { -unity-font-definition: url("Fonts/Barlow-Medium.ttf"); font-size: 24px; color: var(--bh-text); margin-left: 10px; }
+
+/* ------------------------------------------------------------------ sent */
+
+.bh-note { font-size: 26px; color: var(--bh-muted); margin-bottom: 20px; }
+.bh-note--error { color: var(--bh-err); }
+.bh-sent-list { font-size: 26px; color: var(--bh-text); }
+
+/* ------------------------------------------------------------------ full-screen preview */
+
+.bh-preview { position: absolute; left: 0; top: 0; right: 0; bottom: 0; }
+.bh-preview-head { position: absolute; left: 96px; right: 96px; top: 54px; flex-direction: row; justify-content: space-between; align-items: flex-end; }
+.bh-preview-head .bh-head { margin-bottom: 0; flex-shrink: 1; }
+.bh-preview-count { -unity-font-definition: url("Fonts/BarlowSemiCondensed-SemiBold.ttf"); font-size: 24px; letter-spacing: 1.4px; color: var(--bh-muted); margin-left: 24px; }
+.bh-preview-body { position: absolute; left: 96px; right: 96px; top: 242px; bottom: 144px; flex-direction: row; }
+.bh-preview-list { width: 461px; margin-right: 38px; flex-direction: column; }
+.bh-preview-list > .bh-row { width: 100%; }
+.bh-preview-main { flex-grow: 1; flex-shrink: 1; }
+.bh-preview-main > .bh-pane { flex-grow: 1; }
+
+/* ------------------------------------------------------------------ prompt bar */
+
+.bh-prompts {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 125px;
+  padding: 0 82px 54px 82px;
+  flex-direction: row; align-items: center;
+  background-color: var(--bh-bar);
+  border-top-width: 1px; border-color: var(--bh-line);
+}
+.bh-prompts-side { flex-direction: row; align-items: center; }
+.bh-spacer { flex-grow: 1; }
+/* 14px padding each side (the bar's 82px + 14px keeps prompts at the 96px safe line) leaves room for the hover pill */
+.bh-p { flex-direction: row; align-items: center; margin-right: 18px; min-height: 64px; padding: 0 14px; border-radius: var(--bh-radius); }
+#bh-prompts-right > .bh-p { margin-right: 0; margin-left: 18px; }
+.bh-pointer .bh-p:hover { background-color: var(--bh-surface); }
+.bh-pointer .bh-p--disabled:hover { background-color: rgba(0, 0, 0, 0); }
+/* Move only explains the arrows; there is nothing to click */
+.bh-pointer .bh-p--hint:hover { background-color: rgba(0, 0, 0, 0); }
+.bh-p > .bh-p-label { font-size: 26px; color: var(--bh-text); white-space: nowrap; margin-left: 12px; }
+.bh-p--primary > .bh-p-label { -unity-font-definition: url("Fonts/Barlow-Bold.ttf"); color: var(--bh-accent); }
+.bh-p--disabled { opacity: 0.45; }
+.bh-glyph { flex-direction: row; align-items: center; }
+.bh-key {
+  min-width: 37px; height: 37px; padding: 0 10px; margin-right: 5px;
+  -unity-font-definition: url("Fonts/Barlow-Bold.ttf"); font-size: 19px; -unity-text-align: middle-center;
+  color: #14161c; background-color: #e7e8ec;
+  border-width: 1px; border-bottom-width: 4px; border-color: #a9adb8; border-radius: 6px;
+}
+.bh-key--last { margin-right: 0; }
+
+/* controller glyphs: each platform's own colours, not the theme's. Symbols come from JetBrains Mono,
+   the only bundled font that has them. */
+.bh-pad {
+  width: 37px; height: 37px; border-radius: 19px; padding: 0;
+  -unity-font-definition: url("Fonts/Barlow-Bold.ttf"); font-size: 21px; -unity-text-align: middle-center; color: #ffffff;
+}
+.bh-pad--xbox-south { background-color: #5cb82c; }
+.bh-pad--xbox-east { background-color: #e0463c; }
+.bh-pad--xbox-west { background-color: #2f7fd4; }
+.bh-pad--xbox-north { background-color: #f1c21b; color: #1b1500; }
+.bh-pad--ps { background-color: #0d0f14; border-width: 2px; border-color: #3b4150; -unity-font-definition: url("Fonts/JetBrainsMono-Regular.ttf"); font-size: 32px; }
+.bh-pad--ps-south { color: #8fb4f2; }
+.bh-pad--ps-east { color: #ef7479; }
+.bh-pad--ps-west { color: #e28bd0; }
+.bh-pad--ps-north { color: #6fd0b1; }
+.bh-pad--switch { background-color: #2b2e36; color: #f2f3f5; border-width: 2px; border-color: #555a66; }
+.bh-dpad {
+  height: 37px; padding: 0 12px; border-radius: 8px;
+  background-color: #0d0f14; border-width: 2px; border-color: #3b4150;
+  -unity-font-definition: url("Fonts/JetBrainsMono-Regular.ttf"); font-size: 18px; letter-spacing: 2px; -unity-text-align: middle-center; color: #cfd3dc;
+}
+.bh-spin { width: 31px; height: 31px; flex-grow: 0; }
+.bh-arc { color: var(--bh-accent); border-color: var(--bh-line); }
+
+/* ------------------------------------------------------------------ background upload toast */
+
+.bh-toast {
+  position: absolute; right: 96px; bottom: 158px;
+  min-height: 64px; padding: 19px 27px;
+  flex-direction: row; align-items: center;
+  background-color: var(--bh-ground);
+  border-width: 3px; border-left-width: 7px; border-color: var(--bh-line); border-left-color: var(--bh-accent);
+  border-radius: var(--bh-radius);
+}
+.bh-toast--ok { border-left-color: var(--bh-ok); }
+.bh-toast--error { border-left-color: var(--bh-err); }
+.bh-toast--ok .bh-arc { color: var(--bh-ok); }
+.bh-toast--error .bh-arc { color: var(--bh-err); }
+.bh-ring { width: 46px; height: 46px; margin-right: 19px; }
+.bh-toast-title { -unity-font-definition: url("Fonts/BarlowSemiCondensed-Bold.ttf"); font-size: 28px; letter-spacing: 0.8px; }
+.bh-toast-sub { font-size: 24px; color: var(--bh-muted); }

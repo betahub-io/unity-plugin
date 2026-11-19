@@ -1,0 +1,151 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../UIElementsSchema/UIElements.xsd">
+  <Style src="BugReportWidget.uss" />
+
+  <!-- Bug report widget, direction B: a full-screen form over the paused game. What happened on the
+       left, what gets sent on the right, actions in the prompt bar. BugReportWidget.cs fills the text,
+       builds the attachment rows, the preview pane and the prompts, and adds the theme stylesheet to
+       bh-layer. Element names (bh-*) are shared with BugReportWidget.cs; keep them when customizing. -->
+  <ui:VisualElement name="bh-layer" class="bh-layer bh-root" picking-mode="Ignore">
+
+    <ui:VisualElement name="bh-overlay" class="bh-overlay bh-hidden" focusable="true">
+      <ui:VisualElement class="bh-scrim" />
+      <ui:VisualElement class="bh-scrim-left" />
+
+      <ui:VisualElement name="bh-screen" class="bh-screen">
+        <ui:VisualElement name="bh-left" class="bh-left">
+          <ui:VisualElement class="bh-head">
+            <ui:Label name="bh-kicker" class="bh-kicker" text="BETAHUB" />
+            <ui:Label name="bh-title" class="bh-title" text="REPORT A BUG" />
+            <!-- the report and attachments tabs take the title's place and height; built in code -->
+            <ui:VisualElement name="bh-tabs" class="bh-tabs bh-hidden" />
+            <ui:Label name="bh-subtitle" class="bh-sub" text="Goes straight to the developers" />
+          </ui:VisualElement>
+
+          <!-- compose -->
+          <ui:VisualElement name="bh-form" class="bh-form">
+            <ui:VisualElement name="bh-type" class="bh-row">
+              <ui:VisualElement class="bh-row-name"><ui:Label name="bh-type-label" class="bh-oname" text="Report type" /></ui:VisualElement>
+              <ui:VisualElement class="bh-switch">
+                <ui:Label name="bh-type-bug" class="bh-switch-opt bh-switch-opt--on" text="BUG" />
+                <ui:Label name="bh-type-suggestion" class="bh-switch-opt" text="SUGGESTION" />
+              </ui:VisualElement>
+            </ui:VisualElement>
+
+            <ui:VisualElement name="bh-fld-description" class="bh-fld">
+              <ui:VisualElement class="bh-fld-label">
+                <ui:Label name="bh-description-label" text="WHAT HAPPENED" />
+                <ui:Label name="bh-description-tag" class="bh-tag" text="required" />
+              </ui:VisualElement>
+              <ui:VisualElement class="bh-box-wrap">
+                <ui:VisualElement class="bh-glow" picking-mode="Ignore" />
+                <ui:VisualElement class="bh-box bh-box--multi">
+                  <ui:TextField name="bh-description" multiline="true" class="bh-input bh-input--multi" />
+                  <ui:Label name="bh-description-prompt" class="bh-prompt" picking-mode="Ignore" text="Describe what happened" />
+                </ui:VisualElement>
+              </ui:VisualElement>
+            </ui:VisualElement>
+
+            <ui:VisualElement name="bh-fld-steps" class="bh-fld">
+              <ui:VisualElement class="bh-fld-label">
+                <ui:Label name="bh-steps-label" text="STEPS TO REPRODUCE" />
+                <ui:Label name="bh-steps-tag" class="bh-tag" text="optional" />
+              </ui:VisualElement>
+              <ui:VisualElement class="bh-box-wrap">
+                <ui:VisualElement class="bh-glow" picking-mode="Ignore" />
+                <ui:VisualElement class="bh-box">
+                  <ui:TextField name="bh-steps" multiline="true" class="bh-input bh-input--steps" />
+                  <ui:Label name="bh-steps-prompt" class="bh-prompt" picking-mode="Ignore" text="Add steps if you can. It helps a lot." />
+                </ui:VisualElement>
+              </ui:VisualElement>
+            </ui:VisualElement>
+
+            <ui:VisualElement name="bh-terms" class="bh-row">
+              <ui:VisualElement class="bh-row-name">
+                <ui:VisualElement name="bh-terms-check" class="bh-check"><ui:Label class="bh-check-mark" text="✓" /></ui:VisualElement>
+                <ui:Label name="bh-terms-label" class="bh-oname bh-oname--off" text="I accept the terms of bug reporting" />
+              </ui:VisualElement>
+            </ui:VisualElement>
+          </ui:VisualElement>
+
+          <!-- sent -->
+          <ui:VisualElement name="bh-sent" class="bh-form bh-hidden">
+            <ui:VisualElement name="bh-fld-email" class="bh-fld">
+              <ui:VisualElement class="bh-fld-label">
+                <ui:Label name="bh-email-label" text="EMAIL ME WHEN IT'S FIXED" />
+                <ui:Label name="bh-email-tag" class="bh-tag" text="optional" />
+              </ui:VisualElement>
+              <ui:VisualElement class="bh-box-wrap">
+                <ui:VisualElement class="bh-glow" picking-mode="Ignore" />
+                <ui:VisualElement class="bh-box">
+                  <ui:TextField name="bh-email" class="bh-input" />
+                  <ui:Label name="bh-email-prompt" class="bh-prompt" picking-mode="Ignore" text="you@example.com" />
+                </ui:VisualElement>
+              </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:Label name="bh-sent-note" class="bh-note" text="One email when it's fixed. Nothing else, no account." />
+            <ui:VisualElement name="bh-link" class="bh-row">
+              <ui:VisualElement class="bh-row-name"><ui:Label name="bh-link-label" class="bh-oname" text="Report link" /></ui:VisualElement>
+              <ui:VisualElement name="bh-link-value" class="bh-oval"><ui:Label text="COPY" /></ui:VisualElement>
+            </ui:VisualElement>
+          </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement name="bh-right" class="bh-right">
+          <ui:VisualElement name="bh-pane" class="bh-pane" />
+          <ui:VisualElement class="bh-cap">
+            <ui:Label name="bh-cap-left" text="YOUR SCREENSHOT · THIS FRAME" />
+            <ui:VisualElement name="bh-cap-right" class="bh-cap-right" />
+          </ui:VisualElement>
+          <ui:VisualElement name="bh-attachments">
+            <ui:VisualElement class="bh-group">
+              <ui:Label name="bh-group-label" text="SENDING ALONG" />
+              <ui:Label name="bh-group-count" text="3 OF 3" />
+            </ui:VisualElement>
+            <ui:VisualElement name="bh-rows" class="bh-rows" />
+          </ui:VisualElement>
+          <ui:VisualElement name="bh-sent-with" class="bh-hidden">
+            <ui:VisualElement class="bh-group">
+              <ui:Label name="bh-sent-with-label" text="SENT WITH THIS REPORT" />
+              <ui:Label name="bh-sent-with-count" text="3" />
+            </ui:VisualElement>
+            <ui:Label name="bh-sent-list" class="bh-sent-list" text="Screenshot · Last 60 s of play · Game log" />
+          </ui:VisualElement>
+        </ui:VisualElement>
+      </ui:VisualElement>
+
+      <!-- the attachments tab: one attachment full screen -->
+      <ui:VisualElement name="bh-preview" class="bh-preview bh-hidden">
+        <ui:VisualElement class="bh-preview-head">
+          <ui:VisualElement class="bh-head">
+            <ui:Label name="bh-preview-kicker" class="bh-kicker" text="BETAHUB" />
+            <!-- the same tabs, with Attachments open -->
+            <ui:VisualElement name="bh-preview-tabs" class="bh-tabs" />
+            <ui:Label name="bh-preview-subtitle" class="bh-sub" text="Game log · Last lines · the full file is sent" />
+          </ui:VisualElement>
+          <ui:Label name="bh-preview-count" class="bh-preview-count" text="3 OF 3" />
+        </ui:VisualElement>
+        <ui:VisualElement class="bh-preview-body">
+          <ui:VisualElement name="bh-preview-list" class="bh-preview-list" />
+          <ui:VisualElement class="bh-preview-main">
+            <ui:VisualElement name="bh-preview-pane" class="bh-pane" />
+          </ui:VisualElement>
+        </ui:VisualElement>
+      </ui:VisualElement>
+
+      <ui:VisualElement name="bh-prompts" class="bh-prompts">
+        <ui:VisualElement name="bh-prompts-left" class="bh-prompts-side" />
+        <ui:VisualElement class="bh-spacer" />
+        <ui:VisualElement name="bh-prompts-right" class="bh-prompts-side" />
+      </ui:VisualElement>
+    </ui:VisualElement>
+
+    <!-- shown over the running game while a report uploads in the background -->
+    <ui:VisualElement name="bh-toast" class="bh-toast bh-hidden" picking-mode="Ignore">
+      <ui:VisualElement name="bh-ring" class="bh-ring" />
+      <ui:VisualElement>
+        <ui:Label name="bh-toast-title" class="bh-toast-title" text="UPLOADING YOUR REPORT" />
+        <ui:Label name="bh-toast-sub" class="bh-toast-sub" text="45% · the game continues" />
+      </ui:VisualElement>
+    </ui:VisualElement>
+  </ui:VisualElement>
+</ui:UXML>

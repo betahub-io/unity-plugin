@@ -10,6 +10,8 @@ namespace BetaHub
 {
     public class FfmpegDownloader
     {
+        public const string MenuPath = "Window/BetaHub/Download FFmpeg";
+
         private static readonly Dictionary<string, string> PlatformInfo = new Dictionary<string, string>
         {
             { "Windows", "ffmpeg.exe" },
@@ -118,8 +120,30 @@ namespace BetaHub
             }
         }
 
-        [MenuItem("Window/BetaHub/Download FFmpeg", false, 10000)]
-        static void DownloadFfmpegMenu()
+        /// <summary>Whether FFmpeg is in StreamingAssets for the platform this editor runs on.</summary>
+        public static bool IsInstalledForThisEditor()
+        {
+            string platform = EditorPlatform();
+            if (platform == null) return true; // nothing to offer
+            string dir = Path.Combine(Application.streamingAssetsPath, "BetaHub");
+            string name = GetFfmpegFilename(platform);
+            // 1.x put it straight in StreamingAssets/BetaHub
+            return File.Exists(Path.Combine(dir, platform, name)) || File.Exists(Path.Combine(dir, name));
+        }
+
+        private static string EditorPlatform()
+        {
+            switch (Application.platform)
+            {
+                case RuntimePlatform.WindowsEditor: return "Windows";
+                case RuntimePlatform.OSXEditor: return "MacOS";
+                case RuntimePlatform.LinuxEditor: return "Linux";
+                default: return null;
+            }
+        }
+
+        [MenuItem(MenuPath, false, 10000)]
+        public static void DownloadForAllPlatforms()
         {
             bool anyErrors = false;
 

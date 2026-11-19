@@ -52,3 +52,9 @@ Thumbs.db
 /*.apk
 /*.aab
 /*.unitypackage
+
+# =================== #
+# Fast dotnet test loop (Tools~/EditTests) #
+# =================== #
+!Tools~/EditTests/EditTests.csproj
+Tools~/EditTests/bin/

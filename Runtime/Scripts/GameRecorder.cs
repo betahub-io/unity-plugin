@@ -47,6 +47,34 @@ namespace BetaHub
         [HideInInspector]
         public RenderTexture CaptureRenderTexture;
 
+        /// <summary>Preview frames kept for the report form: one every interval over the recording window.</summary>
+        public const int PreviewFrameCount = 6;
+        public const float PreviewFrameInterval = 10f;
+        private const int PreviewFrameHeight = 180;
+
+        public struct PreviewFrame
+        {
+            public Texture Texture;
+            /// <summary>Seconds between this frame and the newest one.</summary>
+            public float SecondsBeforeNewest;
+        }
+
+        /// <summary>
+        /// Render format of the preview frames: one without alpha, since a camera's clear alpha (near 0 in Unity's
+        /// default camera) would let the pane show through the game. 11-11-10 float where it renders, else 5-6-5.
+        /// </summary>
+        public static RenderTextureFormat PreviewFrameFormat() =>
+            SystemInfo.SupportsRenderTextureFormat(RenderTextureFormat.RGB111110Float) ? RenderTextureFormat.RGB111110Float : RenderTextureFormat.RGB565;
+
+        /// <summary>Preview frame size for a capture of the given size: a fixed height, the game's aspect.</summary>
+        public static Vector2Int PreviewFrameSize(int sourceWidth, int sourceHeight)
+        {
+            if (sourceWidth <= 0) throw new System.ArgumentOutOfRangeException(nameof(sourceWidth), sourceWidth, "Capture width must be positive.");
+            if (sourceHeight <= 0) throw new System.ArgumentOutOfRangeException(nameof(sourceHeight), sourceHeight, "Capture height must be positive.");
+            int width = Mathf.Max(1, Mathf.RoundToInt(PreviewFrameHeight * (float)sourceWidth / sourceHeight));
+            return new Vector2Int(width, PreviewFrameHeight);
+        }
+
 #if !UNITY_WEBGL || UNITY_EDITOR
         // Optimized: Use RenderTextures for efficient GPU-based capture
         private RenderTexture _captureRT;
@@ -56,6 +84,11 @@ namespace BetaHub
         // GC Optimization: Reusable buffers to avoid allocations in capture loop
         private byte[] _frameDataBuffer; // Reusable buffer for frame data from GPU
         private byte[] _rgbaDataBuffer; // Reusable buffer for RGBA texture data
+
+        private RenderTexture[] _previewFrames;
+        private readonly ThumbnailRing _previewRing = new ThumbnailRing(PreviewFrameCount, PreviewFrameInterval);
+        private static readonly Vector2 PreviewFlipScale = new Vector2(1f, -1f);
+        private static readonly Vector2 PreviewFlipOffset = new Vector2(0f, 1f);
 #endif
 
         public bool IsRecording { get; private set; }
@@ -218,6 +251,7 @@ namespace BetaHub
             _rgbConversionBuffer = null;
             _frameDataBuffer = null;
             _rgbaDataBuffer = null;
+            ReleasePreviewFrames();
             if (_videoEncoder != null) // can be null since Start() may not have been called
             {
                 _videoEncoder.Dispose();
@@ -336,6 +370,8 @@ namespace BetaHub
             }
 
             IsRecording = false;
+            // The clip restarts empty, so the preview frames of this one must not show in the next form.
+            _previewRing.Clear();
 
             // Stop video first so segments are finalized
             _videoEncoder.FinalizeRecording();
@@ -428,6 +464,7 @@ namespace BetaHub
                             Graphics.Blit(CaptureRenderTexture, _captureRT);
                             AsyncGPUReadback.Request(_captureRT, 0, OnCompleteReadback);
                         }
+                        KeepPreviewFrame(CaptureRenderTexture);
                     }
                     else
                     {
@@ -447,11 +484,63 @@ namespace BetaHub
                         
                         // Use AsyncGPUReadback for non-blocking frame capture
                         AsyncGPUReadback.Request(_captureRT, 0, OnCompleteReadback);
+                        KeepPreviewFrame(_captureRT);
                     }
                 }
             }
         }
 
+        // A small GPU copy every PreviewFrameInterval; paused time (the form is open) adds none.
+        private void KeepPreviewFrame(Texture source)
+        {
+            if (IsPaused || !_previewRing.IsDue(Time.unscaledTime)) return;
+            if (_previewFrames == null)
+            {
+                _previewFrames = new RenderTexture[PreviewFrameCount];
+            }
+            int slot = _previewRing.Claim(Time.unscaledTime);
+            var size = PreviewFrameSize(source.width, source.height);
+            var frame = _previewFrames[slot];
+            if (frame == null || frame.width != size.x || frame.height != size.y)
+            {
+                if (frame != null) frame.Release();
+                frame = _previewFrames[slot] = new RenderTexture(size.x, size.y, 0, PreviewFrameFormat());
+            }
+            // The capture holds the top row first, the order FFmpeg reads, so as a texture it is upside down.
+            // MirrorVertically means it is not, and the encoder flips it instead.
+            if (MirrorVertically) Graphics.Blit(source, frame);
+            else Graphics.Blit(source, frame, PreviewFlipScale, PreviewFlipOffset);
+        }
+
+        private void ReleasePreviewFrames()
+        {
+            _previewRing.Clear();
+            if (_previewFrames == null) return;
+            foreach (var frame in _previewFrames)
+            {
+                if (frame != null) frame.Release();
+            }
+            _previewFrames = null;
+        }
+#endif
+
+        /// <summary>Downscaled frames of the recording, oldest first. Empty on WebGL and before the first frame.</summary>
+        public List<PreviewFrame> GetPreviewFrames()
+        {
+            var frames = new List<PreviewFrame>();
+#if !UNITY_WEBGL || UNITY_EDITOR
+            if (_previewFrames == null) return frames;
+            float newest = 0f;
+            foreach (var entry in _previewRing.Ordered()) newest = entry.Time;
+            foreach (var entry in _previewRing.Ordered())
+            {
+                frames.Add(new PreviewFrame { Texture = _previewFrames[entry.Slot], SecondsBeforeNewest = newest - entry.Time });
+            }
+#endif
+            return frames;
+        }
+
+#if !UNITY_WEBGL || UNITY_EDITOR
         // Optimized: Async callback for GPU readback completion
         private void OnCompleteReadback(AsyncGPUReadbackRequest request)
         {
@@ -509,16 +598,13 @@ namespace BetaHub
             }
 
             // Draw cursor if enabled
-            if (RenderCursor)
+            if (RenderCursor && TryGetMousePosition(out Vector3 mousePos))
             {
                 if (painter == null)
                 {
                     painter = new TexturePainter(bufferWrapper, flipY: true);
                 }
-                
-                // Get mouse position in screen coordinates
-                Vector3 mousePos = Input.mousePosition;
-                
+
                 // Convert screen coordinates to texture coordinates
                 // Screen coordinates: (0,0) at bottom-left, (Screen.width, Screen.height) at top-right
                 // Texture coordinates depend on scaling and capture source
@@ -552,6 +638,19 @@ namespace BetaHub
             }
 
             return _rgbConversionBuffer;
+        }
+
+        // Mouse position in screen coordinates. The legacy Input class throws when only the new Input System is active.
+        private static bool TryGetMousePosition(out Vector3 position)
+        {
+#if ENABLE_INPUT_SYSTEM && !ENABLE_LEGACY_INPUT_MANAGER
+            var mouse = UnityEngine.InputSystem.Mouse.current;
+            position = mouse != null ? (Vector3)mouse.position.ReadValue() : Vector3.zero;
+            return mouse != null;
+#else
+            position = Input.mousePosition;
+            return true;
+#endif
         }
 
         /// <summary>
