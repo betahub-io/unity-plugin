@@ -195,30 +195,44 @@ namespace BetaHub
             return string.IsNullOrEmpty(www.error) ? UnknownErrorMessage : www.error;
         }
 
+        // The form of a draft report. Custom fields go as issue[custom]: BetaHub creates a field the project
+        // doesn't have yet (text, for developers) instead of dropping its value.
+        internal static List<KeyValuePair<string, string>> DraftFormFields(string description, string steps, int releaseId, string releaseLabel, Dictionary<string, string> customFields)
+        {
+            var fields = new List<KeyValuePair<string, string>>
+            {
+                new KeyValuePair<string, string>("issue[description]", description),
+                new KeyValuePair<string, string>("issue[unformatted_steps_to_reproduce]", steps),
+                new KeyValuePair<string, string>("draft", "true"), // this enables the draft flow
+            };
+
+            if (releaseId > 0)
+            {
+                fields.Add(new KeyValuePair<string, string>("issue[release_id]", releaseId.ToString()));
+            }
+            else if (!string.IsNullOrEmpty(releaseLabel))
+            {
+                fields.Add(new KeyValuePair<string, string>("issue[release_label]", releaseLabel));
+            }
+
+            if (customFields != null)
+            {
+                foreach (var kvp in customFields)
+                {
+                    fields.Add(new KeyValuePair<string, string>($"issue[custom][{kvp.Key}]", kvp.Value));
+                }
+            }
+            return fields;
+        }
+
         // posts a draft issue to BetaHub.
         // returns the issue id and the update issue auth token via callback
         private IEnumerator PostIssueDraft(string description, string steps, int releaseId, string releaseLabel, Dictionary<string, string> customFields, Action<DraftResult> onResult)
         {
             WWWForm form = new WWWForm();
-            form.AddField("issue[description]", description);
-            form.AddField("issue[unformatted_steps_to_reproduce]", steps);
-            form.AddField("draft", "true"); // this enables the draft flow
-
-            if (releaseId > 0)
+            foreach (var field in DraftFormFields(description, steps, releaseId, releaseLabel, customFields))
             {
-                form.AddField("issue[release_id]", releaseId);
-            }
-            else if (!string.IsNullOrEmpty(releaseLabel))
-            {
-                form.AddField("issue[release_label]", releaseLabel);
-            }
-
-            if (customFields != null && customFields.Count > 0)
-            {
-                foreach (var kvp in customFields)
-                {
-                    form.AddField($"issue[custom_fields][{kvp.Key}]", kvp.Value);
-                }
+                form.AddField(field.Key, field.Value);
             }
 
             string url = GetPostIssueUrl();

@@ -499,16 +499,10 @@ namespace BetaHub
             _hostLostPings.Clear();
         }
         
-        void Start()
+        // OnEnable, not Start: the reporter checks its providers' fields in its Start, and every OnEnable on the
+        // object runs before any Start.
+        void OnEnable()
         {
-#if UNITY_WEBGL
-            if (pingMethod == PingMethod.ICMP)
-            {
-                Debug.LogWarning("LatencyProvider: ICMP ping is not supported on WebGL. Falling back to HTTP mode.");
-                pingMethod = PingMethod.HTTP;
-            }
-#endif
-
             // Try to auto-attach to BetaHubReporter on the same GameObject
             var reporter = GetComponent<BetaHubReporter>();
             if (reporter != null)
@@ -524,7 +518,18 @@ namespace BetaHub
                     "Latency data will not be included in bug reports. " +
                     "Please attach BetaHubReporter to the same GameObject or manually call SetLatencyProvider().");
             }
-            
+        }
+
+        void Start()
+        {
+#if UNITY_WEBGL
+            if (pingMethod == PingMethod.ICMP)
+            {
+                Debug.LogWarning("LatencyProvider: ICMP ping is not supported on WebGL. Falling back to HTTP mode.");
+                pingMethod = PingMethod.HTTP;
+            }
+#endif
+
             // Start continuous ping collection if enabled
             if (EnableLatency && collectionMode == PingCollectionMode.Continuous)
             {

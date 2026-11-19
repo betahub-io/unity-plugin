@@ -179,7 +179,9 @@ namespace BetaHub
             _hasCachedData = false;
         }
         
-        void Start()
+        // OnEnable, not Start: the reporter checks its providers' fields in its Start, and every OnEnable on the
+        // object runs before any Start.
+        void OnEnable()
         {
             // Try to auto-attach to BetaHubReporter on the same GameObject
             var reporter = GetComponent<BetaHubReporter>();

@@ -92,6 +92,12 @@ namespace BetaHub
 #endif
 
         public bool IsRecording { get; private set; }
+
+        /// <summary>
+        /// Whether this recorder can record at all: set in Start once FFmpeg was found (on WebGL, once the browser
+        /// recorder started). False without FFmpeg, in IL2CPP builds without ENABLE_BETAHUB_FFMPEG, and while disabled.
+        /// </summary>
+        public bool CanRecord { get; private set; }
 #if UNITY_WEBGL && !UNITY_EDITOR
         private bool _webglInitialized;
         private bool _webglPaused;
@@ -135,6 +141,7 @@ namespace BetaHub
 #if UNITY_WEBGL && !UNITY_EDITOR
             int result = WebGLRecorderBridge.BetaHubRecorder_Init();
             _webglInitialized = (result != 0);
+            CanRecord = _webglInitialized;
             if (!_webglInitialized)
             {
                 Debug.LogWarning("WebGL video recording initialization failed. Recording will be unavailable.");
@@ -221,6 +228,7 @@ namespace BetaHub
 
             _captureInterval = 1.0f / FrameRate;
             _nextCaptureTime = Time.unscaledTime;
+            CanRecord = true;
 #endif
         }
 

@@ -311,7 +311,8 @@ namespace BetaHub
         {
             var sources = new AttachmentSources
             {
-                RecordingSeconds = _recorder != null && IncludeVideo ? _recorder.RecordingDuration : 0,
+                // a recorder that never started (no FFmpeg, IL2CPP without the define) has no video to send
+                RecordingSeconds = _recorder != null && _recorder.CanRecord && IncludeVideo ? _recorder.RecordingDuration : 0,
                 PlayerLog = GetPlayerLogSource(),
                 LocationCountry = geolocationProvider != null && geolocationProvider.EnableGeolocation,
                 LocationNetwork = geolocationProvider != null && geolocationProvider.EnableAsnCollection,
